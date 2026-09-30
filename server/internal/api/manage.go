@@ -1,0 +1,336 @@
+package api
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/timothydodd/couchside/internal/db"
+	"github.com/timothydodd/couchside/internal/imaging"
+	"github.com/timothydodd/couchside/internal/metadata"
+	"github.com/timothydodd/couchside/internal/worker"
+)
+
+// --- library Manage view ---------------------------------------------------------
+
+func (s *Server) manageItems(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	lib, err := s.db.Library(r.Context(), id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	rows, err := s.db.ManageRows(r.Context(), id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"library": lib, "items": rows})
+}
+
+func (s *Server) itemFiles(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	files, err := s.db.ManageFiles(r.Context(), id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, files)
+}
+
+// itemLookup searches the metadata provider by any title, so a wrong or
+// missing match can be fixed by picking the right one.
+func (s *Server) itemLookup(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	item, err := s.db.Item(r.Context(), id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		q = item.ParsedTitle
+	}
+	year, _ := strconv.Atoi(r.URL.Query().Get("year"))
+	kind := metadata.Movie
+	if item.Kind == "series" {
+		kind = metadata.Series
+	}
+	res, err := s.providers.SearchTitles(r.Context(), kind, q, year)
+	if err != nil {
+		writeErr(w, badRequest(err.Error()))
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+// --- deleting from disk ----------------------------------------------------------
+
+// deleteFile removes one file from disk (with its subtitle sidecars) and
+// from the library. Used for extra copies found as duplicates.
+func (s *Server) deleteFile(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	f, err := s.db.File(r.Context(), id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	lib, err := s.db.Library(r.Context(), f.LibraryID)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	res, err := s.deleteFiles(r.Context(), lib, []db.File{f})
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+// deleteItem removes a whole movie or series: every file on disk, then the item.
+func (s *Server) deleteItem(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	item, err := s.db.Item(r.Context(), id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	lib, err := s.db.Library(r.Context(), item.LibraryID)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	files, err := s.db.ItemFiles(r.Context(), id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	res, err := s.deleteFiles(r.Context(), lib, files)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+type deleteResult struct {
+	Deleted      int      `json:"deleted"`
+	Bytes        int64    `json:"bytes"`
+	ItemsRemoved []int64  `json:"itemsRemoved"`
+	KeptFolders  []string `json:"keptFolders"` // emptied of video but still holding other files
+}
+
+// deleteFiles deletes files on disk, then forgets them. It stops at the first
+// file it can't delete (read-only mount, permissions) and reports it, keeping
+// what was already done.
+func (s *Server) deleteFiles(ctx context.Context, lib db.Library, files []db.File) (deleteResult, error) {
+	res := deleteResult{ItemsRemoved: []int64{}, KeptFolders: []string{}}
+	var done []int64
+	var failure error
+	dirs := map[string]bool{}
+	for _, f := range files {
+		if !insideDir(f.Path, lib.Path) {
+			failure = fmt.Errorf("%s is outside the library folder; not deleting it", f.Path)
+			break
+		}
+		if err := os.Remove(f.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			failure = fmt.Errorf("couldn't delete %s: %v", filepath.Base(f.Path), err)
+			break
+		}
+		for _, sc := range sidecars(f.Path) {
+			_ = os.Remove(sc)
+		}
+		if old, _ := s.db.DeleteOptimized(ctx, f.ID); old != "" {
+			_ = os.Remove(old)
+		}
+		_ = os.RemoveAll(filepath.Dir(worker.FileStillPath(s.cfg.CacheDir, f.ID)))
+		_ = s.db.DeleteRecordingsAt(ctx, f.Path)
+		slog.Info("deleted file", "path", f.Path, "size", f.Size)
+		done = append(done, f.ID)
+		res.Deleted++
+		res.Bytes += f.Size
+		dirs[filepath.Dir(f.Path)] = true
+	}
+	if len(done) > 0 {
+		gone, err := s.db.DeleteFileRows(ctx, lib.ID, done)
+		if err != nil {
+			return res, err
+		}
+		for _, id := range gone {
+			_ = os.RemoveAll(worker.ItemArtDir(s.cfg.CacheDir, id))
+		}
+		res.ItemsRemoved = append(res.ItemsRemoved, gone...)
+	}
+	for d := range dirs {
+		if kept := removeEmptyDirs(d, lib.Path); kept != "" {
+			res.KeptFolders = append(res.KeptFolders, kept)
+		}
+	}
+	if failure != nil {
+		return res, badRequest(failure.Error())
+	}
+	return res, nil
+}
+
+// insideDir reports whether p is strictly inside dir.
+func insideDir(p, dir string) bool {
+	rel, err := filepath.Rel(filepath.Clean(dir), filepath.Clean(p))
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
+}
+
+// removeEmptyDirs removes dir and its parents up to (not including) root
+// while they're empty. It returns the first folder left because it still
+// holds other files (artwork, .nfo), or "" when none of it held any.
+func removeEmptyDirs(dir, root string) string {
+	for d := filepath.Clean(dir); insideDir(d, root); d = filepath.Dir(d) {
+		entries, err := os.ReadDir(d)
+		if err != nil {
+			return ""
+		}
+		if len(entries) > 0 {
+			if hasVideoLeft(entries) {
+				return "" // other episodes live here; nothing unusual
+			}
+			return d
+		}
+		if err := os.Remove(d); err != nil {
+			return d
+		}
+	}
+	return ""
+}
+
+func hasVideoLeft(entries []os.DirEntry) bool {
+	for _, e := range entries {
+		if e.IsDir() {
+			return true
+		}
+		switch strings.ToLower(filepath.Ext(e.Name())) {
+		case ".mkv", ".mp4", ".m4v", ".avi", ".ts", ".m2ts", ".mov", ".wmv", ".mpg", ".mpeg", ".webm", ".flv":
+			return true
+		}
+	}
+	return false
+}
+
+// --- custom artwork --------------------------------------------------------------
+
+// uploadArtwork replaces an item's poster or backdrop with an uploaded image
+// (the request body). The artwork job and re-matches leave it in place.
+func (s *Server) uploadArtwork(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	kind := chi.URLParam(r, "kind")
+	if kind != "poster" && kind != "backdrop" {
+		writeErr(w, badRequest("artwork must be poster or backdrop"))
+		return
+	}
+	if _, err := s.db.Item(r.Context(), id); err != nil {
+		writeErr(w, err)
+		return
+	}
+	dir := worker.ItemArtDir(s.cfg.CacheDir, id)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		writeErr(w, err)
+		return
+	}
+	orig := filepath.Join(dir, "upload.orig")
+	defer os.Remove(orig)
+	out, err := os.Create(orig)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	n, err := io.Copy(out, http.MaxBytesReader(w, r.Body, 25<<20))
+	if cerr := out.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		writeErr(w, badRequest("upload failed (images up to 25 MB): "+err.Error()))
+		return
+	}
+	if n == 0 {
+		writeErr(w, badRequest("the upload was empty"))
+		return
+	}
+	ff := imaging.FFmpeg{Bin: s.cfg.FFmpeg}
+	if kind == "poster" {
+		err = ff.Resize(r.Context(), orig, filepath.Join(dir, "poster.webp"), 780)
+		if err == nil {
+			err = ff.Resize(r.Context(), orig, filepath.Join(dir, "poster-thumb.webp"), 360)
+		}
+	} else {
+		err = ff.Resize(r.Context(), orig, filepath.Join(dir, "backdrop.webp"), 1280)
+	}
+	if err != nil {
+		slog.Warn("artwork upload", "item", id, "err", err)
+		writeErr(w, badRequest("that file isn't an image Couchside can read"))
+		return
+	}
+	if err := s.db.SetCustomArtwork(r.Context(), id, kind, true); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// resetArtwork drops uploaded artwork and fetches the automatic one again.
+func (s *Server) resetArtwork(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	kind := chi.URLParam(r, "kind")
+	if kind != "poster" && kind != "backdrop" {
+		writeErr(w, badRequest("artwork must be poster or backdrop"))
+		return
+	}
+	item, err := s.db.Item(r.Context(), id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := s.db.SetCustomArtwork(r.Context(), id, kind, false); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := s.worker.Enqueue(r.Context(), worker.KindArtwork, id, "Artwork "+item.Title); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}

@@ -89,3 +89,33 @@ func TestOMDbBadKeyIsAnError(t *testing.T) {
 		t.Fatalf("want error, got %v %v", d, err)
 	}
 }
+
+func TestOMDbSearchTitles(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		switch {
+		case q.Get("s") == "Heat" && q.Get("y") == "1996":
+			w.Write([]byte(`{"Response":"False","Error":"Movie not found!"}`))
+		case q.Get("s") == "Heat":
+			w.Write([]byte(`{"Response":"True","Search":[{"imdbID":"tt0113277","Title":"Heat","Year":"1995","Poster":"https://x/heat.jpg"},{"imdbID":"tt0093164","Title":"Heat","Year":"1986","Poster":"N/A"}]}`))
+		case q.Get("i") == "tt0113277":
+			w.Write([]byte(`{"Response":"True","Title":"Heat","Year":"1995","imdbID":"tt0113277","Poster":"N/A"}`))
+		default:
+			t.Errorf("unexpected query %v", q)
+		}
+	}))
+	defer srv.Close()
+	o := NewOMDb("k", &memCache{m: map[string][]byte{}})
+	o.base = srv.URL + "/"
+
+	// Nothing for the year: search again without it.
+	res, err := o.SearchTitles(context.Background(), Movie, "Heat", 1996)
+	if err != nil || len(res) != 2 || res[0].ImdbID != "tt0113277" || res[0].Poster != "https://x/heat.jpg" || res[1].Poster != "" {
+		t.Fatalf("search = %+v, %v", res, err)
+	}
+	// An IMDb URL is looked up directly.
+	res, err = o.SearchTitles(context.Background(), Movie, "https://www.imdb.com/title/tt0113277/", 0)
+	if err != nil || len(res) != 1 || res[0].Title != "Heat" || res[0].Year != "1995" {
+		t.Fatalf("by id = %+v, %v", res, err)
+	}
+}

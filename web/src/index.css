@@ -416,3 +416,20 @@ video::cue {
     border-color: color-mix(in srgb, var(--avatar) 45%, var(--bg-surface));
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Library Manage view.
+--------------------------------------------------------------------------- */
+@layer components {
+  /* Small label; pair with a .tint-* class for colour. */
+  .badge {
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-semibold;
+  }
+  /* Drawer that slides over the right edge of the page. */
+  .side-panel {
+    @apply fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col border-l border-border bg-surface shadow-[var(--shadow-md)];
+  }
+  .panel-section {
+    @apply border-t border-border-light px-4 py-4;
+  }
+}

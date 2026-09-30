@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Check, Clapperboard, Cpu, Folder, FolderPlus, Pencil, ScanSearch, Trash2, Tv } from "lucide-react";
+import { Check, Clapperboard, Cpu, Folder, FolderPlus, Pencil, ScanSearch, SlidersHorizontal, Trash2, Tv } from "lucide-react";
+import Link from "../components/Link";
 import FolderPicker from "../components/FolderPicker";
 import { EmptyState, ErrorNote, PageHeader, Spinner } from "../components/ui";
 import { api, useApi } from "../lib/api";
@@ -88,6 +89,9 @@ export default function LibrariesPage() {
                 <div className="text-content-muted">Scanned {fmtAgo(l.lastScanAt)}</div>
               </div>
               <div className="flex gap-1.5">
+                <Link to={`/libraries/${l.id}`} className="btn-ghost" title="Sort by quality, find duplicates, fix matches, artwork and deletes">
+                  <SlidersHorizontal size={15} /> Manage
+                </Link>
                 <button className="btn-ghost" onClick={() => void scan(l.id)}>
                   <ScanSearch size={15} /> Scan
                 </button>

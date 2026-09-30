@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -63,6 +64,7 @@ type omdbSearch struct {
 		ImdbID string `json:"imdbID"`
 		Title  string `json:"Title"`
 		Year   string `json:"Year"`
+		Poster string `json:"Poster"`
 	} `json:"Search"`
 }
 
@@ -355,3 +357,40 @@ func yearRange(s string) (start, end int) {
 	}
 	return start, end
 }
+
+// SearchTitles lists OMDb's matches for a title, for picking a match by hand.
+// With a year and no results, it searches again without the year. An IMDb
+// id or URL is looked up directly.
+func (o *OMDb) SearchTitles(ctx context.Context, kind Kind, query string, year int) ([]SearchResult, error) {
+	if id := reImdbID.FindString(query); id != "" {
+		d, err := o.ByImdbID(ctx, kind, id)
+		if err != nil || d == nil {
+			return []SearchResult{}, err
+		}
+		return []SearchResult{{ImdbID: d.ImdbID, Title: d.Title, Year: strconv.Itoa(d.Year), Poster: d.PosterURL}}, nil
+	}
+	search := func(y int) ([]SearchResult, error) {
+		var s omdbSearch
+		q := url.Values{"s": {query}, "type": {string(kind)}}
+		if y > 0 {
+			q.Set("y", strconv.Itoa(y))
+		}
+		if err := o.get(ctx, q, &s); err != nil && !errors.Is(err, errNotFound) {
+			return nil, err
+		}
+		out := make([]SearchResult, 0, len(s.Search))
+		for _, r := range s.Search {
+			if r.ImdbID != "" {
+				out = append(out, SearchResult{ImdbID: r.ImdbID, Title: r.Title, Year: r.Year, Poster: na(r.Poster)})
+			}
+		}
+		return out, nil
+	}
+	out, err := search(year)
+	if err == nil && len(out) == 0 && year > 0 {
+		out, err = search(0)
+	}
+	return out, err
+}
+
+var reImdbID = regexp.MustCompile(`tt\d{5,10}`)

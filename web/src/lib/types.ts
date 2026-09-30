@@ -378,3 +378,60 @@ export interface LibraryMatch {
   dvr: boolean;
   matching: number;
 }
+
+/** GET /api/libraries/{id}/manage: one movie or show with its file facts. */
+export interface ManageRow {
+  id: number;
+  kind: ItemKind;
+  title: string;
+  year: number | null;
+  parsedTitle: string;
+  parsedYear: number;
+  matchStatus: "pending" | "matched" | "unmatched";
+  imdbId: string;
+  hasPoster: boolean;
+  customPoster: boolean;
+  customBackdrop: boolean;
+  updatedAt: number;
+  addedAt: number;
+  fileCount: number;
+  episodeCount: number;
+  size: number;
+  maxHeight: number;
+  minHeight: number;
+  videoCodec: string;
+  sameImdb: number;
+}
+
+/** GET /api/items/{id}/files */
+export interface ManageFile {
+  id: number;
+  path: string;
+  size: number;
+  durationSec: number | null;
+  container: string;
+  videoCodec: string;
+  audioCodec: string;
+  width: number | null;
+  height: number | null;
+  problem: FileProblem;
+  addedAt: number;
+  season: number | null;
+  episode: number | null;
+  episodeTitle: string;
+}
+
+/** GET /api/items/{id}/lookup */
+export interface SearchResult {
+  imdbId: string;
+  title: string;
+  year: string;
+  poster: string;
+}
+
+export interface DeleteResult {
+  deleted: number;
+  bytes: number;
+  itemsRemoved: number[];
+  keptFolders: string[];
+}

@@ -18,6 +18,7 @@ A lightweight self-hosted media server for a home k3s cluster. It scans your mov
 - Browsing: Home with a hero and rows, virtualised Movies and TV grids with search, genre, watched filters and sort, plus detail pages with seasons.
 - Direct play with byte-range streaming, resume position, watched state, continue-watching, and next-episode autoplay.
 - An Activity page for background jobs, with retry.
+- Library management: rename a library or move it to another folder (watch history follows), and a **Manage** view per library. Sort by quality, size or date added; filter to duplicates, unmatched or SD titles; fix a match by searching OMDb under any name; upload your own poster or backdrop; delete extra copies or whole movies and series from disk.
 
 ## Encoding
 

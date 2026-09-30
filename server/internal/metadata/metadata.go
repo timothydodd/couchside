@@ -82,3 +82,28 @@ func (c *Chain) Lookup(ctx context.Context, kind Kind, title string, year int, i
 	}
 	return nil, nil, errors.Join(errs...)
 }
+
+// SearchResult is one candidate when picking a match by hand.
+type SearchResult struct {
+	ImdbID string `json:"imdbId"`
+	Title  string `json:"title"`
+	Year   string `json:"year"` // as the provider writes it, e.g. "2016–2021"
+	Poster string `json:"poster"`
+}
+
+// TitleSearcher is implemented by providers that can list title matches.
+type TitleSearcher interface {
+	SearchTitles(ctx context.Context, kind Kind, query string, year int) ([]SearchResult, error)
+}
+
+// SearchTitles asks the first provider that can search.
+func (c *Chain) SearchTitles(ctx context.Context, kind Kind, query string, year int) ([]SearchResult, error) {
+	if c != nil {
+		for _, p := range c.Providers {
+			if s, ok := p.(TitleSearcher); ok {
+				return s.SearchTitles(ctx, kind, query, year)
+			}
+		}
+	}
+	return nil, errors.New("no metadata provider can search; set OMDB_API_KEY")
+}

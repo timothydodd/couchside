@@ -5,8 +5,16 @@ import { posterUrl } from "../lib/api";
 import { placeholderAngle } from "../lib/format";
 import type { ItemSummary } from "../lib/types";
 
-/** Poster art, or a branded gradient with the title when there's no poster. */
-export function PosterArt({ item, size = "thumb" }: { item: ItemSummary; size?: "thumb" | "full" }) {
+/** Poster art, or a branded gradient with the title when there's no poster (bare: no title, for tiny thumbnails). */
+export function PosterArt({
+  item,
+  size = "thumb",
+  bare = false,
+}: {
+  item: Pick<ItemSummary, "id" | "hasPoster" | "updatedAt" | "title" | "year">;
+  size?: "thumb" | "full";
+  bare?: boolean;
+}) {
   const [failed, setFailed] = useState(false);
   if (item.hasPoster && !failed) {
     return (
@@ -26,8 +34,12 @@ export function PosterArt({ item, size = "thumb" }: { item: ItemSummary; size?: 
       className="poster-placeholder absolute inset-0 flex flex-col justify-end p-3"
       style={{ "--ph-angle": placeholderAngle(item.id) } as React.CSSProperties}
     >
-      <div className="line-clamp-4 text-base font-semibold leading-snug text-content">{item.title}</div>
-      {item.year && <div className="mt-1 text-xs text-content-muted">{item.year}</div>}
+      {!bare && (
+        <>
+          <div className="line-clamp-4 text-base font-semibold leading-snug text-content">{item.title}</div>
+          {item.year && <div className="mt-1 text-xs text-content-muted">{item.year}</div>}
+        </>
+      )}
     </div>
   );
 }

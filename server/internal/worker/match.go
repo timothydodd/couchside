@@ -124,8 +124,14 @@ func (w *Worker) artwork(ctx context.Context, itemID int64) error {
 	}
 	hasPoster, hasBackdrop := false, false
 	var errs []string
+	// Uploaded artwork stays; only the rest is fetched or grabbed.
+	customPoster, customBackdrop, err := w.db.CustomArtwork(ctx, itemID)
+	if err != nil {
+		return err
+	}
+	hasPoster, hasBackdrop = customPoster, customBackdrop
 
-	if item.PosterURL != "" {
+	if item.PosterURL != "" && !customPoster {
 		switch err := w.poster(ctx, item.PosterURL, dir); {
 		case errors.Is(err, errGone):
 			// OMDb has plenty of dead poster links; show the placeholder, don't fail.
@@ -136,7 +142,7 @@ func (w *Worker) artwork(ctx context.Context, itemID int64) error {
 			hasPoster = true
 		}
 	}
-	if src, err := w.db.BackdropSource(ctx, itemID); err == nil && src != nil {
+	if src, err := w.db.BackdropSource(ctx, itemID); err == nil && src != nil && !customBackdrop {
 		at := imaging.GrabOffset(src.DurationSec, 0.2)
 		if err := w.ff.FrameGrab(ctx, src.Path, filepath.Join(dir, "backdrop.webp"), at, 1280); err != nil {
 			errs = append(errs, "backdrop: "+err.Error())

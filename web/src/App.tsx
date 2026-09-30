@@ -6,6 +6,7 @@ import HomePage from "./pages/HomePage";
 import ItemPage from "./pages/ItemPage";
 import LibrariesPage from "./pages/LibrariesPage";
 import LibraryPage from "./pages/LibraryPage";
+import LibraryManagePage from "./pages/LibraryManagePage";
 import PlayerPage from "./pages/PlayerPage";
 import ProfilesPage from "./pages/ProfilesPage";
 import LiveTvPage from "./pages/LiveTvPage";
@@ -47,6 +48,7 @@ export default function App() {
           {route.name === "livetv" && <LiveTvPage tab={route.tab} />}
           {route.name === "activity" && <ActivityPage />}
           {route.name === "libraries" && <LibrariesPage />}
+          {route.name === "manage" && <LibraryManagePage id={route.id} />}
           {route.name === "settings" && <SettingsPage />}
           {route.name === "notfound" && <EmptyState title="Nothing here">That page doesn't exist.</EmptyState>}
         </main>

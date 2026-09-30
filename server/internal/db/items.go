@@ -169,7 +169,7 @@ func (d *DB) ClearMatch(ctx context.Context, id int64) error {
 	}
 	_, err := d.sql.ExecContext(ctx, `UPDATE media_items SET match_status = 'unmatched', title = parsed_title,
 		sort_title = ?, year = NULLIF(parsed_year, 0), plot = '', genres = '', rated = '', rating = NULL,
-		runtime_min = NULL, total_seasons = NULL, poster_url = '', has_poster = 0, match_provider = '',
+		runtime_min = NULL, total_seasons = NULL, poster_url = '', has_poster = custom_poster, match_provider = '',
 		imdb_id = CASE WHEN imdb_pinned = 1 THEN imdb_id ELSE '' END, updated_at = unixepoch()
 		WHERE id = ?`, SortTitle(parsed), id)
 	return err

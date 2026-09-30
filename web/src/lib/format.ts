@@ -75,3 +75,9 @@ export function fmtDay(t: number): string {
 
 /** "Today 9:00 – 10:00 PM" */
 export const fmtSlot = (start: number, end: number) => `${fmtDay(start)} ${fmtTime(start)} – ${fmtTime(end)}`;
+
+/** A path relative to a folder (a library root), for display. */
+export function relPath(path: string, root: string): string {
+  const r = root.replace(/\/+$/, "") + "/";
+  return path.startsWith(r) ? path.slice(r.length) : path;
+}

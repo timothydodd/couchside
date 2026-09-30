@@ -32,7 +32,13 @@ export default function Sidebar() {
   // Detail pages highlight the section they belong to.
   const liveTv = useStatus((s) => s.status?.livetv);
   const current: NavName =
-    route.name === "item" || route.name === "play" ? "home" : route.name === "watch" || route.name === "recording" ? "livetv" : route.name;
+    route.name === "item" || route.name === "play"
+      ? "home"
+      : route.name === "watch" || route.name === "recording"
+        ? "livetv"
+        : route.name === "manage"
+          ? "libraries"
+          : route.name;
 
   const badge = (name: NavName) => {
     if (name === "movies" && counts?.movies) return <Count n={counts.movies} />;

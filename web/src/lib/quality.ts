@@ -1,0 +1,25 @@
+// Quality labels for the library Manage view.
+import type { Tone } from "../components/ui";
+
+/** 4 = 4K, 3 = 1080p, 2 = 720p, 1 = SD, 0 = unknown. */
+export function qualityTier(height: number | null | undefined): number {
+  if (!height) return 0;
+  if (height >= 1500) return 4;
+  if (height >= 900) return 3;
+  if (height >= 600) return 2;
+  return 1;
+}
+
+export function qualityLabel(height: number | null | undefined): string {
+  return ["?", "SD", "720p", "1080p", "4K"][qualityTier(height)];
+}
+
+export const qualityTone = (height: number | null | undefined): Tone =>
+  (["muted", "warning", "muted", "good", "info"] as Tone[])[qualityTier(height)];
+
+const CODECS: Record<string, string> = { h264: "H.264", hevc: "HEVC", av1: "AV1", mpeg2video: "MPEG-2", vc1: "VC-1", mpeg4: "MPEG-4", vp9: "VP9" };
+export const codecLabel = (c: string) => CODECS[c] ?? c.toUpperCase();
+
+/** Extra copies: more files than movies/episodes they cover. */
+export const extraFiles = (r: { kind: string; fileCount: number; episodeCount: number }) =>
+  Math.max(0, r.fileCount - (r.kind === "series" ? Math.max(1, r.episodeCount) : 1));
