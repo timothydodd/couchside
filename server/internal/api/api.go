@@ -65,6 +65,7 @@ func (s *Server) Handler() http.Handler {
 
 		r.Get("/libraries", s.listLibraries)
 		r.Post("/libraries", s.createLibrary)
+		r.Put("/libraries/{id}", s.updateLibrary)
 		r.Delete("/libraries/{id}", s.deleteLibrary)
 		r.Post("/libraries/{id}/scan", s.scanLibrary)
 		r.Post("/libraries/scan", s.scanAll)

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"os"
@@ -125,6 +126,78 @@ func (s *Server) createLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, lib)
+}
+
+// updateLibrary renames a library or moves it to another folder. The kind
+// can't change: every item would have to be rebuilt, so that's remove and re-add.
+func (s *Server) updateLibrary(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	var in struct{ Name, Path string }
+	if err := decode(r, &in); err != nil {
+		writeErr(w, err)
+		return
+	}
+	ctx := r.Context()
+	old, err := s.db.Library(ctx, id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	in.Name = strings.TrimSpace(in.Name)
+	if in.Name == "" {
+		writeErr(w, badRequest("name is required"))
+		return
+	}
+	path := old.Path
+	if strings.TrimSpace(in.Path) != "" && filepath.Clean(strings.TrimSpace(in.Path)) != old.Path {
+		if path, err = s.checkPath(in.Path); err != nil {
+			writeErr(w, err)
+			return
+		}
+	}
+	if err := s.db.UpdateLibrary(ctx, id, in.Name, path); err != nil {
+		if errors.Is(err, db.ErrPathInUse) {
+			err = badRequest(err.Error())
+		}
+		writeErr(w, err)
+		return
+	}
+	if path != old.Path {
+		s.repointRecordings(ctx, old.Path, path)
+		if err := s.worker.Enqueue(ctx, worker.KindScan, id, "Scan "+in.Name); err != nil {
+			writeErr(w, err)
+			return
+		}
+	}
+	lib, err := s.db.Library(ctx, id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, lib)
+}
+
+// repointRecordings follows DVR recordings to a library's new folder when
+// the file is there, so they stay linked to their library entry.
+func (s *Server) repointRecordings(ctx context.Context, oldDir, newDir string) {
+	recs, err := s.db.RecordingsWithStatus(ctx, "completed")
+	if err != nil {
+		return
+	}
+	prefix := strings.TrimSuffix(oldDir, "/") + "/"
+	for _, rec := range recs {
+		if !strings.HasPrefix(rec.Path, prefix) {
+			continue
+		}
+		moved := filepath.Join(newDir, strings.TrimPrefix(rec.Path, prefix))
+		if _, err := os.Stat(moved); err == nil {
+			_ = s.db.SetRecordingPath(ctx, rec.ID, moved)
+		}
+	}
 }
 
 // checkPath cleans a library path and confirms it's a readable folder inside
