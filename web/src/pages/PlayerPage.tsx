@@ -25,13 +25,19 @@ const loadHls = () => (hlsModule ??= import("hls.js/light").then((m) => m.defaul
 
 type Sub = { kind: "off" } | { kind: "text"; track: SubtitleTrack } | { kind: "burn"; track: SubtitleTrack };
 
+// Where to start the next file when moving between a movie's parts, instead
+// of its saved position.
+let partStart: { fileId: number; at: number } | null = null;
+
 /**
  * Movies and episodes. Plays the original file when the browser can, then an
  * optimized copy, then a server stream. Picking another audio track or
  * picture subtitles switches to a server stream that includes them.
  */
 export default function PlayerPage({ fileId }: { fileId: number }) {
-  const { data: info, error: infoError } = useApi<PlayInfo>(`/api/files/${fileId}`);
+  const { data: loaded, error: infoError } = useApi<PlayInfo>(`/api/files/${fileId}`);
+  // useApi hands back the previous file's info for a render after fileId changes.
+  const info = loaded?.fileId === fileId ? loaded : undefined;
   const { data: streams } = useApi<{ audio: AudioTrack[]; subtitles: SubtitleTrack[] }>(`/api/files/${fileId}/streams`);
   const [breakPoll, setBreakPoll] = useState(false);
   const { data: comm, reload: reloadComm } = useApi<Commercials>(`/api/files/${fileId}/commercials`, { pollMs: breakPoll ? 5000 : undefined });
@@ -86,6 +92,11 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
 
   useEffect(() => {
     if (info && startAt.current === null) {
+      if (partStart?.fileId === info.fileId) {
+        startAt.current = partStart.at;
+        partStart = null;
+        return;
+      }
       const ok = !info.watched && info.positionSec > 30 && (!info.durationSec || info.positionSec < info.durationSec - 30);
       startAt.current = ok ? info.positionSec : 0;
     }
@@ -358,10 +369,40 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
     };
   }, [fileId]);
 
+  // --- parts: a movie split across files plays as one timeline -----------------------
+  const parts = useMemo(() => {
+    const list = info?.parts;
+    const at = list?.findIndex((p) => p.fileId === fileId) ?? -1;
+    if (!list || list.length < 2 || at < 0) return null;
+    const starts: number[] = [];
+    let t = 0;
+    for (const p of list) {
+      starts.push(t);
+      t += p.durationSec ?? 0;
+    }
+    return { list, at, starts, total: t };
+  }, [info, fileId]);
+  const playPartAt = useCallback(
+    (t: number) => {
+      if (!parts) return;
+      let j = 0;
+      while (j + 1 < parts.starts.length && parts.starts[j + 1] <= t) j++;
+      const next = parts.list[j];
+      if (next.fileId === fileId) return;
+      partStart = { fileId: next.fileId, at: Math.max(0, t - parts.starts[j]) };
+      go(`/play/${next.fileId}`, { replace: true });
+    },
+    [parts, fileId, go],
+  );
+
   const onEnded = async () => {
     const v = videoRef.current;
     if (v?.duration) await api(`/api/files/${fileId}/progress`, { method: "PUT", json: { position: v.duration, duration: v.duration } }).catch(() => {});
-    if (info?.nextFileId && prefs.autoplayNext !== false) go(`/play/${info.nextFileId}`, { replace: true });
+    if (parts && parts.at + 1 < parts.list.length) {
+      // The rest of the same movie: always carry on, from the start of the next part.
+      partStart = { fileId: parts.list[parts.at + 1].fileId, at: 0 };
+      go(`/play/${parts.list[parts.at + 1].fileId}`, { replace: true });
+    } else if (info?.nextFileId && !parts && prefs.autoplayNext !== false) go(`/play/${info.nextFileId}`, { replace: true });
     else exit();
   };
   const onEndedRef = useRef(onEnded);
@@ -461,7 +502,11 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
       videoRef={videoRef}
       title={info?.title ?? " "}
       subtitle={info?.subtitle}
-      timeline={{ kind: "vod" }}
+      timeline={
+        parts
+          ? { kind: "vod", parts: { offset: parts.starts[parts.at], total: parts.total, starts: parts.starts.slice(1), seek: playPartAt } }
+          : { kind: "vod" }
+      }
       settings={settings}
       breaks={comm?.status === "done" ? comm.segments : undefined}
       breakMode={breakMode}

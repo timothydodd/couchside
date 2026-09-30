@@ -21,7 +21,7 @@ type ItemSummary struct {
 	MatchStatus  string   `json:"matchStatus"`
 	AddedAt      int64    `json:"addedAt"`
 	UpdatedAt    int64    `json:"updatedAt"`
-	FileCount    int      `json:"fileCount"`
+	FileCount    int      `json:"fileCount"`    // extras aren't counted
 	WatchedCount int      `json:"watchedCount"`
 	LastAddedAt  int64    `json:"lastAddedAt"`
 }
@@ -44,8 +44,8 @@ type Item struct {
 func summaryCols(ctx context.Context) string {
 	return `m.id, m.kind, m.title, m.sort_title, m.year, m.genres, m.rating, m.runtime_min,
 	m.has_poster, m.has_backdrop, m.match_status, m.added_at, m.updated_at,
-	(SELECT COUNT(*) FROM files f WHERE f.media_item_id = m.id),
-	(SELECT COUNT(*) FROM files f ` + watchJoin(ctx) + ` WHERE f.media_item_id = m.id AND w.watched = 1),
+	(SELECT COUNT(*) FROM files f WHERE f.media_item_id = m.id AND f.role <> 'extra'),
+	(SELECT COUNT(*) FROM files f ` + watchJoin(ctx) + ` WHERE f.media_item_id = m.id AND f.role <> 'extra' AND w.watched = 1),
 	COALESCE((SELECT MAX(f.added_at) FROM files f WHERE f.media_item_id = m.id), m.added_at) AS last_added`
 }
 

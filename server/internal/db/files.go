@@ -27,12 +27,17 @@ type File struct {
 	Watched        bool     `json:"watched"`
 	Optimized      bool     `json:"optimized"`
 	Problem        string   `json:"problem"` // '' | unreadable | no-video
+	Role           string   `json:"role"`      // copy | part | extra (movies)
+	PartNo         int      `json:"partNo"`
+	ExtraTitle     string   `json:"extraTitle"`
+	RolePinned     bool     `json:"rolePinned"`
 }
 
 const fileCols = `f.id, f.library_id, f.media_item_id, f.episode_id, f.path, f.size, f.mtime, f.duration_sec,
 	f.container, f.video_codec, f.audio_codec, f.width, f.height, f.audio_tracks, f.subtitle_tracks,
 	f.has_still, f.added_at, COALESCE(w.position_sec, 0), COALESCE(w.watched, 0),
-	EXISTS (SELECT 1 FROM optimized o WHERE o.file_id = f.id), f.problem`
+	EXISTS (SELECT 1 FROM optimized o WHERE o.file_id = f.id), f.problem,
+	f.role, f.part_no, f.extra_title, f.role_pinned`
 
 func fileFrom(ctx context.Context) string { return ` FROM files f ` + watchJoin(ctx) }
 
@@ -40,7 +45,8 @@ func scanFile(r interface{ Scan(...any) error }) (File, error) {
 	var f File
 	err := r.Scan(&f.ID, &f.LibraryID, &f.MediaItemID, &f.EpisodeID, &f.Path, &f.Size, &f.Mtime, &f.DurationSec,
 		&f.Container, &f.VideoCodec, &f.AudioCodec, &f.Width, &f.Height, &f.AudioTracks, &f.SubtitleTracks,
-		&f.HasStill, &f.AddedAt, &f.PositionSec, &f.Watched, &f.Optimized, &f.Problem)
+		&f.HasStill, &f.AddedAt, &f.PositionSec, &f.Watched, &f.Optimized, &f.Problem,
+		&f.Role, &f.PartNo, &f.ExtraTitle, &f.RolePinned)
 	return f, err
 }
 
@@ -66,9 +72,39 @@ func (d *DB) File(ctx context.Context, id int64) (File, error) {
 	return f, notFound(err)
 }
 
-// ItemFiles returns an item's files, largest (usually best quality) first.
+// fileRoleOrder lists parts in order, then copies largest (usually best
+// quality) first, then extras by title.
+const fileRoleOrder = ` ORDER BY CASE f.role WHEN 'part' THEN 0 WHEN 'copy' THEN 1 ELSE 2 END, f.part_no, f.size DESC, f.extra_title`
+
+// ItemFiles returns all of an item's files, in fileRoleOrder.
 func (d *DB) ItemFiles(ctx context.Context, itemID int64) ([]File, error) {
-	return d.queryFiles(ctx, `WHERE f.media_item_id = ? ORDER BY f.size DESC`, itemID)
+	return d.queryFiles(ctx, `WHERE f.media_item_id = ?`+fileRoleOrder, itemID)
+}
+
+// FeatureFiles is ItemFiles without extras: what "watched" means for an item.
+func (d *DB) FeatureFiles(ctx context.Context, itemID int64) ([]File, error) {
+	return d.queryFiles(ctx, `WHERE f.media_item_id = ? AND f.role <> 'extra'`+fileRoleOrder, itemID)
+}
+
+// SetDetectedRole stores the scanner's guess at a file's role, unless one
+// was chosen by hand.
+func (d *DB) SetDetectedRole(ctx context.Context, id int64, role string, partNo int, extraTitle string) error {
+	_, err := d.sql.ExecContext(ctx, `UPDATE files SET role = ?, part_no = ?, extra_title = ?
+		WHERE id = ? AND role_pinned = 0`, role, partNo, extraTitle, id)
+	return err
+}
+
+// SetFileRole stores a role chosen by hand, which later scans keep.
+func (d *DB) SetFileRole(ctx context.Context, id int64, role string, partNo int, extraTitle string) error {
+	res, err := d.sql.ExecContext(ctx, `UPDATE files SET role = ?, part_no = ?, extra_title = ?, role_pinned = 1
+		WHERE id = ?`, role, partNo, extraTitle, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // FileStamp is what the scanner compares to skip unchanged files, plus how
@@ -81,14 +117,20 @@ type FileStamp struct {
 	ParsedYear  int
 	Season      int
 	Episode     int
+	Role        string
+	PartNo      int
+	ExtraTitle  string
+	RolePinned  bool
 }
 
 func (d *DB) FileStamp(ctx context.Context, path string) (*FileStamp, error) {
 	var s FileStamp
 	err := d.sql.QueryRowContext(ctx, `SELECT f.id, f.size, f.mtime, m.parsed_title, m.parsed_year,
-		COALESCE(e.season, 0), COALESCE(e.episode, 0)
+		COALESCE(e.season, 0), COALESCE(e.episode, 0),
+		f.role, f.part_no, f.extra_title, f.role_pinned
 		FROM files f JOIN media_items m ON m.id = f.media_item_id LEFT JOIN episodes e ON e.id = f.episode_id
-		WHERE f.path = ?`, path).Scan(&s.ID, &s.Size, &s.Mtime, &s.ParsedTitle, &s.ParsedYear, &s.Season, &s.Episode)
+		WHERE f.path = ?`, path).Scan(&s.ID, &s.Size, &s.Mtime, &s.ParsedTitle, &s.ParsedYear, &s.Season, &s.Episode,
+		&s.Role, &s.PartNo, &s.ExtraTitle, &s.RolePinned)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -147,12 +189,11 @@ func (d *DB) PruneLibrary(ctx context.Context, libraryID, scanStart int64) (int6
 	return n, tx.Commit()
 }
 
-// BackdropSource picks the file to grab a backdrop frame from: the largest
-// file for a movie, the first episode for a series.
+// BackdropSource picks the file to grab a backdrop frame from: the first
+// part or largest copy of a movie (never an extra), the first episode of a series.
 func (d *DB) BackdropSource(ctx context.Context, itemID int64) (*File, error) {
-	files, err := d.queryFiles(ctx, `LEFT JOIN episodes e ON e.id = f.episode_id WHERE f.media_item_id = ? AND f.problem = ''
-		
-		ORDER BY COALESCE(e.season, 0), COALESCE(e.episode, 0), f.size DESC LIMIT 1`, itemID)
+	files, err := d.queryFiles(ctx, `LEFT JOIN episodes e ON e.id = f.episode_id WHERE f.media_item_id = ? AND f.problem = '' AND f.role <> 'extra'
+		ORDER BY COALESCE(e.season, 0), COALESCE(e.episode, 0), f.part_no, f.size DESC LIMIT 1`, itemID)
 	if err != nil || len(files) == 0 {
 		return nil, err
 	}

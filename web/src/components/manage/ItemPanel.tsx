@@ -69,7 +69,7 @@ export default function ItemPanel({ row, library, onClose, onChanged }: { row: M
           )}
           <MetadataSearch row={row} onMatched={onChanged} />
           <ArtworkEditor row={row} onChanged={onChanged} />
-          <FileList kind={row.kind} files={files} libraryPath={library.path} onDeleted={deleted} />
+          <FileList kind={row.kind} files={files} libraryPath={library.path} onDeleted={deleted} onChanged={changed} />
           <DeleteItem row={row} onDeleted={deleted} />
         </div>
       </aside>

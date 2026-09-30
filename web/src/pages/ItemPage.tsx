@@ -26,9 +26,14 @@ export default function ItemPage({ id }: { id: number }) {
   const { item, files, seasons } = data;
   const isSeries = item.kind === "series";
   const next = isSeries ? nextEpisode(seasons ?? []) : null;
-  const movieFile = files[0];
+  const feature = featureFiles(files);
+  const extras = files.filter((f) => f.role === "extra");
+  // A split movie resumes in its first unfinished part, at a time on the whole movie's clock.
+  const movieAt = feature.findIndex((f) => !f.watched);
+  const movieFile = feature[Math.max(0, movieAt)];
+  const partOffset = feature.slice(0, Math.max(0, movieAt)).reduce((t, f) => t + (f.durationSec ?? 0), 0);
   const playFile = isSeries ? next?.fileId : movieFile?.id;
-  const resumeAt = isSeries ? next?.positionSec : movieFile && !movieFile.watched ? movieFile.positionSec : 0;
+  const resumeAt = isSeries ? next?.positionSec : movieAt >= 0 ? partOffset + movieFile.positionSec : 0;
   const allWatched = item.fileCount > 0 && item.watchedCount >= item.fileCount;
 
   const setWatched = async (watched: boolean) => {
@@ -36,14 +41,14 @@ export default function ItemPage({ id }: { id: number }) {
     await reload();
   };
 
-  const runtime = item.runtimeMin ? fmtRuntime(item.runtimeMin * 60) : fmtRuntime(movieFile?.durationSec);
+  const runtime = item.runtimeMin ? fmtRuntime(item.runtimeMin * 60) : fmtRuntime(feature.reduce((t, f) => t + (f.durationSec ?? 0), 0) || null);
 
   return (
     <div className="pb-10">
       {/* Backdrop: the grabbed frame, or a blown-up blurred poster as a fallback. */}
       <section className="relative h-[40vh] min-h-64 max-h-[460px] overflow-hidden">
         {item.hasBackdrop ? (
-          <img src={backdropUrl(item)} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <img src={backdropUrl(item)} alt="" className="hero-art" />
         ) : item.hasPoster ? (
           <img src={posterUrl(item, "full")} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-60 blur-2xl" />
         ) : (
@@ -65,6 +70,7 @@ export default function ItemPage({ id }: { id: number }) {
             {item.year && <span>{item.year}</span>}
             {item.rated && <span className="chip">{item.rated}</span>}
             {!isSeries && runtime && <span>{runtime}</span>}
+            {feature.length > 1 && <span>{feature.length} parts</span>}
             {isSeries && seasons && (
               <span>
                 {seasons.length} season{seasons.length === 1 ? "" : "s"} · {item.fileCount} episode{item.fileCount === 1 ? "" : "s"}
@@ -123,7 +129,8 @@ export default function ItemPage({ id }: { id: number }) {
       </div>
 
       {isSeries && seasons && <Seasons seasons={seasons} />}
-      {!isSeries && files.length > 0 && <FilesCard files={files} onChange={reload} />}
+      {extras.length > 0 && <Extras title={item.title} files={extras} />}
+      {!isSeries && files.length > extras.length && <FilesCard files={files.filter((f) => f.role !== "extra")} onChange={reload} />}
       {error && (
         <div className="px-6 pt-4">
           <ErrorNote>{error}</ErrorNote>
@@ -131,6 +138,14 @@ export default function ItemPage({ id }: { id: number }) {
       )}
     </div>
   );
+}
+
+/** The files that make up a movie: its parts in order (the best copy of each), or its best copy. */
+function featureFiles(files: MediaFile[]): MediaFile[] {
+  const parts = files.filter((f) => f.role === "part" && !f.problem); // server order: part number, then biggest
+  if (parts.length) return parts.filter((f, i) => i === 0 || parts[i - 1].partNo !== f.partNo);
+  const copy = files.find((f) => f.role === "copy");
+  return copy ? [copy] : [];
 }
 
 /** First episode that isn't finished: resume it, or start the next one. */
@@ -248,6 +263,58 @@ function Seasons({ seasons }: { seasons: NonNullable<ItemDetail["seasons"]> }) {
 }
 
 function EpisodeItem({ e }: { e: EpisodeRow }) {
+  return (
+    <StillRow file={e}>
+      <div className="flex items-baseline gap-2">
+        {e.airDate ? (
+          <span className="shrink-0 text-xs font-semibold tabular-nums text-content-muted">{fmtAirDate(e.airDate)}</span>
+        ) : (
+          <span className="text-xs font-semibold tabular-nums text-content-muted">E{e.episode}</span>
+        )}
+        <span className="truncate text-sm font-medium text-content">{e.title || (e.airDate ? "" : `Episode ${e.episode}`)}</span>
+      </div>
+      <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-content-muted">
+        {e.released && <span>{e.released}</span>}
+        {e.durationSec && <span>{fmtRuntime(e.durationSec)}</span>}
+        {e.rating != null && (
+          <span className="inline-flex items-center gap-1">
+            <Star size={11} className="fill-warning text-warning" />
+            {e.rating.toFixed(1)}
+          </span>
+        )}
+      </div>
+    </StillRow>
+  );
+}
+
+/** A movie's bonus material, listed like episodes and titled "Movie - Extra". */
+function Extras({ title, files }: { title: string; files: MediaFile[] }) {
+  return (
+    <section className="mt-10 px-6">
+      <h2 className="row-title mb-1">Extras</h2>
+      <ol className="flex flex-col">
+        {files.map((f) => (
+          <StillRow key={f.id} file={{ ...f, fileId: f.id }}>
+            <div className="truncate text-sm font-medium text-content">
+              <span className="text-content-muted">{title} - </span>
+              {f.extraTitle}
+            </div>
+            {f.durationSec && <div className="mt-0.5 text-xs text-content-muted">{fmtRuntime(f.durationSec)}</div>}
+          </StillRow>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/** A playable row with the file's frame on the left: episodes and extras. */
+function StillRow({
+  file: e,
+  children,
+}: {
+  file: Pick<EpisodeRow, "fileId" | "hasStill" | "durationSec" | "positionSec" | "watched" | "problem">;
+  children: React.ReactNode;
+}) {
   const progress = e.durationSec && !e.watched ? (e.positionSec / e.durationSec) * 100 : 0;
   return (
     <li>
@@ -269,26 +336,7 @@ function EpisodeItem({ e }: { e: EpisodeRow }) {
             </div>
           )}
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2">
-            {e.airDate ? (
-              <span className="shrink-0 text-xs font-semibold tabular-nums text-content-muted">{fmtAirDate(e.airDate)}</span>
-            ) : (
-              <span className="text-xs font-semibold tabular-nums text-content-muted">E{e.episode}</span>
-            )}
-            <span className="truncate text-sm font-medium text-content">{e.title || (e.airDate ? "" : `Episode ${e.episode}`)}</span>
-          </div>
-          <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-content-muted">
-            {e.released && <span>{e.released}</span>}
-            {e.durationSec && <span>{fmtRuntime(e.durationSec)}</span>}
-            {e.rating != null && (
-              <span className="inline-flex items-center gap-1">
-                <Star size={11} className="fill-warning text-warning" />
-                {e.rating.toFixed(1)}
-              </span>
-            )}
-          </div>
-        </div>
+        <div className="min-w-0 flex-1">{children}</div>
         {e.problem && (
           <span className="tint-warning shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold" title={PROBLEM_TEXT[e.problem].detail}>
             {PROBLEM_TEXT[e.problem].label}
@@ -397,6 +445,7 @@ function FilesCard({ files, onChange }: { files: MediaFile[]; onChange: () => vo
             {files.map((f) => (
               <tr key={f.id}>
                 <td className="mono max-w-xs truncate" title={f.path}>
+                  {f.role === "part" && <span className="chip mr-1.5">Part {f.partNo}</span>}
                   <Link to={`/play/${f.id}`} className="hover:text-accent">
                     {f.path}
                   </Link>

@@ -88,7 +88,7 @@ function Hero({ item }: { item: ItemSummary }) {
   const plot = data?.item.plot;
   return (
     <section className="relative h-[46vh] min-h-72 max-h-[520px] overflow-hidden">
-      <img src={backdropUrl(item)} alt="" className="absolute inset-0 h-full w-full object-cover" />
+      <img src={backdropUrl(item)} alt="" className="hero-art" />
       <div className="hero-fade absolute inset-0" />
       <div className="absolute inset-x-0 bottom-0 max-w-2xl px-6 pb-6">
         <div className="text-[11px] font-semibold uppercase tracking-widest text-brand-pink">Just added</div>

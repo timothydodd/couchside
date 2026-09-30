@@ -18,8 +18,7 @@ import (
 )
 
 // Folders NAS boxes and download tools litter libraries with.
-var skipDirs = map[string]bool{"@eadir": true, "#recycle": true, "$recycle.bin": true, ".trash": true,
-	"lost+found": true, "extras": true, "featurettes": true, "behind the scenes": true, "deleted scenes": true, "trailers": true}
+var skipDirs = map[string]bool{"@eadir": true, "#recycle": true, "$recycle.bin": true, ".trash": true, "lost+found": true}
 
 var reSample = regexp.MustCompile(`(?i)(^|[^a-z])sample([^a-z]|$)`)
 
@@ -51,6 +50,10 @@ func (w *Worker) scan(ctx context.Context, libID int64) error {
 			if path != lib.Path && (strings.HasPrefix(name, ".") || skipDirs[strings.ToLower(name)]) {
 				return fs.SkipDir
 			}
+			// Movie extras are indexed as extras of their movie; TV has no use for them.
+			if _, extras := parse.ExtrasDir(name); extras && lib.Kind == "tv" && path != lib.Path {
+				return fs.SkipDir
+			}
 			return nil
 		}
 		if !parse.IsVideo(name) || strings.HasPrefix(name, ".") {
@@ -68,6 +71,9 @@ func (w *Worker) scan(ctx context.Context, libID int64) error {
 			return err
 		}
 		if stamp != nil && stamp.Size == info.Size() && stamp.Mtime == info.ModTime().Unix() && !w.parseChanged(lib, path, stamp) {
+			if err := w.refreshRole(ctx, lib, path, stamp); err != nil {
+				return err
+			}
 			return w.db.TouchFile(ctx, stamp.ID, start)
 		}
 		ok, err := w.indexFile(ctx, lib, path, info, start)
@@ -105,8 +111,35 @@ func (w *Worker) parseChanged(lib db.Library, path string, st *db.FileStamp) boo
 		r, ok := parse.Episode(rel)
 		return ok && (r.Title != st.ParsedTitle || r.Year != st.ParsedYear || r.Season != st.Season || r.Episode != st.Episode)
 	}
-	r := parse.Movie(path)
+	r := parse.Movie(relPath(lib, path))
 	return r.Title != st.ParsedTitle || r.Year != st.ParsedYear
+}
+
+func relPath(lib db.Library, path string) string {
+	rel, err := filepath.Rel(lib.Path, path)
+	if err != nil {
+		return path
+	}
+	return rel
+}
+
+// refreshRole brings an unchanged movie file's guessed role (part, extra) up
+// to date with the parser, so detection reaches files indexed before it.
+func (w *Worker) refreshRole(ctx context.Context, lib db.Library, path string, st *db.FileStamp) error {
+	if lib.Kind == "tv" || st.RolePinned {
+		return nil
+	}
+	r := parse.MovieRole(relPath(lib, path), st.ParsedTitle)
+	if r.Kind == st.Role && r.Part == st.PartNo && r.Extra == st.ExtraTitle {
+		return nil
+	}
+	if err := w.db.SetDetectedRole(ctx, st.ID, r.Kind, r.Part, r.Extra); err != nil {
+		return err
+	}
+	if r.Kind == "extra" {
+		return w.Enqueue(ctx, KindStill, st.ID, "Still "+filepath.Base(path))
+	}
+	return nil
 }
 
 // indexFile parses, probes and records one file. It returns false for files
@@ -118,6 +151,7 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 		created bool
 		err     error
 		label   string
+		role    = parse.Role{Kind: "copy"}
 	)
 	if lib.Kind == "tv" {
 		rel, _ := filepath.Rel(lib.Path, path)
@@ -136,11 +170,13 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 		f.EpisodeID = &epID
 		label = r.Title
 	} else {
-		r := parse.Movie(path)
+		rel := relPath(lib, path)
+		r := parse.Movie(rel)
 		if itemID, created, err = w.db.EnsureItem(ctx, lib.ID, "movie", r.Title, r.Year); err != nil {
 			return false, err
 		}
 		label = r.Title
+		role = parse.MovieRole(rel, r.Title)
 	}
 	f.MediaItemID = itemID
 
@@ -165,6 +201,11 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 	if err != nil {
 		return false, err
 	}
+	if lib.Kind != "tv" {
+		if err := w.db.SetDetectedRole(ctx, fileID, role.Kind, role.Part, role.Extra); err != nil {
+			return false, err
+		}
+	}
 	// A changed file makes its optimized copy stale; cleanupOptimized deletes it on disk.
 	if old, err := w.db.DeleteOptimized(ctx, fileID); err == nil && old != "" {
 		_ = os.Remove(old)
@@ -174,7 +215,8 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 			return false, err
 		}
 	}
-	if f.EpisodeID != nil && f.Problem == "" {
+	// Episodes and extras are shown with a frame from the file.
+	if (f.EpisodeID != nil || role.Kind == "extra") && f.Problem == "" {
 		if err := w.Enqueue(ctx, KindStill, fileID, "Still "+filepath.Base(path)); err != nil {
 			return false, err
 		}

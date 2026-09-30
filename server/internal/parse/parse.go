@@ -35,7 +35,15 @@ var (
 
 // Movie parses a movie file. When the filename has no year but its folder
 // does ("Inception (2010)/movie.mkv"), the folder wins.
+//
+// path is relative to the library root. Files in an extras folder
+// ("Inception (2010)/Featurettes/x.mkv") belong to the movie folder above it.
 func Movie(path string) Result {
+	if _, ok := inExtrasDir(path); ok {
+		if d := Name(filepath.Base(filepath.Dir(filepath.Dir(path)))); d.Title != "" {
+			return d
+		}
+	}
 	r := Name(stem(path))
 	if r.Year == 0 {
 		dir := filepath.Base(filepath.Dir(path))

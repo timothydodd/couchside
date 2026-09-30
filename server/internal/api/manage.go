@@ -334,3 +334,92 @@ func (s *Server) resetArtwork(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusAccepted)
 }
+
+// setFileRole marks a movie file as another copy, part N of the movie, or an
+// extra with a title. The choice is pinned, so scans keep it. Marking part 2+
+// while the movie has no part 1 makes its one other copy part 1: "this is the
+// second part" is usually all anyone means.
+func (s *Server) setFileRole(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	var in struct {
+		Role       string
+		PartNo     int
+		ExtraTitle string
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, err)
+		return
+	}
+	ctx := r.Context()
+	f, err := s.db.File(ctx, id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if f.EpisodeID != nil {
+		writeErr(w, badRequest("only movie files can be parts or extras"))
+		return
+	}
+	in.ExtraTitle = strings.TrimSpace(in.ExtraTitle)
+	switch in.Role {
+	case "copy":
+		in.PartNo, in.ExtraTitle = 0, ""
+	case "part":
+		if in.PartNo < 1 || in.PartNo > 20 {
+			writeErr(w, badRequest("part number must be between 1 and 20"))
+			return
+		}
+		in.ExtraTitle = ""
+	case "extra":
+		in.PartNo = 0
+		if in.ExtraTitle == "" {
+			in.ExtraTitle = "Bonus"
+		}
+		if len(in.ExtraTitle) > 200 {
+			writeErr(w, badRequest("extra title is too long"))
+			return
+		}
+	default:
+		writeErr(w, badRequest("role must be copy, part or extra"))
+		return
+	}
+	if err := s.db.SetFileRole(ctx, id, in.Role, in.PartNo, in.ExtraTitle); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if in.Role == "part" && in.PartNo > 1 {
+		files, err := s.db.ItemFiles(ctx, f.MediaItemID)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		var copies []db.File
+		hasFirst := false
+		for _, o := range files {
+			if o.ID == id {
+				continue
+			}
+			hasFirst = hasFirst || (o.Role == "part" && o.PartNo == 1)
+			if o.Role == "copy" {
+				copies = append(copies, o)
+			}
+		}
+		if !hasFirst && len(copies) == 1 {
+			if err := s.db.SetFileRole(ctx, copies[0].ID, "part", 1, ""); err != nil {
+				writeErr(w, err)
+				return
+			}
+		}
+	}
+	if in.Role == "extra" && !f.HasStill && f.Problem == "" {
+		if err := s.db.Enqueue(ctx, worker.KindStill, id, "Still "+filepath.Base(f.Path)); err != nil {
+			writeErr(w, err)
+			return
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

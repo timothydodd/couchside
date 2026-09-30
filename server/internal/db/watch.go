@@ -66,12 +66,25 @@ type PlayInfo struct {
 	Height      *int     `json:"height"`
 	Optimized   bool     `json:"optimized"`
 	Problem     string   `json:"problem"`
+	Role        string   `json:"role"` // copy | part | extra
+	PartNo      int      `json:"partNo"`
+	ExtraTitle  string   `json:"extraTitle"`
+	// Parts is the whole movie, in order, when this file is one part of it,
+	// so the player can draw one timeline across them.
+	Parts []PartRef `json:"parts,omitempty"`
+}
+
+// PartRef is one part of a movie split across files.
+type PartRef struct {
+	FileID      int64    `json:"fileId"`
+	PartNo      int      `json:"partNo"`
+	DurationSec *float64 `json:"durationSec"`
 }
 
 const playCols = `f.id, m.id, m.kind, m.title, e.season, e.episode, COALESCE(e.title, ''),
 	COALESCE(w.position_sec, 0), f.duration_sec, COALESCE(w.watched, 0), f.has_still, m.has_backdrop, m.updated_at,
 	f.container, f.video_codec, f.audio_codec, f.width, f.height, EXISTS (SELECT 1 FROM optimized o WHERE o.file_id = f.id),
-	f.problem, COALESCE(e.air_date, '')`
+	f.problem, COALESCE(e.air_date, ''), f.role, f.part_no, f.extra_title`
 
 func playFrom(ctx context.Context) string {
 	return ` FROM files f JOIN media_items m ON m.id = f.media_item_id
@@ -84,9 +97,16 @@ func scanPlay(r interface{ Scan(...any) error }) (PlayInfo, error) {
 	var epTitle, airDate string
 	err := r.Scan(&p.FileID, &p.ItemID, &p.Kind, &p.Title, &season, &episode, &epTitle, &p.PositionSec,
 		&p.DurationSec, &p.Watched, &p.HasStill, &p.HasBackdrop, &p.UpdatedAt,
-		&p.Container, &p.VideoCodec, &p.AudioCodec, &p.Width, &p.Height, &p.Optimized, &p.Problem, &airDate)
+		&p.Container, &p.VideoCodec, &p.AudioCodec, &p.Width, &p.Height, &p.Optimized, &p.Problem, &airDate,
+		&p.Role, &p.PartNo, &p.ExtraTitle)
 	if err != nil {
 		return p, err
+	}
+	switch p.Role {
+	case "extra":
+		p.Title += " - " + p.ExtraTitle
+	case "part":
+		p.Subtitle = fmt.Sprintf("Part %d", p.PartNo)
 	}
 	if airDate != "" {
 		p.Subtitle = FormatAirDate(airDate)
@@ -110,6 +130,9 @@ func (d *DB) PlayInfo(ctx context.Context, fileID int64) (PlayInfo, error) {
 	if err != nil {
 		return p, notFound(err)
 	}
+	if p.Role == "part" {
+		return p, d.addParts(ctx, &p)
+	}
 	// Next episode in the same series, for autoplay.
 	var next int64
 	err = d.sql.QueryRowContext(ctx, `SELECT f2.id FROM files f
@@ -123,6 +146,42 @@ func (d *DB) PlayInfo(ctx context.Context, fileID int64) (PlayInfo, error) {
 		return p, err
 	}
 	return p, nil
+}
+
+// addParts fills in the movie's parts (the best copy of each part number)
+// and makes the next part what plays after this one.
+func (d *DB) addParts(ctx context.Context, p *PlayInfo) error {
+	rows, err := d.sql.QueryContext(ctx, `SELECT f.id, f.part_no, f.duration_sec FROM files f
+		WHERE f.media_item_id = ? AND f.role = 'part' AND f.problem = ''
+		ORDER BY f.part_no, f.id = ? DESC, f.size DESC`, p.ItemID, p.FileID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var r PartRef
+		if err := rows.Scan(&r.FileID, &r.PartNo, &r.DurationSec); err != nil {
+			return err
+		}
+		if n := len(p.Parts); n > 0 && p.Parts[n-1].PartNo == r.PartNo {
+			continue // another copy of the same part
+		}
+		p.Parts = append(p.Parts, r)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for i, r := range p.Parts {
+		if r.FileID != p.FileID {
+			continue
+		}
+		p.Subtitle = fmt.Sprintf("Part %d of %d", i+1, len(p.Parts))
+		if i+1 < len(p.Parts) {
+			next := p.Parts[i+1].FileID
+			p.NextFileID = &next
+		}
+	}
+	return nil
 }
 
 // ContinueWatching lists partly watched files, most recent first.

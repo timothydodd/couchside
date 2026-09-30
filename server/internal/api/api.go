@@ -89,6 +89,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/files/{id}/watched", s.fileWatched)
 		r.Delete("/files/{id}/optimized", s.deleteOptimized)
 		r.Delete("/files/{id}", s.deleteFile)
+		r.Put("/files/{id}/role", s.setFileRole)
 		r.Post("/files/{id}/hls", s.createHLS)
 		r.Get("/files/{id}/streams", s.fileStreams)
 		r.Get("/files/{id}/commercials", s.commercials)

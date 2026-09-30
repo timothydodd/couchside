@@ -30,6 +30,9 @@ export interface Item extends ItemSummary {
   totalSeasons: number | null;
 }
 
+/** What a movie file is to its movie: another copy, one part of a split movie, or an extra. */
+export type FileRole = "copy" | "part" | "extra";
+
 export interface MediaFile {
   id: number;
   path: string;
@@ -46,6 +49,11 @@ export interface MediaFile {
   watched: boolean;
   optimized: boolean;
   problem: FileProblem;
+  hasStill: boolean;
+  role: FileRole;
+  partNo: number;
+  extraTitle: string;
+  rolePinned: boolean;
 }
 
 export interface EpisodeRow {
@@ -91,6 +99,17 @@ export interface PlayInfo {
   height: number | null;
   optimized: boolean;
   problem: FileProblem;
+  role: FileRole;
+  partNo: number;
+  extraTitle: string;
+  /** The whole movie, in order, when this file is one part of it. */
+  parts?: PartRef[];
+}
+
+export interface PartRef {
+  fileId: number;
+  partNo: number;
+  durationSec: number | null;
 }
 
 /** A commercial break, in seconds from the start of the file. */
@@ -401,6 +420,8 @@ export interface ManageRow {
   minHeight: number;
   videoCodec: string;
   sameImdb: number;
+  parts: number;
+  extras: number;
 }
 
 /** GET /api/items/{id}/files */
@@ -419,6 +440,9 @@ export interface ManageFile {
   season: number | null;
   episode: number | null;
   episodeTitle: string;
+  role: FileRole;
+  partNo: number;
+  extraTitle: string;
 }
 
 /** GET /api/items/{id}/lookup */

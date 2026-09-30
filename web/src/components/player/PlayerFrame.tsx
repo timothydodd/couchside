@@ -11,15 +11,27 @@ import type { BreakMode, Segment } from "../../lib/types";
 
 /**
  * How the timeline behaves:
- * - vod: a file with a fixed duration.
+ * - vod: a file with a fixed duration. With parts, the file is one part of a
+ *   movie and the bar spans the whole movie (see PartsTimeline).
  * - live: a growing live stream you can rewind within; "Live" jumps to the edge.
  * - recording: a recording in progress, drawn over the whole program
  *   (startAt..endAt as wall-clock unix seconds, video time 0 = startAt).
  */
 export type Timeline =
-  | { kind: "vod" }
+  | { kind: "vod"; parts?: PartsTimeline }
   | { kind: "live" }
   | { kind: "recording"; startAt: number; endAt: number };
+
+/**
+ * A movie split across files. The playing file starts at offset on the
+ * movie's clock; seek is called with a movie time outside it.
+ */
+export interface PartsTimeline {
+  offset: number;
+  total: number;
+  starts: number[]; // where each later part begins, marked on the bar
+  seek: (t: number) => void;
+}
 
 export interface PlayerFrameProps {
   videoRef: RefObject<HTMLVideoElement | null>;
@@ -60,6 +72,8 @@ export default function PlayerFrame(p: PlayerFrameProps) {
 
   const v = () => videoRef.current;
   const isLive = timeline.kind !== "vod";
+  const parts = timeline.kind === "vod" ? timeline.parts : undefined;
+  const off = parts?.offset ?? 0;
   const edge = useCallback(() => {
     const e = p.liveEdge?.();
     return e ?? Math.max(st.seekStart, st.seekEnd - 3);
@@ -94,16 +108,31 @@ export default function PlayerFrame(p: PlayerFrameProps) {
     const el = v();
     if (el) el.currentTime = t;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // A time on the whole bar: outside the playing part, another part takes over.
+  const seekBar = useCallback(
+    (t: number) => {
+      const el = v();
+      if (!el) return;
+      const end = isFinite(el.duration) ? el.duration : Infinity;
+      if (parts && (t < off || t - off >= end - 0.5)) parts.seek(Math.max(0, Math.min(parts.total, t)));
+      else seekTo(t - off);
+    },
+    [parts, off, seekTo], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const skip = useCallback(
     (d: number) => {
       const el = v();
       if (!el) return;
+      if (parts && (el.currentTime + d < 0 || (isFinite(el.duration) && el.currentTime + d >= el.duration))) {
+        seekBar(off + el.currentTime + d);
+        return;
+      }
       const hi = isLive ? st.seekEnd : isFinite(el.duration) ? el.duration : el.currentTime + d;
       const t = Math.max(isLive ? st.seekStart : 0, Math.min(hi, el.currentTime + d));
       brk.allow(t);
       el.currentTime = t;
     },
-    [isLive, st.seekEnd, st.seekStart, brk.allow], // eslint-disable-line react-hooks/exhaustive-deps
+    [isLive, st.seekEnd, st.seekStart, brk.allow, parts, off, seekBar], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const goLive = () => {
     seekTo(edge());
@@ -197,7 +226,10 @@ export default function PlayerFrame(p: PlayerFrameProps) {
   let max = isFinite(st.duration) ? st.duration : st.seekEnd;
   let recordedEnd: number | undefined;
   let label = (t: number) => fmtClock(t);
-  if (timeline.kind === "live") {
+  if (parts) {
+    max = parts.total;
+    label = (t: number) => `${fmtClock(t)} · Part ${parts.starts.filter((s) => s <= t).length + 1}`;
+  } else if (timeline.kind === "live") {
     min = st.seekStart;
     max = Math.max(st.seekEnd, st.seekStart + 1);
     label = (t: number) => fmtTime(Date.now() / 1000 - (st.seekEnd - t));
@@ -209,7 +241,9 @@ export default function PlayerFrame(p: PlayerFrameProps) {
   }
 
   const timeText =
-    timeline.kind === "vod"
+    parts
+      ? `${fmtClock(off + st.time)} / ${fmtClock(parts.total)}`
+      : timeline.kind === "vod"
       ? `${fmtClock(st.time)} / ${isFinite(st.duration) ? fmtClock(st.duration) : "–"}`
       : timeline.kind === "recording"
         ? `${fmtTime(timeline.startAt + st.time)} · ${fmtClock(st.time)} of ${fmtClock(timeline.endAt - timeline.startAt)}`
@@ -305,14 +339,15 @@ export default function PlayerFrame(p: PlayerFrameProps) {
         <SeekBar
           min={min}
           max={max}
-          value={st.time}
-          bufferedEnd={st.bufferedEnd}
+          value={off + st.time}
+          bufferedEnd={off + st.bufferedEnd}
           recordedEnd={recordedEnd}
-          breaks={brk.breaks}
+          breaks={off ? brk.breaks?.map((b) => ({ start: b.start + off, end: b.end + off })) : brk.breaks}
+          marks={parts?.starts}
           label={label}
           onSeek={(t) => {
-            brk.allow(t);
-            seekTo(t);
+            brk.allow(t - off);
+            seekBar(t);
           }}
         />
         <div className="mt-1 flex items-center gap-1">

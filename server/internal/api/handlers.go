@@ -409,7 +409,7 @@ func (s *Server) itemWatched(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	files, err := s.db.ItemFiles(r.Context(), id)
+	files, err := s.db.FeatureFiles(r.Context(), id) // extras keep their own state
 	if err != nil {
 		writeErr(w, err)
 		return

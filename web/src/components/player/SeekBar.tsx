@@ -5,7 +5,8 @@ import type { Segment } from "../../lib/types";
  * Scrubber. [min, max] is the whole bar; buffered and recorded ranges are
  * drawn inside it. When recordedEnd is set (a recording still in progress),
  * the part after it is shown as not-yet-recorded and can't be seeked into.
- * Commercial breaks are marked over the track.
+ * Commercial breaks are marked over the track, and marks (where a movie's
+ * next part begins) as ticks.
  */
 export default function SeekBar({
   min,
@@ -14,6 +15,7 @@ export default function SeekBar({
   bufferedEnd,
   recordedEnd,
   breaks,
+  marks,
   label,
   onSeek,
 }: {
@@ -23,6 +25,7 @@ export default function SeekBar({
   bufferedEnd: number;
   recordedEnd?: number;
   breaks?: Segment[];
+  marks?: number[];
   label: (t: number) => string;
   onSeek: (t: number) => void;
 }) {
@@ -73,6 +76,9 @@ export default function SeekBar({
         <div className="absolute inset-y-0 left-0 bg-accent" style={{ width: pct(shown) }} />
         {breaks?.map((b) => (
           <div key={b.start} className="seek-break" style={{ left: pct(b.start), right: `calc(100% - ${pct(b.end)})` }} />
+        ))}
+        {marks?.map((m) => (
+          <div key={m} className="seek-mark" style={{ left: pct(m) }} />
         ))}
       </div>
       {recordedEnd !== undefined && (

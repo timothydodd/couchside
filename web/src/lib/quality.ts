@@ -20,6 +20,11 @@ export const qualityTone = (height: number | null | undefined): Tone =>
 const CODECS: Record<string, string> = { h264: "H.264", hevc: "HEVC", av1: "AV1", mpeg2video: "MPEG-2", vc1: "VC-1", mpeg4: "MPEG-4", vp9: "VP9" };
 export const codecLabel = (c: string) => CODECS[c] ?? c.toUpperCase();
 
-/** Extra copies: more files than movies/episodes they cover. */
-export const extraFiles = (r: { kind: string; fileCount: number; episodeCount: number }) =>
-  Math.max(0, r.fileCount - (r.kind === "series" ? Math.max(1, r.episodeCount) : 1));
+/**
+ * Extra copies: more files than movies/episodes they cover. A movie's parts
+ * together are one copy, and its extras (bonus material) aren't copies at all.
+ */
+export const extraFiles = (r: { kind: string; fileCount: number; episodeCount: number; parts: number; extras: number }) =>
+  r.kind === "series"
+    ? Math.max(0, r.fileCount - Math.max(1, r.episodeCount))
+    : Math.max(0, r.fileCount - r.extras - r.parts - (r.parts > 0 ? 0 : 1));

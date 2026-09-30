@@ -27,6 +27,8 @@ type ManageRow struct {
 	MinHeight      int    `json:"minHeight"`    // worst file's (series: the weakest episode)
 	VideoCodec     string `json:"videoCodec"`   // best file's codec
 	SameImdb       int    `json:"sameImdb"`     // other items in the library matched to the same title
+	Parts          int    `json:"parts"`        // files that are parts of a split movie
+	Extras         int    `json:"extras"`       // bonus-material files
 }
 
 // ManageRows lists a library's items with the file facts the Manage view
@@ -38,12 +40,14 @@ func (d *DB) ManageRows(ctx context.Context, libraryID int64) ([]ManageRow, erro
 		(SELECT COUNT(DISTINCT f.episode_id) FROM files f WHERE f.media_item_id = m.id),
 		(SELECT COALESCE(SUM(f.size), 0) FROM files f WHERE f.media_item_id = m.id),
 		COALESCE(best.height, 0),
-		(SELECT COALESCE(MIN(COALESCE(f.height, 0)), 0) FROM files f WHERE f.media_item_id = m.id),
+		(SELECT COALESCE(MIN(COALESCE(f.height, 0)), 0) FROM files f WHERE f.media_item_id = m.id AND f.role <> 'extra'),
 		COALESCE(best.video_codec, ''),
 		(SELECT COUNT(*) FROM media_items m2 WHERE m2.library_id = m.library_id AND m2.id <> m.id
-		   AND m.imdb_id <> '' AND m2.imdb_id = m.imdb_id)
+		   AND m.imdb_id <> '' AND m2.imdb_id = m.imdb_id),
+		(SELECT COUNT(*) FROM files f WHERE f.media_item_id = m.id AND f.role = 'part'),
+		(SELECT COUNT(*) FROM files f WHERE f.media_item_id = m.id AND f.role = 'extra')
 		FROM media_items m
-		LEFT JOIN files best ON best.id = (SELECT f.id FROM files f WHERE f.media_item_id = m.id
+		LEFT JOIN files best ON best.id = (SELECT f.id FROM files f WHERE f.media_item_id = m.id AND f.role <> 'extra'
 		  ORDER BY COALESCE(f.height, 0) DESC, f.size DESC LIMIT 1)
 		WHERE m.library_id = ? ORDER BY m.sort_title`, libraryID)
 	if err != nil {
@@ -55,7 +59,7 @@ func (d *DB) ManageRows(ctx context.Context, libraryID int64) ([]ManageRow, erro
 		var r ManageRow
 		if err := rows.Scan(&r.ID, &r.Kind, &r.Title, &r.Year, &r.ParsedTitle, &r.ParsedYear, &r.MatchStatus, &r.ImdbID,
 			&r.HasPoster, &r.CustomPoster, &r.CustomBackdrop, &r.UpdatedAt, &r.AddedAt, &r.FileCount, &r.EpisodeCount,
-			&r.Size, &r.MaxHeight, &r.MinHeight, &r.VideoCodec, &r.SameImdb); err != nil {
+			&r.Size, &r.MaxHeight, &r.MinHeight, &r.VideoCodec, &r.SameImdb, &r.Parts, &r.Extras); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -79,15 +83,20 @@ type ManageFile struct {
 	Season       *int     `json:"season"`
 	Episode      *int     `json:"episode"`
 	EpisodeTitle string   `json:"episodeTitle"`
+	Role         string   `json:"role"`
+	PartNo       int      `json:"partNo"`
+	ExtraTitle   string   `json:"extraTitle"`
 }
 
 // ManageFiles lists an item's files in episode order, best copy first.
 func (d *DB) ManageFiles(ctx context.Context, itemID int64) ([]ManageFile, error) {
 	rows, err := d.sql.QueryContext(ctx, `SELECT f.id, f.path, f.size, f.duration_sec, f.container, f.video_codec,
-		f.audio_codec, f.width, f.height, f.problem, f.added_at, e.season, e.episode, COALESCE(e.title, '')
+		f.audio_codec, f.width, f.height, f.problem, f.added_at, e.season, e.episode, COALESCE(e.title, ''),
+		f.role, f.part_no, f.extra_title
 		FROM files f LEFT JOIN episodes e ON e.id = f.episode_id
 		WHERE f.media_item_id = ?
-		ORDER BY COALESCE(e.season, 0), COALESCE(e.episode, 0), COALESCE(f.height, 0) DESC, f.size DESC`, itemID)
+		ORDER BY COALESCE(e.season, 0), COALESCE(e.episode, 0), CASE f.role WHEN 'copy' THEN 0 WHEN 'part' THEN 1 ELSE 2 END,
+		  f.part_no, COALESCE(f.height, 0) DESC, f.size DESC, f.extra_title`, itemID)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +105,8 @@ func (d *DB) ManageFiles(ctx context.Context, itemID int64) ([]ManageFile, error
 	for rows.Next() {
 		var f ManageFile
 		if err := rows.Scan(&f.ID, &f.Path, &f.Size, &f.DurationSec, &f.Container, &f.VideoCodec, &f.AudioCodec,
-			&f.Width, &f.Height, &f.Problem, &f.AddedAt, &f.Season, &f.Episode, &f.EpisodeTitle); err != nil {
+			&f.Width, &f.Height, &f.Problem, &f.AddedAt, &f.Season, &f.Episode, &f.EpisodeTitle,
+			&f.Role, &f.PartNo, &f.ExtraTitle); err != nil {
 			return nil, err
 		}
 		out = append(out, f)

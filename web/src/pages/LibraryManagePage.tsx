@@ -182,9 +182,11 @@ function Row({ r, active, onOpen }: { r: ManageRow; active: boolean; onOpen: () 
         {r.kind === "series" ? `${r.episodeCount} ep${r.episodeCount === 1 ? "" : "s"}` : r.fileCount}
         {extra > 0 && (
           <span className="badge tint-warning ml-1.5" title="More than one file for the same movie or episode">
-            <Copy size={11} /> {extra} extra
+            <Copy size={11} /> +{extra} {extra === 1 ? "copy" : "copies"}
           </span>
         )}
+        {r.parts > 0 && <span className="badge tint-muted ml-1.5">{r.parts} parts</span>}
+        {r.extras > 0 && <span className="badge tint-muted ml-1.5">{r.extras} extra{r.extras === 1 ? "" : "s"}</span>}
         {r.sameImdb > 0 && (
           <span className="badge tint-info ml-1.5" title="Another entry in this library is matched to the same title">
             Same title ×{r.sameImdb + 1}
