@@ -23,7 +23,8 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
 
 # --- comskip: commercial detection for DVR recordings --------------------------
 # Not packaged for Alpine, so it's built from source against Alpine's ffmpeg.
-# argtable2 (only in edge) is built static so the runtime needs no extra package.
+# argtable2 (only in edge) is built static so the runtime needs no extra package;
+# its 2005 config.guess/config.sub don't know aarch64, so automake's replace them.
 # Runs on the target platform: it links the same ffmpeg libraries as the runtime.
 FROM alpine:3.22 AS comskip
 ARG COMSKIP_REF=V0.83
@@ -31,7 +32,9 @@ RUN apk add --no-cache build-base autoconf automake libtool pkgconf git ffmpeg-d
 # Older C in both projects; gcc 14 would otherwise stop on implicit declarations.
 ENV CFLAGS="-O2 -std=gnu17 -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion"
 RUN wget -qO- https://downloads.sourceforge.net/argtable/argtable2-13.tar.gz | tar xz -C /tmp \
- && cd /tmp/argtable2-13 && ./configure --prefix=/usr/local --disable-shared --enable-static \
+ && cd /tmp/argtable2-13 \
+ && cp /usr/share/automake-*/config.guess /usr/share/automake-*/config.sub . \
+ && ./configure --prefix=/usr/local --disable-shared --enable-static \
  && make -j"$(nproc)" && make install
 RUN git clone --depth 1 --branch ${COMSKIP_REF} https://github.com/erikkaashoek/Comskip /comskip \
  && cd /comskip && ./autogen.sh && PKG_CONFIG_PATH=/usr/local/lib/pkgconfig ./configure \
