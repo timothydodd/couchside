@@ -7,7 +7,7 @@ import { fmtResolution } from "../lib/format";
 import { QUALITIES, chooseSource, hlsCopyCaps, nativeHls, sourceKey, stepDown, type Quality, type Source } from "../lib/playback";
 import { audioLabel, subtitleDetail, subtitleLabel, type AudioTrack, type SubtitleTrack } from "../lib/tracks";
 import { parseVtt } from "../lib/vtt";
-import { PROBLEM_TEXT, type HlsSession, type PlayInfo } from "../lib/types";
+import { PROBLEM_TEXT, type BreakMode, type Commercials, type HlsSession, type PlayInfo } from "../lib/types";
 import { useRouter } from "../stores/router";
 
 const REPORT_EVERY_MS = 10_000;
@@ -16,6 +16,22 @@ const STALL_WINDOW_MS = 60_000;
 const STALLS_TO_STEP = 3;
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const SUB_CHUNK = 90; // seconds per embedded-subtitle chunk (server's SubtitleChunk)
+const BROADCAST = new Set(["ts", "mpg", "mpeg", "wtv"]); // containers worth offering commercial detection for
+const BREAK_MODES: { id: BreakMode; label: string; short: string; detail: string }[] = [
+  { id: "auto", label: "Skip automatically", short: "Auto-skip", detail: "Jumps past each break, with a way back" },
+  { id: "button", label: "Show a skip button", short: "Skip button", detail: "Press it, or S, to skip a break" },
+  { id: "off", label: "Don't skip", short: "Marked only", detail: "Breaks are still marked on the timeline" },
+];
+
+function loadBreakMode(): BreakMode {
+  try {
+    const m = localStorage.getItem("couchside:commercials");
+    if (m === "auto" || m === "button" || m === "off") return m;
+  } catch {
+    /* ignore */
+  }
+  return "auto";
+}
 
 let hlsModule: Promise<typeof HlsType> | null = null;
 const loadHls = () => (hlsModule ??= import("hls.js/light").then((m) => m.default));
@@ -30,6 +46,9 @@ type Sub = { kind: "off" } | { kind: "text"; track: SubtitleTrack } | { kind: "b
 export default function PlayerPage({ fileId }: { fileId: number }) {
   const { data: info, error: infoError } = useApi<PlayInfo>(`/api/files/${fileId}`);
   const { data: streams } = useApi<{ audio: AudioTrack[]; subtitles: SubtitleTrack[] }>(`/api/files/${fileId}/streams`);
+  const [breakPoll, setBreakPoll] = useState(false);
+  const { data: comm, reload: reloadComm } = useApi<Commercials>(`/api/files/${fileId}/commercials`, { pollMs: breakPoll ? 5000 : undefined });
+  const [breakMode, setBreakMode] = useState<BreakMode>(loadBreakMode);
   const { go, back } = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<HlsType | null>(null);
@@ -356,6 +375,22 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   const onEndedRef = useRef(onEnded);
   onEndedRef.current = onEnded;
 
+  // --- commercials -----------------------------------------------------------------------
+  const detecting = comm?.status === "queued" || comm?.status === "running";
+  useEffect(() => setBreakPoll(detecting), [detecting]);
+  const findCommercials = () =>
+    void api(`/api/files/${fileId}/commercials`, { method: "POST" })
+      .then(reloadComm)
+      .catch((e) => flash(`Couldn't start commercial detection: ${(e as Error).message}`));
+  const chooseBreakMode = (m: BreakMode) => {
+    setBreakMode(m);
+    try {
+      localStorage.setItem("couchside:commercials", m);
+    } catch {
+      /* ignore */
+    }
+  };
+
   // --- settings ------------------------------------------------------------------------
   const mode = describe(source, session);
   const qualityLabel = (q: Quality) => (q === "auto" ? "Auto" : `${q}p`);
@@ -417,6 +452,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
         switchTo(() => setSub({ kind: "burn", track: t }));
       },
     },
+    commercialsSection(comm, breakMode, !!info && BROADCAST.has(info.container), chooseBreakMode, findCommercials),
     {
       id: "speed",
       label: "Playback speed",
@@ -442,6 +478,8 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
       subtitle={info?.subtitle}
       timeline={{ kind: "vod" }}
       settings={settings}
+      breaks={comm?.status === "done" ? comm.segments : undefined}
+      breakMode={breakMode}
       onBack={exit}
       loading={errorText ? null : loading}
       notice={notice}
@@ -449,6 +487,59 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
       videoProps={{ onError: onVideoError, onWaiting, onPlaying, onSeeking: () => (waitingSince.current = null), onEnded: () => void onEnded() }}
     />
   );
+}
+
+/**
+ * The Commercials settings page: how to treat breaks once they're known,
+ * otherwise detection status and a button to start it. Only shown for
+ * broadcast recordings, or files that have been through detection.
+ */
+function commercialsSection(
+  comm: Commercials | undefined,
+  mode: BreakMode,
+  broadcast: boolean,
+  onMode: (m: BreakMode) => void,
+  onFind: () => void,
+): SettingSection {
+  const hidden = !comm || (comm.status === "none" && !(broadcast && comm.available));
+  if (comm?.status === "done") {
+    const n = comm.segments.length;
+    return {
+      id: "commercials",
+      label: "Commercials",
+      hidden,
+      value: n === 0 ? "None found" : `${n} break${n === 1 ? "" : "s"} · ${BREAK_MODES.find((m) => m.id === mode)!.short}`,
+      options: [
+        ...BREAK_MODES.map((m) => ({ id: m.id, label: m.label, detail: m.detail, active: m.id === mode })),
+        ...(comm.available ? [{ id: "again", label: "Look again", detail: "Re-run detection on this file" }] : []),
+      ],
+      onSelect: (id) => (id === "again" ? onFind() : onMode(id as BreakMode)),
+    };
+  }
+  const text =
+    comm?.status === "queued"
+      ? "Waiting for its turn on the server…"
+      : comm?.status === "running"
+        ? "Looking for commercial breaks. They'll appear on the timeline when it's done."
+        : comm?.status === "failed"
+          ? `Detection failed: ${comm.error || "unknown error"}`
+          : "This file hasn't been checked for commercials yet.";
+  return {
+    id: "commercials",
+    label: "Commercials",
+    hidden,
+    value: comm?.status === "failed" ? "Failed" : comm?.status === "none" ? "Not checked" : "Finding…",
+    content: (
+      <div className="px-3 pb-3 pt-1 text-xs text-content-muted">
+        <p>{text}</p>
+        {comm?.available && (comm.status === "none" || comm.status === "failed") && (
+          <button className="btn-primary mt-3" onClick={onFind}>
+            {comm.status === "failed" ? "Try again" : "Find commercials"}
+          </button>
+        )}
+      </div>
+    ),
+  };
 }
 
 function describe(source: Source | null, s: HlsSession | null): string {

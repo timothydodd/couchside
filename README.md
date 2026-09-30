@@ -59,12 +59,13 @@ A lightweight self-hosted media server for a home k3s cluster. It scans your mov
   - **Options.** Limit to one channel, and keep only the last N recordings.
   - **Linking.** The rule links to the same-named library show whose episode titles match the upcoming airings, and you can change it.
   - **When it runs.** Rules re-evaluate after every guide refresh and hourly. When all tuners are booked, a later airing of the same episode is used instead.
+- **Commercial skipping.** Each finished recording is checked for commercial breaks with [Comskip](https://github.com/erikkaashoek/Comskip), which is built into the container image. The breaks are marked on the timeline, and the player skips them automatically, with a **Watch it** link to go back. The gear menu's **Commercials** page switches to a skip button (or the S key), or turns skipping off. Other `.ts` files, such as older Plex DVR recordings, can be checked from the same page. The recording file itself is never cut. For zip installs, put `comskip` on the PATH or set `COUCHSIDE_COMSKIP`; `COUCHSIDE_COMSKIP_INI` points at a tuned `comskip.ini`, which must keep `output_edl=1`.
 - **Limits.** ATSC 3.0 channels with DRM can't be watched or recorded outside SiliconDust's apps.
 
 ## Not built yet
 
 - **Auth.** There is no login. Keep Couchside on your LAN, or put it behind an auth proxy such as Authelia or oauth2-proxy.
-- Commercial detection, and a Schedules Direct guide source for two weeks of listings.
+- A Schedules Direct guide source for two weeks of listings.
 - A TMDB provider for real backdrops, and multiple users.
 
 ## Install

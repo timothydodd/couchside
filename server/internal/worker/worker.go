@@ -29,6 +29,7 @@ type Worker struct {
 	providers *metadata.Chain
 	ff        imaging.FFmpeg
 	enc       transcode.Encoder
+	comskip   string // resolved comskip binary; "" when commercial detection is off
 	wake      chan struct{}
 	wakeEnc   chan struct{}
 
@@ -38,7 +39,8 @@ type Worker struct {
 
 func New(d *db.DB, cfg config.Config, providers *metadata.Chain, enc transcode.Encoder) *Worker {
 	return &Worker{db: d, cfg: cfg, providers: providers, ff: imaging.FFmpeg{Bin: cfg.FFmpeg}, enc: enc,
-		wake: make(chan struct{}, 1), wakeEnc: make(chan struct{}, 1), cancels: map[int64]context.CancelFunc{}}
+		comskip: detectComskip(cfg.Comskip),
+		wake:    make(chan struct{}, 1), wakeEnc: make(chan struct{}, 1), cancels: map[int64]context.CancelFunc{}}
 }
 
 // Cancel stops a running job or drops a queued one. Reports whether anything was cancelled.
@@ -77,6 +79,7 @@ func (w *Worker) Run(ctx context.Context) {
 		slog.Error("requeue running jobs", "err", err)
 	}
 	w.cleanupOptimized(ctx)
+	w.cleanupComskip()
 	var wg sync.WaitGroup
 	for i := 0; i < w.cfg.Workers; i++ {
 		wg.Add(1)
@@ -171,6 +174,8 @@ func (w *Worker) handle(ctx context.Context, j *db.Job) error {
 		return w.still(ctx, j.RefID)
 	case KindOptimize:
 		return w.optimize(ctx, j.ID, j.RefID)
+	case KindCommercials:
+		return w.commercials(ctx, j.ID, j.RefID)
 	}
 	return fmt.Errorf("unknown job kind %q", j.Kind)
 }

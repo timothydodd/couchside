@@ -1,9 +1,11 @@
 import { useRef, useState, type PointerEvent } from "react";
+import type { Segment } from "../../lib/types";
 
 /**
  * Scrubber. [min, max] is the whole bar; buffered and recorded ranges are
  * drawn inside it. When recordedEnd is set (a recording still in progress),
  * the part after it is shown as not-yet-recorded and can't be seeked into.
+ * Commercial breaks are marked over the track.
  */
 export default function SeekBar({
   min,
@@ -11,6 +13,7 @@ export default function SeekBar({
   value,
   bufferedEnd,
   recordedEnd,
+  breaks,
   label,
   onSeek,
 }: {
@@ -19,6 +22,7 @@ export default function SeekBar({
   value: number;
   bufferedEnd: number;
   recordedEnd?: number;
+  breaks?: Segment[];
   label: (t: number) => string;
   onSeek: (t: number) => void;
 }) {
@@ -67,6 +71,9 @@ export default function SeekBar({
         {recordedEnd !== undefined && <div className="absolute inset-y-0 left-0 bg-white/20" style={{ width: pct(limit) }} />}
         <div className="absolute inset-y-0 left-0 bg-white/35" style={{ width: pct(Math.min(bufferedEnd, limit)) }} />
         <div className="absolute inset-y-0 left-0 bg-accent" style={{ width: pct(shown) }} />
+        {breaks?.map((b) => (
+          <div key={b.start} className="seek-break" style={{ left: pct(b.start), right: `calc(100% - ${pct(b.end)})` }} />
+        ))}
       </div>
       {recordedEnd !== undefined && (
         <div className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 rounded bg-critical" style={{ left: pct(limit) }} title="Recorded so far" />
@@ -78,6 +85,7 @@ export default function SeekBar({
       {hover !== null && (
         <div className="pointer-events-none absolute -top-8 -translate-x-1/2 rounded bg-black/85 px-2 py-0.5 text-xs tabular-nums text-white" style={{ left: pct(hover) }}>
           {label(hover)}
+          {breaks?.some((b) => hover >= b.start && hover < b.end) && " · Commercial"}
         </div>
       )}
     </div>

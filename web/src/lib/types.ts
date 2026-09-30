@@ -93,6 +93,23 @@ export interface PlayInfo {
   problem: FileProblem;
 }
 
+/** A commercial break, in seconds from the start of the file. */
+export interface Segment {
+  start: number;
+  end: number;
+}
+
+/** GET /api/files/{id}/commercials */
+export interface Commercials {
+  available: boolean; // comskip is installed on the server
+  status: "none" | "queued" | "running" | "failed" | "done";
+  error: string;
+  segments: Segment[];
+}
+
+/** How the player treats commercial breaks. */
+export type BreakMode = "auto" | "button" | "off";
+
 /** Set by the scanner for files that can't be played at all. */
 export type FileProblem = "" | "unreadable" | "no-video";
 

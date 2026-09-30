@@ -179,5 +179,22 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 			return false, err
 		}
 	}
+	if w.comskip != "" && f.Problem == "" {
+		if err := w.autoCommercials(ctx, fileID, path); err != nil {
+			return false, err
+		}
+	}
 	return true, nil
+}
+
+// autoCommercials queues commercial detection for a finished DVR recording
+// that hasn't been analysed in its current form.
+func (w *Worker) autoCommercials(ctx context.Context, fileID int64, path string) error {
+	if rec, err := w.db.IsRecording(ctx, path); err != nil || !rec {
+		return err
+	}
+	if _, done, err := w.db.Commercials(ctx, fileID); err != nil || done {
+		return err
+	}
+	return w.EnqueueCommercials(ctx, fileID, path)
 }

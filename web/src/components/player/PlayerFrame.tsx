@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject, type VideoHTMLAttributes } from "react";
 import {
-  AlertTriangle, ArrowLeft, Maximize, Minimize, Pause, Play, Radio, RotateCcw, RotateCw, Settings2, SkipBack, Volume1, Volume2, VolumeX,
+  AlertTriangle, ArrowLeft, ChevronsRight, Maximize, Minimize, Pause, Play, Radio, RotateCcw, RotateCw, Settings2, SkipBack, Volume1, Volume2, VolumeX,
 } from "lucide-react";
 import SeekBar from "./SeekBar";
 import SettingsMenu, { type SettingSection } from "./SettingsMenu";
 import { useMediaState } from "./useMediaState";
+import { useBreakSkip } from "./useBreakSkip";
 import { fmtClock, fmtTime } from "../../lib/format";
+import type { BreakMode, Segment } from "../../lib/types";
 
 /**
  * How the timeline behaves:
@@ -30,6 +32,9 @@ export interface PlayerFrameProps {
   /** Position of the live edge (hls.liveSyncPosition); defaults to a few seconds before the seekable end. */
   liveEdge?: () => number | null;
   settings: SettingSection[];
+  /** Commercial breaks to mark and skip (vod only). */
+  breaks?: Segment[];
+  breakMode?: BreakMode;
   onBack: () => void;
   onKey?: (e: KeyboardEvent) => boolean; // return true when handled
   loading?: string | null;
@@ -46,6 +51,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
   const { videoRef, timeline } = p;
   const root = useRef<HTMLDivElement>(null);
   const st = useMediaState(videoRef);
+  const brk = useBreakSkip(videoRef, st.time, timeline.kind === "vod" ? p.breaks : undefined, p.breakMode ?? "off");
   const [chrome, setChrome] = useState(true);
   const [menu, setMenu] = useState(false);
   const [full, setFull] = useState(false);
@@ -93,9 +99,11 @@ export default function PlayerFrame(p: PlayerFrameProps) {
       const el = v();
       if (!el) return;
       const hi = isLive ? st.seekEnd : isFinite(el.duration) ? el.duration : el.currentTime + d;
-      el.currentTime = Math.max(isLive ? st.seekStart : 0, Math.min(hi, el.currentTime + d));
+      const t = Math.max(isLive ? st.seekStart : 0, Math.min(hi, el.currentTime + d));
+      brk.allow(t);
+      el.currentTime = t;
     },
-    [isLive, st.seekEnd, st.seekStart], // eslint-disable-line react-hooks/exhaustive-deps
+    [isLive, st.seekEnd, st.seekStart, brk.allow], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const goLive = () => {
     seekTo(edge());
@@ -170,6 +178,9 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           break;
         case "f":
           toggleFull();
+          break;
+        case "s":
+          brk.skip();
           break;
         case "Escape":
           if (menu) setMenu(false);
@@ -270,6 +281,20 @@ export default function PlayerFrame(p: PlayerFrameProps) {
         </div>
       )}
 
+      {(brk.current || brk.skipped) && !p.error && (
+        <div className="absolute bottom-28 right-5 z-20" onClick={(e) => e.stopPropagation()}>
+          {brk.current ? (
+            <button className="player-pill" onClick={brk.skip} title="Skip commercial (S)">
+              Skip commercial <ChevronsRight size={16} />
+            </button>
+          ) : (
+            <button className="player-pill" onClick={brk.watch}>
+              Skipped a {fmtClock(brk.skipped!.end - brk.skipped!.start)} commercial break · <span className="underline">Watch it</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* bottom controls */}
       <div
         className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/55 to-transparent px-5 pb-3 pt-16 transition-opacity duration-300 ${
@@ -277,7 +302,19 @@ export default function PlayerFrame(p: PlayerFrameProps) {
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-        <SeekBar min={min} max={max} value={st.time} bufferedEnd={st.bufferedEnd} recordedEnd={recordedEnd} label={label} onSeek={seekTo} />
+        <SeekBar
+          min={min}
+          max={max}
+          value={st.time}
+          bufferedEnd={st.bufferedEnd}
+          recordedEnd={recordedEnd}
+          breaks={brk.breaks}
+          label={label}
+          onSeek={(t) => {
+            brk.allow(t);
+            seekTo(t);
+          }}
+        />
         <div className="mt-1 flex items-center gap-1">
           <CtlButton label={st.paused ? "Play (Space)" : "Pause (Space)"} onClick={toggle}>
             {st.paused ? <Play size={20} className="fill-current" /> : <Pause size={20} className="fill-current" />}

@@ -30,6 +30,9 @@ type Config struct {
 	RecordingsDir string        // COUCHSIDE_RECORDINGS_DIR: where the DVR writes (must be writable)
 	PadBefore     time.Duration // COUCHSIDE_DVR_PAD_BEFORE, default 1m
 	PadAfter      time.Duration // COUCHSIDE_DVR_PAD_AFTER, default 2m
+
+	Comskip    string // COUCHSIDE_COMSKIP: comskip binary; commercial detection is off when it isn't found
+	ComskipINI string // COUCHSIDE_COMSKIP_INI: your own comskip.ini; empty uses Couchside's defaults
 }
 
 func Load() Config {
@@ -56,6 +59,9 @@ func Load() Config {
 		RecordingsDir: filepath.Clean(env("COUCHSIDE_RECORDINGS_DIR", filepath.Join(data, "recordings"))),
 		PadBefore:     envDur("COUCHSIDE_DVR_PAD_BEFORE", time.Minute),
 		PadAfter:      envDur("COUCHSIDE_DVR_PAD_AFTER", 2*time.Minute),
+
+		Comskip:    env("COUCHSIDE_COMSKIP", "comskip"),
+		ComskipINI: os.Getenv("COUCHSIDE_COMSKIP_INI"),
 	}
 	if n, err := strconv.Atoi(os.Getenv("COUCHSIDE_WORKERS")); err == nil && n > 0 {
 		c.Workers = n

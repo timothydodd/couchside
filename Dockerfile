@@ -21,6 +21,22 @@ COPY --from=web /web/dist ./internal/webui/dist
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/couchside ./cmd/couchside
 
+# --- comskip: commercial detection for DVR recordings --------------------------
+# Not packaged for Alpine, so it's built from source against Alpine's ffmpeg.
+# argtable2 (only in edge) is built static so the runtime needs no extra package.
+# Runs on the target platform: it links the same ffmpeg libraries as the runtime.
+FROM alpine:3.22 AS comskip
+ARG COMSKIP_REF=V0.83
+RUN apk add --no-cache build-base autoconf automake libtool pkgconf git ffmpeg-dev
+# Older C in both projects; gcc 14 would otherwise stop on implicit declarations.
+ENV CFLAGS="-O2 -std=gnu17 -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion"
+RUN wget -qO- https://downloads.sourceforge.net/argtable/argtable2-13.tar.gz | tar xz -C /tmp \
+ && cd /tmp/argtable2-13 && ./configure --prefix=/usr/local --disable-shared --enable-static \
+ && make -j"$(nproc)" && make install
+RUN git clone --depth 1 --branch ${COMSKIP_REF} https://github.com/erikkaashoek/Comskip /comskip \
+ && cd /comskip && ./autogen.sh && PKG_CONFIG_PATH=/usr/local/lib/pkgconfig ./configure \
+ && make -j"$(nproc)" && strip comskip
+
 # --- runtime: Alpine for ffmpeg ------------------------------------------------
 FROM alpine:3.22
 # Intel VAAPI drivers (iHD for Broadwell and newer, i965 for older chips) so
@@ -30,6 +46,7 @@ RUN apk add --no-cache ffmpeg ca-certificates tzdata \
  && adduser -D -H -u 1000 couchside \
  && mkdir -p /data /cache /media /recordings \
  && chown couchside:couchside /data /cache /recordings
+COPY --from=comskip /comskip/comskip /usr/local/bin/comskip
 COPY --from=server /out/couchside /usr/local/bin/couchside
 
 ENV COUCHSIDE_ADDR=:8080 \
