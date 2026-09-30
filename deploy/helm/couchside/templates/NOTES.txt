@@ -1,0 +1,19 @@
+Couchside is starting.
+
+{{- if .Values.ingress.enabled }}
+Open: http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}
+{{- else }}
+Port-forward to try it:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "couchside.fullname" . }} 8080:{{ .Values.service.port }}
+  open http://localhost:8080
+{{- end }}
+
+Then add libraries under {{ .Values.media.mountPath }} on the Libraries page.
+{{- if not (or .Values.omdb.apiKey .Values.omdb.existingSecret) }}
+
+No OMDb key configured: titles come from filenames and there are no posters.
+  kubectl -n {{ .Release.Namespace }} create secret generic couchside-omdb --from-literal=omdb-api-key=<key>
+  helm upgrade {{ .Release.Name }} ... --set omdb.existingSecret=couchside-omdb
+{{- end }}
+
+Couchside has no login yet. Keep it on your LAN or behind an auth proxy.

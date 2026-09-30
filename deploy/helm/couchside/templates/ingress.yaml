@@ -1,0 +1,34 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "couchside.fullname" . }}
+  labels: {{- include "couchside.labels" . | nindent 4 }}
+  {{- if or .Values.ingress.annotations .Values.ingress.tls.clusterIssuer }}
+  annotations:
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- if .Values.ingress.tls.clusterIssuer }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.tls.clusterIssuer }}
+    {{- end }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ .Values.ingress.host | quote }}]
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "couchside.fullname" . }}
+                port:
+                  name: http
+{{- end }}

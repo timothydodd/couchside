@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "couchside.fullname" . }}
+  labels: {{- include "couchside.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # SQLite on a ReadWriteOnce volume: never run two pods at once.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {{- include "couchside.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "couchside.selector" . | nindent 8 }}
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- with .Values.hwaccel.dri.groups }}
+        supplementalGroups: {{ toJson . }}
+        {{- end }}
+      containers:
+        - name: couchside
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if and .Values.hwaccel.dri.enabled .Values.hwaccel.dri.privileged }}
+          securityContext:
+            privileged: true
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: COUCHSIDE_MEDIA_ROOT
+              value: {{ .Values.media.mountPath | quote }}
+            - name: COUCHSIDE_WORKERS
+              value: {{ .Values.config.workers | quote }}
+            - name: COUCHSIDE_SCAN_INTERVAL
+              value: {{ .Values.config.scanInterval | quote }}
+            - name: COUCHSIDE_HWACCEL
+              value: {{ .Values.hwaccel.mode | quote }}
+            - name: COUCHSIDE_MAX_TRANSCODES
+              value: {{ .Values.config.maxTranscodes | quote }}
+            - name: COUCHSIDE_ENCODE_WORKERS
+              value: {{ .Values.config.encodeWorkers | quote }}
+            - name: COUCHSIDE_OPTIMIZE_HEIGHT
+              value: {{ .Values.config.optimizeHeight | quote }}
+            {{- if .Values.config.debug }}
+            - name: COUCHSIDE_DEBUG
+              value: "1"
+            {{- end }}
+            {{- if or .Values.omdb.apiKey .Values.omdb.existingSecret }}
+            - name: OMDB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "couchside.omdbSecret" . }}
+                  key: {{ .Values.omdb.existingSecretKey }}
+            {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: cache
+              mountPath: /cache
+            - name: media
+              mountPath: {{ .Values.media.mountPath }}
+              readOnly: true
+            {{- if .Values.hwaccel.dri.enabled }}
+            - name: dri
+              mountPath: /dev/dri
+            {{- end }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.data.existingClaim | default (printf "%s-data" (include "couchside.fullname" .)) }}
+        - name: cache
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.cache.existingClaim | default (printf "%s-cache" (include "couchside.fullname" .)) }}
+        - name: media
+          {{- if eq .Values.media.type "nfs" }}
+          nfs:
+            server: {{ required "media.nfs.server is required" .Values.media.nfs.server }}
+            path: {{ required "media.nfs.path is required" .Values.media.nfs.path }}
+            readOnly: true
+          {{- else if eq .Values.media.type "hostPath" }}
+          hostPath:
+            path: {{ required "media.hostPath.path is required" .Values.media.hostPath.path }}
+            type: Directory
+          {{- else if eq .Values.media.type "pvc" }}
+          persistentVolumeClaim:
+            claimName: {{ required "media.pvc.claimName is required" .Values.media.pvc.claimName }}
+            readOnly: true
+          {{- else }}
+          {{- fail "media.type must be nfs, hostPath or pvc" }}
+          {{- end }}
+        {{- if .Values.hwaccel.dri.enabled }}
+        - name: dri
+          hostPath:
+            path: /dev/dri
+            type: Directory
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}

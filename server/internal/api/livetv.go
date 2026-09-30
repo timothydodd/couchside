@@ -1,0 +1,311 @@
+package api
+
+import (
+	"errors"
+	"net/http"
+	"os"
+	"strconv"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/timothydodd/couchside/internal/db"
+	"github.com/timothydodd/couchside/internal/livetv"
+)
+
+var errNoTuner = httpError{http.StatusNotFound, "Live TV isn't set up: set COUCHSIDE_HDHOMERUN to your tuner's IP address"}
+
+func (s *Server) tvStatus(w http.ResponseWriter, r *http.Request) {
+	if s.tv == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"configured": false})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.tv.Status(r.Context()))
+}
+
+func (s *Server) tvRefresh(w http.ResponseWriter, r *http.Request) {
+	if s.tv == nil {
+		writeErr(w, errNoTuner)
+		return
+	}
+	if err := s.tv.RefreshNow(r.Context()); err != nil {
+		writeErr(w, httpError{http.StatusBadGateway, err.Error()})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type channelNow struct {
+	db.Channel
+	Now  *db.Program `json:"now"`
+	Next *db.Program `json:"next"`
+}
+
+// tvChannels lists channels with what's on now and next.
+func (s *Server) tvChannels(w http.ResponseWriter, r *http.Request) {
+	if s.tv == nil {
+		writeErr(w, errNoTuner)
+		return
+	}
+	ctx := r.Context()
+	chans, err := s.db.Channels(ctx)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	now := time.Now().Unix()
+	progs, err := s.db.ProgramsBetween(ctx, now, now+6*3600)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	byCh := map[string][]db.Program{}
+	for _, p := range progs {
+		byCh[p.Channel] = append(byCh[p.Channel], p)
+	}
+	out := make([]channelNow, 0, len(chans))
+	for _, c := range chans {
+		cn := channelNow{Channel: c}
+		for i := range byCh[c.Number] {
+			p := byCh[c.Number][i]
+			if p.StartAt <= now && p.EndAt > now {
+				cn.Now = &p
+			} else if p.StartAt > now && cn.Next == nil {
+				cn.Next = &p
+			}
+		}
+		out = append(out, cn)
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// tvGuide returns every channel's programs overlapping [start, start+hours).
+func (s *Server) tvGuide(w http.ResponseWriter, r *http.Request) {
+	if s.tv == nil {
+		writeErr(w, errNoTuner)
+		return
+	}
+	start, _ := strconv.ParseInt(r.URL.Query().Get("start"), 10, 64)
+	if start == 0 {
+		start = time.Now().Unix()
+	}
+	hours, _ := strconv.Atoi(r.URL.Query().Get("hours"))
+	if hours <= 0 || hours > 24 {
+		hours = 4
+	}
+	ctx := r.Context()
+	chans, err := s.db.Channels(ctx)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	progs, err := s.db.ProgramsBetween(ctx, start, start+int64(hours)*3600)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	byCh := map[string][]db.Program{}
+	for _, p := range progs {
+		byCh[p.Channel] = append(byCh[p.Channel], p)
+	}
+	type row struct {
+		db.Channel
+		Programs []db.Program `json:"programs"`
+	}
+	out := make([]row, 0, len(chans))
+	for _, c := range chans {
+		ps := byCh[c.Number]
+		if ps == nil {
+			ps = []db.Program{}
+		}
+		out = append(out, row{Channel: c, Programs: ps})
+	}
+	through, _ := s.db.GuideCoverage(ctx)
+	writeJSON(w, http.StatusOK, map[string]any{"start": start, "hours": hours, "through": through, "channels": out})
+}
+
+func (s *Server) tvWatch(w http.ResponseWriter, r *http.Request) {
+	if s.tv == nil {
+		writeErr(w, errNoTuner)
+		return
+	}
+	var in struct {
+		Channel string `json:"channel"`
+		Height  int    `json:"height"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, err)
+		return
+	}
+	sess, err := s.tv.Watch(r.Context(), in.Channel, in.Height)
+	switch {
+	case errors.Is(err, livetv.ErrNoTuner):
+		writeErr(w, httpError{http.StatusServiceUnavailable, "All tuners are busy (recordings, other viewers or Plex). Try again when one frees up."})
+		return
+	case err != nil:
+		writeErr(w, err)
+		return
+	}
+	prog, _ := s.db.ProgramAt(r.Context(), sess.Channel, time.Now().Unix())
+	writeJSON(w, http.StatusOK, map[string]any{
+		"sessionId": sess.ID, "playlist": "/api/live/" + sess.ID + "/index.m3u8",
+		"channel": sess.Channel, "name": sess.Name, "height": sess.Height, "hw": sess.HW, "now": prog,
+	})
+}
+
+func (s *Server) tvLiveFile(w http.ResponseWriter, r *http.Request) {
+	if s.tv == nil {
+		writeErr(w, errNoTuner)
+		return
+	}
+	name := chi.URLParam(r, "file")
+	p, err := s.tv.LiveFile(chi.URLParam(r, "sid"), name)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			http.NotFound(w, r)
+			return
+		}
+		writeErr(w, err)
+		return
+	}
+	if name == "index.m3u8" {
+		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+	} else {
+		w.Header().Set("Content-Type", "video/mp2t")
+	}
+	http.ServeFile(w, r, p)
+}
+
+func (s *Server) tvLeave(w http.ResponseWriter, r *http.Request) {
+	if s.tv != nil {
+		s.tv.LeaveLive(chi.URLParam(r, "sid"))
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) dvrList(w http.ResponseWriter, r *http.Request) {
+	if s.tv == nil {
+		writeErr(w, errNoTuner)
+		return
+	}
+	recs, err := s.db.Recordings(r.Context())
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, recs)
+}
+
+func (s *Server) dvrRecord(w http.ResponseWriter, r *http.Request) {
+	if s.tv == nil {
+		writeErr(w, errNoTuner)
+		return
+	}
+	var in struct {
+		ProgramID int64 `json:"programId"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, err)
+		return
+	}
+	id, overlap, err := s.tv.Record(r.Context(), in.ProgramID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeErr(w, err)
+			return
+		}
+		writeErr(w, badRequest(err.Error()))
+		return
+	}
+	tuners := 0
+	if st := s.tv.Status(r.Context()); st.Device != nil {
+		tuners = st.Device.TunerCount
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "overlapping": overlap, "tuners": tuners,
+		"conflict": tuners > 0 && overlap >= tuners})
+}
+
+func (s *Server) dvrCancel(w http.ResponseWriter, r *http.Request) {
+	if s.tv == nil {
+		writeErr(w, errNoTuner)
+		return
+	}
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := s.tv.Cancel(r.Context(), id); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) dvrDelete(w http.ResponseWriter, r *http.Request) {
+	if s.tv == nil {
+		writeErr(w, errNoTuner)
+		return
+	}
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := s.tv.Delete(r.Context(), id); err != nil {
+		writeErr(w, badRequest(err.Error()))
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// dvrWatch starts playback of an in-progress recording from its beginning.
+func (s *Server) dvrWatch(w http.ResponseWriter, r *http.Request) {
+	if s.tv == nil {
+		writeErr(w, errNoTuner)
+		return
+	}
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	var in struct {
+		Height int `json:"height"`
+	}
+	_ = decode(r, &in)
+	sess, err := s.tv.WatchRecording(r.Context(), id, in.Height)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeErr(w, err)
+			return
+		}
+		writeErr(w, badRequest(err.Error()))
+		return
+	}
+	rec, _ := s.db.Recording(r.Context(), id)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"sessionId": sess.ID, "playlist": "/api/live/" + sess.ID + "/index.m3u8",
+		"channel": sess.Channel, "name": sess.Name, "height": sess.Height, "hw": sess.HW, "recording": rec,
+	})
+}
+
+// tvPin pins or unpins a channel ({"pinned": true}).
+func (s *Server) tvPin(w http.ResponseWriter, r *http.Request) {
+	if s.tv == nil {
+		writeErr(w, errNoTuner)
+		return
+	}
+	var in struct {
+		Pinned bool `json:"pinned"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := s.db.SetChannelPinned(r.Context(), chi.URLParam(r, "number"), in.Pinned); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

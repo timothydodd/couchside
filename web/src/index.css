@@ -1,0 +1,390 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Design tokens — shared with Portside Lite (Dracula/neon palette). Dark is the default;
+   `[data-theme="light"]` on <html> switches to the light variant. The theme
+   store stamps that attribute (see stores/theme.ts).
+--------------------------------------------------------------------------- */
+:root,
+[data-theme="dark"] {
+  --bg-page: #21222c;
+  --bg-surface: #282a36;
+  --bg-raised: #343746;
+  --bg-muted: rgba(255, 255, 255, 0.05);
+  --bg-input: #21222c;
+
+  --text-primary: #f8f8f2;
+  --text-secondary: #c3c5d4;
+  --text-muted: #8b8fa8;
+  --text-on-accent: #ffffff;
+
+  --border: #44475a;
+  --border-light: #373a4a;
+
+  /* Brand */
+  --accent: #8a5cff;
+  --accent-hover: #a07cff;
+  --secondary: #49a7ff;
+  --brand-pink: #ff4fd8;
+  --brand-cyan: #3ef2ff;
+
+  /* Status — reserved for state, never reused as a series color. */
+  --critical: #ff5555;
+  --warning: #ffb86c;
+  --info: #49a7ff;
+  --good: #50fa7b;
+
+
+
+  --focus-ring: rgba(138, 92, 255, 0.45);
+  --shadow-md: 0 8px 28px rgba(0, 0, 0, 0.45);
+
+  /* Media */
+  --shadow-poster: 0 10px 28px rgba(0, 0, 0, 0.55);
+  --player-bg: #000000;
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg-page: #f3f3f7;
+  --bg-surface: #ffffff;
+  --bg-raised: #f7f7fb;
+  --bg-muted: rgba(40, 42, 54, 0.05);
+  --bg-input: #ffffff;
+
+  --text-primary: #1f2030;
+  --text-secondary: #4a4d63;
+  --text-muted: #72758c;
+  --text-on-accent: #ffffff;
+
+  --border: #d6d7e1;
+  --border-light: #e7e8ef;
+
+  --accent: #6d3fe6;
+  --accent-hover: #5a2fd0;
+  --secondary: #2f7fd6;
+  --brand-pink: #d629b4;
+  --brand-cyan: #0f9fb0;
+
+  --critical: #d63a4a;
+  --warning: #c27417;
+  --info: #2f7fd6;
+  --good: #1f9d55;
+
+
+
+  --focus-ring: rgba(109, 63, 230, 0.3);
+  --shadow-md: 0 8px 28px rgba(0, 0, 0, 0.12);
+
+  --shadow-poster: 0 10px 24px rgba(31, 32, 48, 0.22);
+  --player-bg: #000000;
+  color-scheme: light;
+}
+
+/* Map tokens to Tailwind color utilities (bg-surface, text-content, …). */
+@theme inline {
+  --color-page: var(--bg-page);
+  --color-surface: var(--bg-surface);
+  --color-raised: var(--bg-raised);
+  --color-muted: var(--bg-muted);
+  --color-input: var(--bg-input);
+
+  --color-content: var(--text-primary);
+  --color-content-secondary: var(--text-secondary);
+  --color-content-muted: var(--text-muted);
+  --color-on-accent: var(--text-on-accent);
+
+  --color-border: var(--border);
+  --color-border-light: var(--border-light);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-secondary: var(--secondary);
+  --color-brand-pink: var(--brand-pink);
+  --color-brand-cyan: var(--brand-cyan);
+
+  --color-critical: var(--critical);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-good: var(--good);
+
+  --font-sans: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "Cascadia Mono", "JetBrains Mono", Consolas, ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Themed, unobtrusive scrollbars. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------------
+   Reusable component classes (referenced by the React components).
+--------------------------------------------------------------------------- */
+@layer components {
+  /* Each button variant inlines the shared base utilities — Tailwind v4
+     `@apply` composes only real utilities, not other component classes. */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 bg-accent text-on-accent hover:bg-accent-hover;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 bg-critical text-on-accent hover:opacity-90;
+  }
+  /* Outlined tool button: border picks up the accent on hover. */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 text-content-secondary hover:border-accent hover:text-content;
+  }
+  .btn-quiet {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 text-content-muted hover:bg-muted hover:text-content;
+  }
+  /* Compact action chip used in issue cards and table rows. */
+  .btn-chip {
+    @apply inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 text-content-secondary hover:border-accent hover:text-content;
+  }
+
+  .field {
+    @apply rounded-md border border-border bg-input px-2.5 py-1.5 text-sm text-content placeholder:text-content-muted focus:border-accent focus:outline-none;
+  }
+  .field-label {
+    @apply mb-1 block text-xs font-medium text-content-secondary;
+  }
+
+  .card {
+    @apply rounded-lg border border-border-light bg-surface;
+  }
+  .card-title {
+    @apply text-xs font-semibold uppercase tracking-wide text-content-muted;
+  }
+
+  /* Sub-tab / pill navigation item. */
+  .navtab {
+    @apply px-2.5 py-1.5 text-xs text-content-muted transition-colors hover:text-content;
+  }
+  .navtab-active {
+    @apply border-b-2 border-accent text-content;
+  }
+
+  /* Data tables. */
+  .table {
+    @apply w-full border-collapse text-sm;
+  }
+  .table th {
+    @apply sticky top-0 z-10 whitespace-nowrap border-b border-border bg-surface px-3 py-2 text-left text-xs font-semibold text-content-muted;
+  }
+  .table td {
+    @apply whitespace-nowrap border-b border-border-light px-3 py-1.5 align-middle;
+  }
+  .table tbody tr {
+    @apply transition-colors hover:bg-muted;
+  }
+
+  .mono {
+    @apply font-mono text-[12px];
+  }
+}
+
+/* Native form controls (checkboxes) tint with the accent. */
+.accent-brand {
+  accent-color: var(--accent);
+}
+
+/* Tinted pill backgrounds derived from a status color. */
+.tint-critical {
+  background-color: color-mix(in srgb, var(--critical) 14%, transparent);
+  color: var(--critical);
+}
+.tint-warning {
+  background-color: color-mix(in srgb, var(--warning) 14%, transparent);
+  color: var(--warning);
+}
+.tint-info {
+  background-color: color-mix(in srgb, var(--info) 14%, transparent);
+  color: var(--info);
+}
+.tint-good {
+  background-color: color-mix(in srgb, var(--good) 14%, transparent);
+  color: var(--good);
+}
+.tint-muted {
+  background-color: var(--bg-muted);
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------------
+   Media components — Couchside additions, built on the same tokens.
+--------------------------------------------------------------------------- */
+@layer components {
+  /* 2:3 poster tile. Lifts and picks up the accent border on hover/focus,
+     the same affordance .btn-ghost and StatTile use. */
+  .poster {
+    @apply relative block overflow-hidden rounded-lg border border-border-light bg-raised transition-[transform,border-color,box-shadow] duration-200;
+    aspect-ratio: 2 / 3;
+  }
+  .poster-link:hover .poster,
+  .poster-link:focus-visible .poster {
+    @apply -translate-y-1 border-accent;
+    box-shadow: var(--shadow-poster);
+  }
+  .poster-link:focus-visible {
+    outline: none;
+  }
+  .poster-title {
+    @apply mt-2 truncate text-sm font-medium text-content;
+  }
+  .poster-meta {
+    @apply truncate text-xs tabular-nums text-content-muted;
+  }
+
+  /* 16:9 tile for episodes and continue-watching. */
+  .still {
+    @apply relative block overflow-hidden rounded-lg border border-border-light bg-raised transition-[border-color,box-shadow] duration-200;
+    aspect-ratio: 16 / 9;
+  }
+  .still-link:hover .still,
+  .still-link:focus-visible .still {
+    @apply border-accent;
+    box-shadow: var(--shadow-poster);
+  }
+  .still-link:focus-visible {
+    outline: none;
+  }
+
+  /* Section heading for poster rows; deliberately identical to .card-title. */
+  .row-title {
+    @apply text-xs font-semibold uppercase tracking-wide text-content-muted;
+  }
+
+  /* Small overlay badge on artwork (rating, watched, unmatched). */
+  .art-badge {
+    @apply inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold backdrop-blur-sm;
+  }
+
+  /* Metadata chip on detail pages (genre, codec, resolution). */
+  .chip {
+    @apply inline-flex items-center gap-1 rounded border border-border-light px-2 py-0.5 text-xs text-content-secondary;
+  }
+}
+
+/* Artwork placeholder when there is no poster: a brand gradient seeded per
+   item via --ph-angle, so a wall of unmatched titles still looks deliberate. */
+.poster-placeholder {
+  background:
+    radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, var(--accent) 38%, transparent), transparent 60%),
+    radial-gradient(120% 80% at 100% 100%, color-mix(in srgb, var(--brand-pink) 26%, transparent), transparent 60%),
+    linear-gradient(var(--ph-angle, 160deg), var(--bg-raised), var(--bg-surface));
+}
+
+/* Hero: backdrop image fading into the page. Uses --bg-page so the fade is
+   correct in both themes. */
+.hero-fade {
+  background:
+    linear-gradient(to top, var(--bg-page) 0%, color-mix(in srgb, var(--bg-page) 70%, transparent) 35%, transparent 75%),
+    linear-gradient(to right, var(--bg-page) 0%, color-mix(in srgb, var(--bg-page) 55%, transparent) 40%, transparent 80%);
+}
+
+/* Progress strip along the bottom edge of artwork. */
+.art-progress {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 3px;
+  background-color: color-mix(in srgb, var(--accent) 22%, rgba(0, 0, 0, 0.5));
+}
+.art-progress > span {
+  display: block;
+  height: 100%;
+  background-color: var(--accent);
+}
+
+/* Dark scrim for text/badges sitting on artwork, theme-independent. */
+.scrim {
+  background-color: rgba(10, 10, 16, 0.62);
+  color: #f8f8f2;
+}
+
+/* Horizontal poster rows scroll without a visible bar. */
+.row-scroll {
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+.row-scroll::-webkit-scrollbar {
+  display: none;
+}
+.row-scroll > * {
+  scroll-snap-align: start;
+}
+
+/* ---------------------------------------------------------------------------
+   Live TV guide.
+--------------------------------------------------------------------------- */
+@layer components {
+  .guide-cell {
+    @apply absolute top-1 bottom-1 flex flex-col justify-center overflow-hidden rounded-md border border-border-light bg-raised px-2.5 text-left transition-colors hover:border-accent focus-visible:border-accent;
+  }
+  /* Airing now: accent edge, like the active nav item's accent icon. */
+  .guide-cell-now {
+    @apply border-l-2 border-l-accent bg-surface;
+  }
+  .guide-cell-past {
+    @apply opacity-50;
+  }
+  /* Doesn't match the current search/genre filter. */
+  .guide-cell-dim {
+    @apply opacity-25;
+  }
+  .rec-dot {
+    @apply inline-block h-2 w-2 shrink-0 rounded-full bg-critical;
+  }
+}
+
+/* Channel logos come in dark and white variants. A light chip plus a hairline
+   outline keeps both readable in either theme. */
+.channel-logo {
+  background-color: #f4f4f8;
+  border-radius: 4px;
+  padding: 2px 3px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 0.6px rgba(0, 0, 0, 0.85)) drop-shadow(0 0 0.6px rgba(0, 0, 0, 0.85));
+}
+
+/* Subtitles: readable on any picture, like Plex's default style. */
+video::cue {
+  background-color: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 1.05em;
+  line-height: 1.35;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}

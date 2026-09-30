@@ -1,0 +1,23 @@
+node_modules
+dist
+*.local
+.vscode/*
+.idea
+.DS_Store
+
+# Local server state
+server/data/
+data/
+*.db
+*.db-*
+
+# Never commit secrets
+.env
+.env.*
+*kubeconfig*
+values.local.yaml
+!.env.example
+
+# Built UI copied in for release builds (the placeholder stays tracked)
+server/internal/webui/dist/*
+!server/internal/webui/dist/.gitkeep
