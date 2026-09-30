@@ -216,7 +216,7 @@ func (d *DB) LibraryEpisodeKeys(ctx context.Context, itemID int64) (map[string]b
 
 // SeriesCandidates finds library shows whose title normalizes to the given one.
 func (d *DB) SeriesByTitle(ctx context.Context) ([]ItemSummary, error) {
-	return d.querySummaries(ctx, `SELECT `+summaryCols+` FROM media_items m WHERE m.kind = 'series'`)
+	return d.querySummaries(ctx, `SELECT `+summaryCols(ctx)+` FROM media_items m WHERE m.kind = 'series'`)
 }
 
 func episodeKey(season, ep int) string {

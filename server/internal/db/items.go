@@ -40,11 +40,14 @@ type Item struct {
 	PosterURL    string `json:"-"`
 }
 
-const summaryCols = `m.id, m.kind, m.title, m.sort_title, m.year, m.genres, m.rating, m.runtime_min,
+// summaryCols counts watched files for the profile in ctx.
+func summaryCols(ctx context.Context) string {
+	return `m.id, m.kind, m.title, m.sort_title, m.year, m.genres, m.rating, m.runtime_min,
 	m.has_poster, m.has_backdrop, m.match_status, m.added_at, m.updated_at,
 	(SELECT COUNT(*) FROM files f WHERE f.media_item_id = m.id),
-	(SELECT COUNT(*) FROM files f JOIN watch_state w ON w.file_id = f.id WHERE f.media_item_id = m.id AND w.watched = 1),
+	(SELECT COUNT(*) FROM files f ` + watchJoin(ctx) + ` WHERE f.media_item_id = m.id AND w.watched = 1),
 	COALESCE((SELECT MAX(f.added_at) FROM files f WHERE f.media_item_id = m.id), m.added_at) AS last_added`
+}
 
 func scanSummary(dest *ItemSummary, extra ...any) []any {
 	return append([]any{&dest.ID, &dest.Kind, &dest.Title, &dest.SortTitle, &dest.Year, &genreScanner{&dest.Genres}, &dest.Rating,
@@ -80,12 +83,12 @@ func SplitGenres(s string) []string {
 // Items lists every item of a kind. The client filters and sorts: a home
 // library is a few thousand rows, and doing it client-side keeps the grid instant.
 func (d *DB) Items(ctx context.Context, kind string) ([]ItemSummary, error) {
-	return d.querySummaries(ctx, `SELECT `+summaryCols+` FROM media_items m WHERE m.kind = ? ORDER BY m.sort_title`, kind)
+	return d.querySummaries(ctx, `SELECT `+summaryCols(ctx)+` FROM media_items m WHERE m.kind = ? ORDER BY m.sort_title`, kind)
 }
 
 // RecentItems returns items of a kind ordered by newest file.
 func (d *DB) RecentItems(ctx context.Context, kind string, limit int) ([]ItemSummary, error) {
-	return d.querySummaries(ctx, `SELECT `+summaryCols+` FROM media_items m WHERE m.kind = ?
+	return d.querySummaries(ctx, `SELECT `+summaryCols(ctx)+` FROM media_items m WHERE m.kind = ?
 		ORDER BY last_added DESC, m.id DESC LIMIT ?`, kind, limit)
 }
 
@@ -108,7 +111,7 @@ func (d *DB) querySummaries(ctx context.Context, q string, args ...any) ([]ItemS
 
 func (d *DB) Item(ctx context.Context, id int64) (Item, error) {
 	var it Item
-	err := d.sql.QueryRowContext(ctx, `SELECT `+summaryCols+`, m.library_id, m.parsed_title, m.parsed_year,
+	err := d.sql.QueryRowContext(ctx, `SELECT `+summaryCols(ctx)+`, m.library_id, m.parsed_title, m.parsed_year,
 		m.plot, m.rated, m.imdb_id, m.imdb_pinned, m.total_seasons, m.poster_url FROM media_items m WHERE m.id = ?`, id).
 		Scan(scanSummary(&it.ItemSummary, &it.LibraryID, &it.ParsedTitle, &it.ParsedYear, &it.Plot, &it.Rated,
 			&it.ImdbID, &it.ImdbPinned, &it.TotalSeasons, &it.PosterURL)...)

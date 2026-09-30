@@ -402,3 +402,17 @@ video::cue {
     @apply absolute inset-y-0 bg-warning/85;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Profile avatars: a tinted square with the profile's initial. --avatar is
+   set inline to one of the colour tokens (see components/ProfileAvatar).
+--------------------------------------------------------------------------- */
+@layer components {
+  .avatar {
+    @apply inline-flex shrink-0 select-none items-center justify-center rounded-md border font-semibold uppercase;
+    color: var(--avatar);
+    background-color: color-mix(in srgb, var(--avatar) 18%, var(--bg-surface));
+    /* Opaque: a translucent border on a rounded box draws diagonal seams in Chrome. */
+    border-color: color-mix(in srgb, var(--avatar) 45%, var(--bg-surface));
+  }
+}

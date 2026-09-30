@@ -34,7 +34,7 @@ const fileCols = `f.id, f.library_id, f.media_item_id, f.episode_id, f.path, f.s
 	f.has_still, f.added_at, COALESCE(w.position_sec, 0), COALESCE(w.watched, 0),
 	EXISTS (SELECT 1 FROM optimized o WHERE o.file_id = f.id), f.problem`
 
-const fileFrom = ` FROM files f LEFT JOIN watch_state w ON w.file_id = f.id `
+func fileFrom(ctx context.Context) string { return ` FROM files f ` + watchJoin(ctx) }
 
 func scanFile(r interface{ Scan(...any) error }) (File, error) {
 	var f File
@@ -45,7 +45,7 @@ func scanFile(r interface{ Scan(...any) error }) (File, error) {
 }
 
 func (d *DB) queryFiles(ctx context.Context, where string, args ...any) ([]File, error) {
-	rows, err := d.sql.QueryContext(ctx, `SELECT `+fileCols+fileFrom+where, args...)
+	rows, err := d.sql.QueryContext(ctx, `SELECT `+fileCols+fileFrom(ctx)+where, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func (d *DB) queryFiles(ctx context.Context, where string, args ...any) ([]File,
 }
 
 func (d *DB) File(ctx context.Context, id int64) (File, error) {
-	f, err := scanFile(d.sql.QueryRowContext(ctx, `SELECT `+fileCols+fileFrom+`WHERE f.id = ?`, id))
+	f, err := scanFile(d.sql.QueryRowContext(ctx, `SELECT `+fileCols+fileFrom(ctx)+`WHERE f.id = ?`, id))
 	return f, notFound(err)
 }
 

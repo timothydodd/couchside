@@ -7,15 +7,24 @@ import ItemPage from "./pages/ItemPage";
 import LibrariesPage from "./pages/LibrariesPage";
 import LibraryPage from "./pages/LibraryPage";
 import PlayerPage from "./pages/PlayerPage";
+import ProfilesPage from "./pages/ProfilesPage";
 import LiveTvPage from "./pages/LiveTvPage";
 import LivePlayerPage from "./pages/LivePlayerPage";
 import RecordingPlayerPage from "./pages/RecordingPlayerPage";
 import SettingsPage from "./pages/SettingsPage";
+import { useProfile } from "./stores/profile";
 import { useRouter } from "./stores/router";
 
 export default function App() {
   const route = useRouter((s) => s.route);
   const path = useRouter((s) => s.path);
+  const loaded = useProfile((s) => s.loaded);
+  const mustPick = useProfile((s) => !s.chosen && s.profiles.length > 1);
+
+  // Wait for the profile: everything shown (progress, favourites, theme) belongs to it.
+  if (!loaded) return null;
+  // With several profiles, this browser picks one first; with one, it's used silently.
+  if (mustPick || route.name === "profiles") return <ProfilesPage />;
 
   // The player takes over the whole window.
   if (route.name === "play") return <PlayerPage fileId={route.fileId} />;

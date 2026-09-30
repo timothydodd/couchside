@@ -34,6 +34,7 @@ type Server struct {
 	tc        *transcode.Manager
 	tv        *livetv.Service // nil when no tuner is configured
 	version   string
+	profiles  profileIDs
 }
 
 func init() {
@@ -51,9 +52,16 @@ func (s *Server) Handler() http.Handler {
 
 	r.Get("/healthz", s.health)
 	r.Route("/api", func(r chi.Router) {
-		r.Use(middleware.NoCache)
+		r.Use(middleware.NoCache, s.withProfile)
 		r.Get("/status", s.status)
 		r.Get("/home", s.home)
+
+		r.Get("/profiles", s.listProfiles)
+		r.Post("/profiles", s.createProfile)
+		r.Put("/profiles/{id}", s.updateProfile)
+		r.Patch("/profiles/{id}/prefs", s.profilePrefs)
+		r.Delete("/profiles/{id}", s.deleteProfile)
+		r.Post("/profiles/{id}/select", s.selectProfile)
 
 		r.Get("/libraries", s.listLibraries)
 		r.Post("/libraries", s.createLibrary)

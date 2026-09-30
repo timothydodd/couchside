@@ -76,7 +76,7 @@ func (d *DB) SeriesEpisodes(ctx context.Context, seriesID int64) ([]EpisodeRow, 
 		f.id, f.problem, f.has_still, f.duration_sec, COALESCE(w.position_sec, 0), COALESCE(w.watched, 0)
 		FROM episodes e
 		JOIN files f ON f.id = (SELECT f2.id FROM files f2 WHERE f2.episode_id = e.id ORDER BY f2.size DESC LIMIT 1)
-		LEFT JOIN watch_state w ON w.file_id = f.id
+		`+watchJoin(ctx)+`
 		WHERE e.series_id = ? ORDER BY e.season, e.episode`, seriesID)
 	if err != nil {
 		return nil, err

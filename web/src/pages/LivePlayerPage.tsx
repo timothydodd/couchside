@@ -7,6 +7,7 @@ import { ApiError, api, useApi } from "../lib/api";
 import { fmtTime } from "../lib/format";
 import { nativeHls } from "../lib/playback";
 import type { ChannelNow, LiveSessionInfo, Program } from "../lib/types";
+import { useProfile } from "../stores/profile";
 import { useRouter } from "../stores/router";
 
 const LIVE_QUALITIES = [1080, 720, 480] as const;
@@ -19,7 +20,7 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<HlsType | null>(null);
   const { data: channels, reload: reloadChannels } = useApi<ChannelNow[]>("/api/livetv/channels", { pollMs: 60000 });
-  const [height, setHeight] = useState<number>(() => Number(localStorage.getItem("couchside:live-height")) || 720);
+  const [height, setHeight] = useState<number>(() => useProfile.getState().current?.prefs.liveHeight ?? 720);
   const [session, setSession] = useState<LiveSessionInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tuning, setTuning] = useState(true);
@@ -138,11 +139,7 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
       options: LIVE_QUALITIES.map((h) => ({ id: String(h), label: `${h}p`, detail: h === 1080 ? "8 Mbps" : h === 720 ? "4 Mbps" : "1.5 Mbps", active: h === height })),
       onSelect: (id) => {
         const h = Number(id);
-        try {
-          localStorage.setItem("couchside:live-height", String(h));
-        } catch {
-          /* ignore */
-        }
+        useProfile.getState().setPrefs({ liveHeight: h });
         setHeight(h);
       },
     },

@@ -88,6 +88,35 @@ export function EmptyState({ icon, title, children }: { icon?: ReactNode; title:
   );
 }
 
+/** A row of mutually exclusive choices (theme, quality…). */
+export function Segmented<T extends string | number>({
+  value,
+  options,
+  onChange,
+  label,
+}: {
+  value: T;
+  options: { id: T; label: string }[];
+  onChange: (v: T) => void;
+  label: string;
+}) {
+  return (
+    <div className="inline-flex rounded-md border border-border p-0.5" role="radiogroup" aria-label={label}>
+      {options.map((o) => (
+        <button
+          key={o.id}
+          role="radio"
+          aria-checked={value === o.id}
+          onClick={() => onChange(o.id)}
+          className={`rounded px-3 py-1 text-sm transition-colors ${value === o.id ? "bg-accent text-on-accent" : "text-content-secondary hover:text-content"}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function Spinner({ size = 16 }: { size?: number }) {
   return <Loader2 size={size} className="animate-spin text-content-muted" />;
 }

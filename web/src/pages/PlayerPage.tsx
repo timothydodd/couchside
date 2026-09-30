@@ -8,6 +8,8 @@ import { QUALITIES, chooseSource, hlsCopyCaps, nativeHls, sourceKey, stepDown, t
 import { audioLabel, subtitleDetail, subtitleLabel, type AudioTrack, type SubtitleTrack } from "../lib/tracks";
 import { parseVtt } from "../lib/vtt";
 import { PROBLEM_TEXT, type BreakMode, type Commercials, type HlsSession, type PlayInfo } from "../lib/types";
+import { BREAK_MODES, sameLanguage } from "../lib/prefs";
+import { usePrefs, useProfile } from "../stores/profile";
 import { useRouter } from "../stores/router";
 
 const REPORT_EVERY_MS = 10_000;
@@ -17,21 +19,6 @@ const STALLS_TO_STEP = 3;
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const SUB_CHUNK = 90; // seconds per embedded-subtitle chunk (server's SubtitleChunk)
 const BROADCAST = new Set(["ts", "mpg", "mpeg", "wtv"]); // containers worth offering commercial detection for
-const BREAK_MODES: { id: BreakMode; label: string; short: string; detail: string }[] = [
-  { id: "auto", label: "Skip automatically", short: "Auto-skip", detail: "Jumps past each break, with a way back" },
-  { id: "button", label: "Show a skip button", short: "Skip button", detail: "Press it, or S, to skip a break" },
-  { id: "off", label: "Don't skip", short: "Marked only", detail: "Breaks are still marked on the timeline" },
-];
-
-function loadBreakMode(): BreakMode {
-  try {
-    const m = localStorage.getItem("couchside:commercials");
-    if (m === "auto" || m === "button" || m === "off") return m;
-  } catch {
-    /* ignore */
-  }
-  return "auto";
-}
 
 let hlsModule: Promise<typeof HlsType> | null = null;
 const loadHls = () => (hlsModule ??= import("hls.js/light").then((m) => m.default));
@@ -48,7 +35,8 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   const { data: streams } = useApi<{ audio: AudioTrack[]; subtitles: SubtitleTrack[] }>(`/api/files/${fileId}/streams`);
   const [breakPoll, setBreakPoll] = useState(false);
   const { data: comm, reload: reloadComm } = useApi<Commercials>(`/api/files/${fileId}/commercials`, { pollMs: breakPoll ? 5000 : undefined });
-  const [breakMode, setBreakMode] = useState<BreakMode>(loadBreakMode);
+  const prefs = usePrefs();
+  const breakMode = prefs.commercials ?? "auto";
   const { go, back } = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<HlsType | null>(null);
@@ -103,11 +91,15 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
     }
   }, [info]);
 
-  // Turn on the default/forced subtitle track once streams are known.
+  // Once streams are known, turn on text subtitles in the profile's language
+  // (a full track over a forced one), or else any forced track.
+  const subtitleLang = prefs.subtitleLang ?? "";
   useEffect(() => {
-    const forced = streams?.subtitles.find((s) => s.forced && s.text);
-    if (forced) setSub({ kind: "text", track: forced });
-  }, [streams]);
+    const text = streams?.subtitles.filter((s) => s.text) ?? [];
+    const mine = text.filter((s) => sameLanguage(s.language, subtitleLang));
+    const pick = mine.find((s) => !s.forced) ?? mine[0] ?? text.find((s) => s.forced);
+    if (pick) setSub({ kind: "text", track: pick });
+  }, [streams, subtitleLang]);
 
   const flash = (msg: string) => {
     setNotice(msg);
@@ -369,7 +361,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   const onEnded = async () => {
     const v = videoRef.current;
     if (v?.duration) await api(`/api/files/${fileId}/progress`, { method: "PUT", json: { position: v.duration, duration: v.duration } }).catch(() => {});
-    if (info?.nextFileId) go(`/play/${info.nextFileId}`, { replace: true });
+    if (info?.nextFileId && prefs.autoplayNext !== false) go(`/play/${info.nextFileId}`, { replace: true });
     else exit();
   };
   const onEndedRef = useRef(onEnded);
@@ -382,14 +374,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
     void api(`/api/files/${fileId}/commercials`, { method: "POST" })
       .then(reloadComm)
       .catch((e) => flash(`Couldn't start commercial detection: ${(e as Error).message}`));
-  const chooseBreakMode = (m: BreakMode) => {
-    setBreakMode(m);
-    try {
-      localStorage.setItem("couchside:commercials", m);
-    } catch {
-      /* ignore */
-    }
-  };
+  const chooseBreakMode = (m: BreakMode) => useProfile.getState().setPrefs({ commercials: m });
 
   // --- settings ------------------------------------------------------------------------
   const mode = describe(source, session);

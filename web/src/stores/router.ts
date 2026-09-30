@@ -12,6 +12,7 @@ export type Route =
   | { name: "activity" }
   | { name: "libraries" }
   | { name: "settings" }
+  | { name: "profiles" }
   | { name: "notfound" };
 
 export function parseRoute(path: string): Route {
@@ -25,6 +26,7 @@ export function parseRoute(path: string): Route {
   if (p === "/livetv/recordings") return { name: "livetv", tab: "recordings" };
   if (p === "/libraries") return { name: "libraries" };
   if (p === "/settings") return { name: "settings" };
+  if (p === "/profiles") return { name: "profiles" };
   let m = p.match(/^\/item\/(\d+)$/);
   if (m) return { name: "item", id: Number(m[1]) };
   m = p.match(/^\/recording\/(\d+)$/);

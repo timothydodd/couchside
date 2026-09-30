@@ -12,13 +12,15 @@ const watchedAt = 0.92
 
 func (d *DB) SaveProgress(ctx context.Context, fileID int64, position, duration float64) error {
 	watched := duration > 0 && position/duration >= watchedAt
-	_, err := d.sql.ExecContext(ctx, `INSERT INTO watch_state (file_id, position_sec, duration_sec, watched, updated_at)
-		VALUES (?, ?, ?, ?, unixepoch())
-		ON CONFLICT (file_id) DO UPDATE SET position_sec = excluded.position_sec, duration_sec = excluded.duration_sec,
+	_, err := d.sql.ExecContext(ctx, `INSERT INTO watch_state (profile_id, file_id, position_sec, duration_sec, watched, updated_at)
+		VALUES (?, ?, ?, ?, ?, unixepoch())
+		ON CONFLICT (profile_id, file_id) DO UPDATE SET position_sec = excluded.position_sec, duration_sec = excluded.duration_sec,
 		  watched = MAX(watch_state.watched, excluded.watched), updated_at = excluded.updated_at`,
-		fileID, position, duration, watched)
+		ProfileID(ctx), fileID, position, duration, watched)
 	return err
 }
+
+// SaveProgress and SetWatched write the watch state of the profile in ctx.
 
 // SetWatched marks files watched (position cleared) or unwatched (state removed).
 func (d *DB) SetWatched(ctx context.Context, fileIDs []int64, watched bool) error {
@@ -29,10 +31,11 @@ func (d *DB) SetWatched(ctx context.Context, fileIDs []int64, watched bool) erro
 	defer tx.Rollback()
 	for _, id := range fileIDs {
 		if watched {
-			_, err = tx.ExecContext(ctx, `INSERT INTO watch_state (file_id, position_sec, watched, updated_at) VALUES (?, 0, 1, unixepoch())
-				ON CONFLICT (file_id) DO UPDATE SET position_sec = 0, watched = 1, updated_at = unixepoch()`, id)
+			_, err = tx.ExecContext(ctx, `INSERT INTO watch_state (profile_id, file_id, position_sec, watched, updated_at)
+				VALUES (?, ?, 0, 1, unixepoch())
+				ON CONFLICT (profile_id, file_id) DO UPDATE SET position_sec = 0, watched = 1, updated_at = unixepoch()`, ProfileID(ctx), id)
 		} else {
-			_, err = tx.ExecContext(ctx, `DELETE FROM watch_state WHERE file_id = ?`, id)
+			_, err = tx.ExecContext(ctx, `DELETE FROM watch_state WHERE profile_id = ? AND file_id = ?`, ProfileID(ctx), id)
 		}
 		if err != nil {
 			return err
@@ -70,9 +73,10 @@ const playCols = `f.id, m.id, m.kind, m.title, e.season, e.episode, COALESCE(e.t
 	f.container, f.video_codec, f.audio_codec, f.width, f.height, EXISTS (SELECT 1 FROM optimized o WHERE o.file_id = f.id),
 	f.problem, COALESCE(e.air_date, '')`
 
-const playFrom = ` FROM files f JOIN media_items m ON m.id = f.media_item_id
-	LEFT JOIN episodes e ON e.id = f.episode_id
-	LEFT JOIN watch_state w ON w.file_id = f.id `
+func playFrom(ctx context.Context) string {
+	return ` FROM files f JOIN media_items m ON m.id = f.media_item_id
+	LEFT JOIN episodes e ON e.id = f.episode_id ` + watchJoin(ctx)
+}
 
 func scanPlay(r interface{ Scan(...any) error }) (PlayInfo, error) {
 	var p PlayInfo
@@ -102,7 +106,7 @@ func scanPlay(r interface{ Scan(...any) error }) (PlayInfo, error) {
 }
 
 func (d *DB) PlayInfo(ctx context.Context, fileID int64) (PlayInfo, error) {
-	p, err := scanPlay(d.sql.QueryRowContext(ctx, `SELECT `+playCols+playFrom+`WHERE f.id = ?`, fileID))
+	p, err := scanPlay(d.sql.QueryRowContext(ctx, `SELECT `+playCols+playFrom(ctx)+`WHERE f.id = ?`, fileID))
 	if err != nil {
 		return p, notFound(err)
 	}
@@ -123,7 +127,7 @@ func (d *DB) PlayInfo(ctx context.Context, fileID int64) (PlayInfo, error) {
 
 // ContinueWatching lists partly watched files, most recent first.
 func (d *DB) ContinueWatching(ctx context.Context, limit int) ([]PlayInfo, error) {
-	rows, err := d.sql.QueryContext(ctx, `SELECT `+playCols+playFrom+`WHERE w.watched = 0 AND w.position_sec > 30
+	rows, err := d.sql.QueryContext(ctx, `SELECT `+playCols+playFrom(ctx)+`WHERE w.watched = 0 AND w.position_sec > 30
 		ORDER BY w.updated_at DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err

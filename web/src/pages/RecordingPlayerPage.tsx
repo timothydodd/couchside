@@ -6,6 +6,7 @@ import { ApiError, api } from "../lib/api";
 import { fmtTime } from "../lib/format";
 import { nativeHls } from "../lib/playback";
 import type { Recording } from "../lib/types";
+import { useProfile } from "../stores/profile";
 import { useRouter } from "../stores/router";
 
 let hlsModule: Promise<typeof HlsType> | null = null;
@@ -28,7 +29,7 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
   const { back } = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<HlsType | null>(null);
-  const [height, setHeight] = useState<number>(() => Number(localStorage.getItem("couchside:live-height")) || 720);
+  const [height, setHeight] = useState<number>(() => useProfile.getState().current?.prefs.liveHeight ?? 720);
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(true);

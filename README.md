@@ -14,6 +14,7 @@ A lightweight self-hosted media server for a home k3s cluster. It scans your mov
 - ffprobe stream info: duration, codecs, resolution, and track counts.
 - OMDb matching: title, year, plot, genres, IMDb rating, posters, and per-season episode titles. Responses are cached for 30 days, and "Fix match" pins an IMDb id.
 - Artwork: posters resized to WebP, backdrops grabbed from the video itself, and episode stills.
+- Profiles: each person gets their own watch progress, Continue Watching, favourite channels and settings (theme, autoplay of the next episode, preferred subtitle language, commercial skipping, live TV quality). With more than one profile, each browser asks "Who's watching?" once and remembers the answer; switch from the sidebar. There are no passwords.
 - Browsing: Home with a hero and rows, virtualised Movies and TV grids with search, genre, watched filters and sort, plus detail pages with seasons.
 - Direct play with byte-range streaming, resume position, watched state, continue-watching, and next-episode autoplay.
 - An Activity page for background jobs, with retry.
@@ -64,9 +65,9 @@ A lightweight self-hosted media server for a home k3s cluster. It scans your mov
 
 ## Not built yet
 
-- **Auth.** There is no login. Keep Couchside on your LAN, or put it behind an auth proxy such as Authelia or oauth2-proxy.
+- **Auth.** There is no login, and profiles have no passwords. Keep Couchside on your LAN, or put it behind an auth proxy such as Authelia or oauth2-proxy.
 - A Schedules Direct guide source for two weeks of listings.
-- A TMDB provider for real backdrops, and multiple users.
+- A TMDB provider for real backdrops.
 
 ## Install
 

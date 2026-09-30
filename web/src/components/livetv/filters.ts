@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Program, TvChannel } from "../../lib/types";
+import { useProfile } from "../../stores/profile";
 
 export type QualityFilter = "all" | "hd" | "sd";
 
@@ -26,10 +27,9 @@ export const DEFAULT_FILTERS: TvFilters = {
 /** Signal quality below this is marginal: the picture may break up. */
 export const WEAK_SIGNAL = 60;
 
-const KEY = "couchside:tv-filters";
-
-/** Filter state shared by the Guide and Channels tabs, remembered per browser. */
+/** Filter state shared by the Guide and Channels tabs, remembered per browser and profile. */
 export function useTvFilters() {
+  const KEY = `couchside:tv-filters:${useProfile((s) => s.current?.id ?? 0)}`;
   const [f, setF] = useState<TvFilters>(() => {
     try {
       return { ...DEFAULT_FILTERS, ...JSON.parse(localStorage.getItem(KEY) ?? "{}"), q: "" };
@@ -44,7 +44,7 @@ export function useTvFilters() {
     } catch {
       /* ignore */
     }
-  }, [f]);
+  }, [f, KEY]);
   return [f, setF] as const;
 }
 

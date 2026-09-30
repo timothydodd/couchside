@@ -110,6 +110,26 @@ export interface Commercials {
 /** How the player treats commercial breaks. */
 export type BreakMode = "auto" | "button" | "off";
 
+/** Avatar colours, named after the theme tokens they use. */
+export type ProfileColor = "accent" | "pink" | "cyan" | "secondary" | "good" | "warning" | "critical";
+
+/** Per-profile preferences, stored on the server. Every key is optional. */
+export interface Prefs {
+  theme?: "light" | "dark" | "system";
+  autoplayNext?: boolean; // default true
+  commercials?: BreakMode; // default "auto"
+  subtitleLang?: string; // turn on text subtitles in this language; "" = only forced ones (default)
+  liveHeight?: number; // live TV and in-progress recording quality, default 720
+}
+
+export interface Profile {
+  id: number;
+  name: string;
+  color: ProfileColor;
+  prefs: Prefs;
+  createdAt: number;
+}
+
 /** Set by the scanner for files that can't be played at all. */
 export type FileProblem = "" | "unreadable" | "no-video";
 

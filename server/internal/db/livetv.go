@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 )
 
@@ -56,23 +57,34 @@ func (d *DB) ReplaceChannels(ctx context.Context, chans []Channel, sortKey func(
 	return tx.Commit()
 }
 
-const channelCols = `number, name, affiliate, logo_url, url, hd, drm, video_codec, audio_codec, pinned, signal_strength, signal_quality`
+// channelCols reports pinned (a favourite) for the profile in ctx.
+func channelCols(ctx context.Context) string {
+	return fmt.Sprintf(`number, name, affiliate, logo_url, url, hd, drm, video_codec, audio_codec,
+	EXISTS (SELECT 1 FROM profile_channels pc WHERE pc.profile_id = %d AND pc.number = channels.number) AS pinned,
+	signal_strength, signal_quality`, ProfileID(ctx))
+}
 
 func channelDest(c *Channel) []any {
 	return []any{&c.Number, &c.Name, &c.Affiliate, &c.LogoURL, &c.URL, &c.HD, &c.DRM, &c.VideoCodec, &c.AudioCodec,
 		&c.Pinned, &c.SignalStrength, &c.SignalQuality}
 }
 
-// SetChannelPinned pins a channel to the top of the guide (or unpins it).
+// SetChannelPinned makes a channel one of the ctx profile's favourites,
+// pinned to the top of the guide (or unpins it).
 func (d *DB) SetChannelPinned(ctx context.Context, number string, pinned bool) error {
-	res, err := d.sql.ExecContext(ctx, `UPDATE channels SET pinned = ? WHERE number = ?`, pinned, number)
-	if err != nil {
+	var n int
+	if err := d.sql.QueryRowContext(ctx, `SELECT COUNT(*) FROM channels WHERE number = ?`, number).Scan(&n); err != nil {
 		return err
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	if n == 0 {
 		return ErrNotFound
 	}
-	return nil
+	q := `DELETE FROM profile_channels WHERE profile_id = ? AND number = ?`
+	if pinned {
+		q = `INSERT OR IGNORE INTO profile_channels (profile_id, number) VALUES (?, ?)`
+	}
+	_, err := d.sql.ExecContext(ctx, q, ProfileID(ctx), number)
+	return err
 }
 
 func (d *DB) SetChannelGuideInfo(ctx context.Context, number, affiliate, logo string) error {
@@ -82,7 +94,7 @@ func (d *DB) SetChannelGuideInfo(ctx context.Context, number, affiliate, logo st
 
 func (d *DB) Channels(ctx context.Context) ([]Channel, error) {
 	// Pinned channels first, then by channel number.
-	rows, err := d.sql.QueryContext(ctx, `SELECT `+channelCols+` FROM channels ORDER BY pinned DESC, sort_key, number`)
+	rows, err := d.sql.QueryContext(ctx, `SELECT `+channelCols(ctx)+` FROM channels ORDER BY pinned DESC, sort_key, number`)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +112,7 @@ func (d *DB) Channels(ctx context.Context) ([]Channel, error) {
 
 func (d *DB) Channel(ctx context.Context, number string) (Channel, error) {
 	var c Channel
-	err := d.sql.QueryRowContext(ctx, `SELECT `+channelCols+` FROM channels WHERE number = ?`, number).Scan(channelDest(&c)...)
+	err := d.sql.QueryRowContext(ctx, `SELECT `+channelCols(ctx)+` FROM channels WHERE number = ?`, number).Scan(channelDest(&c)...)
 	return c, notFound(err)
 }
 
