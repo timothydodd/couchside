@@ -3,7 +3,7 @@ name: release
 # Push a tag like v0.2.0 to publish:
 #  - zips for Linux, macOS and Windows (single binary with the web UI embedded)
 #  - a GitHub Release with those zips and SHA-256 checksums
-#  - a multi-arch container: ghcr.io/<owner>/couchside:<version>, :<major>.<minor>, :latest
+#  - a multi-arch container: ghcr.io/<owner>/couchside:v<version>, :<version>, :<major>.<minor>, :latest
 on:
   push:
     tags: ["v*"]
@@ -110,6 +110,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
+            type=ref,event=tag
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ github.event_name == 'push' && !contains(github.ref_name, '-') }}
