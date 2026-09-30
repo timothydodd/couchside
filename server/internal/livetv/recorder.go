@@ -82,6 +82,7 @@ func (s *Service) Record(ctx context.Context, programID int64) (int64, int, erro
 	if err != nil {
 		return 0, 0, err
 	}
+	s.prefetchShow(r)
 	overlap, _ := s.db.Overlapping(ctx, r.StartAt-r.PadBefore, r.EndAt+r.PadAfter, id)
 	s.wake()
 	return id, overlap, nil
@@ -160,7 +161,7 @@ func (s *Service) scheduler(ctx context.Context) {
 // path and the parts captured so far are given.
 func (s *Service) startRecording(parent context.Context, r db.Recording, path string, parts []string) {
 	if path == "" {
-		path = s.recordingPath(r)
+		path = s.recordingPath(parent, r)
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			_ = s.db.FinishRecording(parent, r.ID, "failed", "", 0, "Recordings folder isn't writable: "+err.Error())
 			return
@@ -345,11 +346,21 @@ var (
 
 // recordingName names a recording the way Plex does, so the scanner files
 // it under the right show: "Show/Season 25/Show - S25E12 - Title", or by air
-// date when the guide has no episode number.
-type recName struct{ show, season, file string }
+// date when the guide has no episode number. year (0 = unknown) is the
+// series' premiere year, added when another series shares the title:
+// "MacGyver (2016)/Season 2/MacGyver (2016) - S02E05 - Title".
+type recName struct {
+	show, season, file string
+	title              string // series title without the year
+	year               int
+}
 
-func recordingName(r db.Recording) recName {
-	show := safeName(r.Title)
+func recordingName(r db.Recording, year int) recName {
+	title := safeName(r.Title)
+	show := title
+	if year > 0 {
+		show = fmt.Sprintf("%s (%d)", title, year)
+	}
 	start := time.Unix(r.StartAt, 0).Local()
 	var season, file string
 	if m := reEpisode.FindStringSubmatch(r.EpisodeNum); m != nil {
@@ -365,13 +376,13 @@ func recordingName(r db.Recording) recName {
 	if len(file) > 180 {
 		file = file[:180]
 	}
-	return recName{show, season, file}
+	return recName{show: show, season: season, file: file, title: title, year: year}
 }
 
 // recordingPath is where a new recording goes: the current recordings folder,
 // inside an existing matching show/season folder when there is one.
-func (s *Service) recordingPath(r db.Recording) string {
-	return s.pathInDir(s.RecordingsDir(context.Background()), recordingName(r))
+func (s *Service) recordingPath(ctx context.Context, r db.Recording) string {
+	return s.pathInDir(s.RecordingsDir(ctx), recordingName(r, s.showYear(ctx, r, true)))
 }
 
 func safeName(s string) string {

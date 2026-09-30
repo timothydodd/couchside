@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/timothydodd/couchside/internal/db"
+	"github.com/timothydodd/couchside/internal/metadata"
 	"github.com/timothydodd/couchside/internal/transcode"
 )
 
@@ -23,6 +24,7 @@ type Config struct {
 	FFmpeg        string
 	PadBefore     time.Duration
 	PadAfter      time.Duration
+	Metadata      *metadata.Chain // identifies which same-titled series a recording is; may be nil
 }
 
 // Service owns the tuner, guide, live sessions and the DVR scheduler.
@@ -42,6 +44,7 @@ type Service struct {
 	recCancel map[int64]context.CancelFunc
 	libraryID int64
 	wakeSched chan struct{}
+	lookups   map[string]bool // guide series being identified in the background
 }
 
 func New(cfg Config, d *db.DB, enc transcode.Encoder, work Enqueuer, cacheDir string) (*Service, error) {
@@ -50,7 +53,7 @@ func New(cfg Config, d *db.DB, enc transcode.Encoder, work Enqueuer, cacheDir st
 		return nil, err
 	}
 	return &Service{cfg: cfg, db: d, hdhr: NewHDHomeRun(cfg.Tuner), enc: enc, work: work, live: lm,
-		recCancel: map[int64]context.CancelFunc{}, wakeSched: make(chan struct{}, 1)}, nil
+		recCancel: map[int64]context.CancelFunc{}, wakeSched: make(chan struct{}, 1), lookups: map[string]bool{}}, nil
 }
 
 // Status is the Live TV summary for the UI.

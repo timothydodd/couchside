@@ -84,7 +84,7 @@ func run() error {
 	tvDone := make(chan struct{})
 	if cfg.HDHomeRun != "" {
 		tv, err = livetv.New(livetv.Config{Tuner: cfg.HDHomeRun, RecordingsDir: cfg.RecordingsDir, FFmpeg: cfg.FFmpeg,
-			PadBefore: cfg.PadBefore, PadAfter: cfg.PadAfter}, database, enc, w, cfg.CacheDir)
+			PadBefore: cfg.PadBefore, PadAfter: cfg.PadAfter, Metadata: providers}, database, enc, w, cfg.CacheDir)
 		if err != nil {
 			return err
 		}

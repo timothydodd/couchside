@@ -41,7 +41,9 @@ func newTestService(t *testing.T) (*Service, *db.DB, int64) {
 		t.Fatal(err)
 	}
 
-	h := time.Now().Add(time.Hour).Truncate(time.Hour).Unix()
+	// At least an hour out: an airing whose padded start is within 30s counts
+	// as already starting, and rule changes leave it alone.
+	h := time.Now().Add(2 * time.Hour).Truncate(time.Hour).Unix()
 	prog := func(ch string, at int64, ep, title string, isNew bool) db.Program {
 		return db.Program{Channel: ch, StartAt: at, EndAt: at + 1800, Title: "Two and a Half Men", EpisodeNum: ep,
 			EpisodeTitle: title, SeriesID: "SH123", IsNew: isNew}
@@ -197,13 +199,13 @@ func TestRecordingJoinsExistingShowFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := time.Date(2026, 9, 30, 20, 0, 0, 0, time.Local).Unix()
-	got := s.pathInDir(dir, recordingName(db.Recording{Title: "The Simpsons", EpisodeNum: "S07E05", EpisodeTitle: "Bart Sells His Soul", StartAt: start}))
+	got := s.pathInDir(dir, recordingName(db.Recording{Title: "The Simpsons", EpisodeNum: "S07E05", EpisodeTitle: "Bart Sells His Soul", StartAt: start}, 0))
 	want := filepath.Join(dir, "The Simpsons (1989)", "Season 07", "The Simpsons - S07E05 - Bart Sells His Soul.ts")
 	if got != want {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}
 	// A show with no folder yet gets a fresh one.
-	got = s.pathInDir(dir, recordingName(db.Recording{Title: "Ghosts", StartAt: start}))
+	got = s.pathInDir(dir, recordingName(db.Recording{Title: "Ghosts", StartAt: start}, 0))
 	if filepath.Dir(filepath.Dir(got)) != filepath.Join(dir, "Ghosts") || filepath.Base(filepath.Dir(got)) != "Season 2026" {
 		t.Errorf("new show path: %s", got)
 	}

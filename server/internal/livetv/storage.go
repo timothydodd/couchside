@@ -99,7 +99,7 @@ func (s *Service) SetRecordingsDir(ctx context.Context, dir string, move bool) (
 			if r.Path == "" || !within(r.Path, old) {
 				continue
 			}
-			dst := s.pathInDir(dir, recordingName(r)) // fresh, clean name in the new folder
+			dst := s.pathInDir(dir, recordingName(r, s.showYear(ctx, r, false))) // fresh, clean name in the new folder
 			if err := moveFile(r.Path, dst); err != nil {
 				res.Failed = append(res.Failed, fmt.Sprintf("%s: %v", r.Title, err))
 				continue
@@ -126,12 +126,24 @@ func (s *Service) SetRecordingsDir(ctx context.Context, dir string, move bool) (
 
 // pathInDir picks a file name for a recording inside dir, reusing a matching
 // show folder ("The Simpsons (1989)") and season folder ("Season 07") so the
-// recording joins the existing show instead of creating a duplicate.
+// recording joins the existing show instead of creating a duplicate. When
+// the series year is known, a same-titled folder of another series
+// ("MacGyver (1985)", or a plain "MacGyver" matched to 1985) isn't reused.
 func (s *Service) pathInDir(dir string, n recName) string {
 	show, season, file := n.show, n.season, n.file
 	showDir := matchDir(dir, show, func(name string) bool {
-		n := parse.Name(name)
-		return metadata.Normalize(n.Title) == metadata.Normalize(show)
+		pn := parse.Name(name)
+		if metadata.Normalize(pn.Title) != metadata.Normalize(n.title) {
+			return false
+		}
+		if n.year == 0 || pn.Year == n.year {
+			return true
+		}
+		if pn.Year != 0 {
+			return false
+		}
+		fy, _ := s.db.FolderSeriesYear(context.Background(), filepath.Join(dir, name))
+		return fy == 0 || (fy >= n.year-1 && fy <= n.year+1)
 	})
 	num := seasonNumber(season)
 	seasonDir := matchDir(filepath.Join(dir, showDir), season, func(name string) bool {

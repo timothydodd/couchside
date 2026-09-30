@@ -319,3 +319,39 @@ func upscalePoster(u string) string {
 	}
 	return u
 }
+
+// SearchSeries lists the series OMDb knows by a title (first page of
+// results), with the years each ran, e.g. "1985–1992" or "2016–".
+func (o *OMDb) SearchSeries(ctx context.Context, title string) ([]SeriesMatch, error) {
+	var s omdbSearch
+	if err := o.get(ctx, url.Values{"s": {title}, "type": {"series"}}, &s); err != nil && !errors.Is(err, errNotFound) {
+		return nil, err
+	}
+	out := make([]SeriesMatch, 0, len(s.Search))
+	for _, r := range s.Search {
+		if r.ImdbID == "" {
+			continue
+		}
+		start, end := yearRange(r.Year)
+		out = append(out, SeriesMatch{ImdbID: r.ImdbID, Title: r.Title, StartYear: start, EndYear: end})
+	}
+	return out, nil
+}
+
+// yearRange reads OMDb's Year: "2010" (one year), "1985–1992", or "2016–"
+// (still running, end 0).
+func yearRange(s string) (start, end int) {
+	s = strings.TrimSpace(s)
+	if len(s) < 4 {
+		return 0, 0
+	}
+	start, _ = strconv.Atoi(s[:4])
+	rest := strings.TrimLeft(s[4:], "–-— ")
+	switch {
+	case len(s) == 4:
+		end = start
+	case len(rest) >= 4:
+		end, _ = strconv.Atoi(rest[:4])
+	}
+	return start, end
+}

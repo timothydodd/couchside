@@ -345,6 +345,7 @@ func (s *Service) evaluateRule(ctx context.Context, rule db.SeriesRule) (RuleSum
 		}
 		if r, _ := s.db.RecordingAt(ctx, p.Channel, p.StartAt); r != nil {
 			keep = append(keep, r.ID)
+			s.prefetchShow(*r)
 		}
 		if key != "" {
 			seen[key] = true
