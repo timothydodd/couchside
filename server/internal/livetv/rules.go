@@ -184,15 +184,16 @@ func (s *Service) LibraryMatchesFor(ctx context.Context, p db.Program) []Library
 // LibraryMatches finds library shows with the same (normalized) title, best
 // guess first: shows outside the DVR library, then newest.
 func (s *Service) LibraryMatches(ctx context.Context, title string) []LibraryMatch {
+	// Never nil: the "Record series" form reads candidates.length.
+	out := []LibraryMatch{}
 	all, err := s.db.SeriesByTitle(ctx)
 	if err != nil {
-		return nil
+		return out
 	}
 	s.mu.Lock()
 	dvrLib := s.libraryID
 	s.mu.Unlock()
 	want := metadata.Normalize(title)
-	var out []LibraryMatch
 	for _, it := range all {
 		if metadata.Normalize(it.Title) != want {
 			continue
