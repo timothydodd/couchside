@@ -76,6 +76,7 @@ Off by default: anyone who can reach Couchside picks a profile, which suits a tr
 - **Sessions.** Access tokens last 15 minutes; refresh tokens are random, stored only as hashes, and replaced on every use. A replayed refresh token ends its session. Web sessions end after 30 days unused, TV apps after 90. Changing a password signs out your other devices.
 - **Guessing.** Failed sign-ins are slowed per address and per account, then locked out for up to 15 minutes, and logged.
 - **Lost the admin password?** `couchside reset-password -admin <name>` inside the container (`kubectl exec -it deploy/couchside -- …`).
+- **Open to anyone:** `/healthz`, the sign-in endpoints, and artwork (posters, backdrops, episode stills), so TV apps can load images without a token. Everything else, streams included, needs a session.
 - **TV apps** sign in with `POST /api/auth/login` (`"client": "tv"`), send `Authorization: Bearer <accessToken>`, and renew with `POST /api/auth/refresh` (`{"refreshToken": …}`).
 
 ## Not built yet

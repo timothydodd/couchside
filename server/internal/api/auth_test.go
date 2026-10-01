@@ -82,6 +82,13 @@ func TestAccountsFlow(t *testing.T) {
 	if code := web.do("GET", "/api/home", nil, nil); code != 401 {
 		t.Fatalf("home before setup = %d", code)
 	}
+	if code := web.do("GET", "/api/files/1/stream", nil, nil); code != 401 {
+		t.Fatalf("stream before setup = %d", code)
+	}
+	// Artwork is open, so TV image nodes needn't send a token (404: no such item).
+	if code := web.do("GET", "/api/artwork/items/1/poster", nil, nil); code == 401 {
+		t.Fatal("artwork should not need a token")
+	}
 	var info authInfo
 	web.do("GET", "/api/auth", nil, &info)
 	if !info.Enabled || !info.SetupRequired || info.User != nil {

@@ -54,8 +54,9 @@ separate everyone's history, so a profile becomes the account.
   entry). Off by default, and off means exactly today's behaviour: pick a
   profile, no passwords.
 - On: every profile is a user with a password. Every `/api` route needs a
-  signed-in user, including artwork, streams, HLS playlists/segments,
-  subtitles and live TV; `/healthz` stays open for probes. The profile comes
+  signed-in user, including streams, HLS playlists/segments, subtitles and
+  live TV. `/healthz` and artwork (posters, backdrops, stills) stay open, so
+  TV image nodes needn't send a token. The profile comes
   from the session, never from the `couchside_profile` cookie.
 - **Passwords**: Argon2id (`golang.org/x/crypto/argon2`) with a random salt
   per user, stored as a self-describing hash string so the parameters can be

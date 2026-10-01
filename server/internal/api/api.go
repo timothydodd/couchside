@@ -111,11 +111,12 @@ func (s *Server) Handler() http.Handler {
 			})
 		})
 	})
-	// Artwork and streams sit outside the no-cache group.
+	// Artwork and streams sit outside the no-cache group. Artwork is open even
+	// with accounts on, so TV apps' image nodes needn't send a token.
+	r.Get("/api/artwork/items/{id}/{kind}", s.itemArtwork)
+	r.Get("/api/artwork/files/{id}/still", s.fileStill)
 	r.Group(func(r chi.Router) {
 		r.Use(s.authenticate, s.passwordCurrent)
-		r.Get("/api/artwork/items/{id}/{kind}", s.itemArtwork)
-		r.Get("/api/artwork/files/{id}/still", s.fileStill)
 		r.Get("/api/files/{id}/stream", s.stream)
 		r.Get("/api/files/{id}/subtitles/{key}", s.subtitleVTT)
 	})
