@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ChevronRight } from "lucide-react";
 import { api, useApi } from "../../lib/api";
 
 interface Timing {
@@ -11,8 +12,30 @@ interface Timing {
 
 type Field = Exclude<keyof Timing, "dvr">;
 
-/** Recording padding and how much of each commercial break skipping leaves in. Shared by every profile. */
+/**
+ * The Advanced section at the bottom of Settings, closed until opened:
+ * recording padding and how much of each commercial break skipping leaves
+ * in. Shared by every profile.
+ */
 export default function TimingSettings() {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="card">
+      <button className="flex w-full items-center gap-2 p-4 text-left" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <ChevronRight size={15} className={`text-content-muted transition-transform ${open ? "rotate-90" : ""}`} />
+        <span className="card-title">Advanced</span>
+        <span className="text-xs text-content-muted">Recording padding, commercial skip timing</span>
+      </button>
+      {open && (
+        <div className="border-t border-border-light p-4">
+          <TimingForm />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function TimingForm() {
   const { data, reload } = useApi<Timing>("/api/settings/timing");
   const [draft, setDraft] = useState<Timing | null>(null);
   const [busy, setBusy] = useState(false);
@@ -40,8 +63,7 @@ export default function TimingSettings() {
   };
 
   return (
-    <section className="card p-4">
-      <div className="card-title mb-3">Recording &amp; commercial timing</div>
+    <>
       <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
         {draft.dvr && (
           <div>
@@ -69,7 +91,7 @@ export default function TimingSettings() {
         )}
         {msg && <span className={`text-xs ${msg.tone === "good" ? "text-good" : "text-critical"}`}>{msg.text}</span>}
       </div>
-    </section>
+    </>
   );
 }
 

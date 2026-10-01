@@ -42,7 +42,6 @@ export default function SettingsPage() {
         </section>
 
         <LiveTvSettings />
-        <TimingSettings />
 
         <section className="card p-4">
           <div className="card-title mb-3">Transcoding</div>
@@ -82,6 +81,8 @@ export default function SettingsPage() {
             <dd>{status?.workers ?? "–"}</dd>
           </dl>
         </section>
+
+        <TimingSettings />
       </div>
     </div>
   );
