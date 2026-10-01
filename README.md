@@ -2,6 +2,8 @@
 
 # Couchside
 
+[couchside.app](https://couchside.app)
+
 A lightweight self-hosted media server for a home k3s cluster. It scans your movie and TV folders, matches them against the Open Movie Database (OMDb), and shows them in a poster-wall UI styled like Portside Lite.
 
 - **Backend:** one static Go binary with pure-Go SQLite (no CGO) and ffmpeg for thumbnails.
@@ -14,7 +16,7 @@ A lightweight self-hosted media server for a home k3s cluster. It scans your mov
 - ffprobe stream info: duration, codecs, resolution, and track counts.
 - OMDb matching: title, year, plot, genres, IMDb rating, posters, and per-season episode titles. Responses are cached for 30 days, and "Fix match" pins an IMDb id.
 - Artwork: posters resized to WebP, backdrops grabbed from the video itself, and episode stills.
-- Profiles: each person gets their own watch progress, Continue Watching, favourite channels and settings (theme, autoplay of the next episode, preferred subtitle language, commercial skipping, live TV quality). With more than one profile, each browser asks "Who's watching?" once and remembers the answer; switch from the sidebar. There are no passwords.
+- Profiles: each person gets their own watch progress, Continue Watching, favourite channels and settings (theme, autoplay of the next episode, preferred subtitle language, commercial skipping, live TV quality). With more than one profile, each browser asks "Who's watching?" once and remembers the answer; switch from the sidebar. With [accounts](#accounts) on, profiles sign in with passwords.
 - Browsing: Home with a hero and rows, virtualised Movies and TV grids with search, genre, watched filters and sort, plus detail pages with seasons.
 - Direct play with byte-range streaming, resume position, watched state, continue-watching, and next-episode autoplay.
 - An Activity page for background jobs, with retry.

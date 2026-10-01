@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Couchside</title>
+<meta name="description" content="A self-hosted media server for your movies, TV shows and live TV, with a web app and a Roku app.">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/logo-32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:title" content="Couchside">
+<meta property="og:description" content="Your movies, shows and live TV, served from your own server.">
+<meta property="og:image" content="https://couchside.app/icons/logo-512.png">
+<style>
+  /* Tokens from docs/style.md. */
+  :root {
+    color-scheme: dark light;
+    --bg-page: #0A1428; --bg-surface: #0F1D39; --bg-raised: #172A4F;
+    --text-primary: #EEF2FB; --text-secondary: #B4BFD9; --text-muted: #8592B3;
+    --border: #2A3C63; --border-light: #1D2D4F;
+    --accent: #5B93FF; --accent-hover: #7EA9FF; --text-on-accent: #07122A;
+    --brand-gradient: linear-gradient(90deg, #1FEEFE, #076BFD 35%, #882FFC 70%, #FA27E8);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg-page: #F2F5FC; --bg-surface: #FFFFFF; --bg-raised: #F7F9FE;
+      --text-primary: #0E1C37; --text-secondary: #3B4A6B; --text-muted: #5D6B8C;
+      --border: #CFD8EA; --border-light: #E4E9F5;
+      --accent: #1A56E8; --accent-hover: #1446C4; --text-on-accent: #FFFFFF;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg-page); color: var(--text-primary);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  a { color: var(--accent); }
+  a:hover { color: var(--accent-hover); }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+  header.wrap { padding: 72px 16px 48px; text-align: center; }
+  header img { width: 112px; height: 112px; }
+  h1 { margin: 20px 0 0; font-size: clamp(2.2rem, 6vw, 3.2rem); line-height: 1.1; letter-spacing: -0.02em; }
+  .brand { background: var(--brand-gradient); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .tagline { margin: 12px auto 0; max-width: 34rem; font-size: 1.15rem; color: var(--text-secondary); }
+  .actions { margin-top: 28px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-block; padding: 10px 18px; border-radius: 8px; font-weight: 600; text-decoration: none;
+    border: 1px solid var(--border); color: var(--text-primary);
+  }
+  .btn:hover { border-color: var(--accent); color: var(--text-primary); }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+  .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--text-on-accent); }
+  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; padding-bottom: 48px; }
+  .card { background: var(--bg-surface); border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; }
+  .card h2 { margin: 0 0 6px; font-size: 1rem; }
+  .card p { margin: 0; color: var(--text-secondary); font-size: 0.95rem; }
+  h2.section { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-muted); margin: 0 0 12px; }
+  pre {
+    margin: 0; padding: 16px; overflow-x: auto; background: var(--bg-raised); border: 1px solid var(--border-light);
+    border-radius: 12px; font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--text-primary);
+  }
+  .install { padding-bottom: 56px; }
+  .install p { color: var(--text-secondary); }
+  footer { border-top: 1px solid var(--border-light); padding: 24px 0 40px; color: var(--text-muted); font-size: 0.9rem; }
+  footer .wrap { display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between; }
+  footer a { color: var(--text-muted); }
+</style>
+</head>
+<body>
+<header class="wrap">
+  <img src="/icons/logo-256.png" alt="">
+  <h1><span class="brand">Couchside</span></h1>
+  <p class="tagline">Your movies, shows and live TV, served from your own server, to your browser and your Roku.</p>
+  <div class="actions">
+    <a class="btn btn-primary" href="https://github.com/timothydodd/couchside/releases/latest">Download</a>
+    <a class="btn" href="https://github.com/timothydodd/couchside">Source on GitHub</a>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="features" aria-label="Features">
+    <div class="card"><h2>Your library, organised</h2><p>Point it at your movie and TV folders. Couchside finds the titles, fetches posters, plots and episode names, and keeps up as files come and go.</p></div>
+    <div class="card"><h2>Plays everything</h2><p>Direct play when the device can, otherwise on-the-fly HLS with hardware transcoding, HDR tone mapping, subtitles and audio tracks.</p></div>
+    <div class="card"><h2>Live TV and DVR</h2><p>Watch and record from an HDHomeRun tuner, with a guide, series recordings and automatic commercial skipping.</p></div>
+    <div class="card"><h2>Everyone gets their own</h2><p>Profiles keep progress, favourites and settings apart. Turn on accounts for passwords, roles and signed-in device control.</p></div>
+    <div class="card"><h2>Search</h2><p>Find any movie, show, episode, channel or programme in a few letters, forgiving of spelling and punctuation.</p></div>
+    <div class="card"><h2>Yours, not ours</h2><p>One binary or container on your own hardware. No account with us and no tracking: it only talks to the services you set up, like OMDb for metadata and the HDHomeRun guide.</p></div>
+  </section>
+
+  <section class="install">
+    <h2 class="section">Run it</h2>
+    <pre>docker run -d --name couchside -p 8080:8080 \
+  -v couchside-data:/data -v couchside-cache:/cache \
+  -v /path/to/media:/media \
+  ghcr.io/timothydodd/couchside:latest</pre>
+    <p>Then open <code>http://localhost:8080</code> and add your libraries. Zips for Linux, macOS and Windows, a Helm chart for Kubernetes and the full setup guide are in the <a href="https://github.com/timothydodd/couchside#install">README</a>.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Couchside is free, open-source software.</span>
+    <span><a href="https://github.com/timothydodd/couchside">GitHub</a> · <a href="https://github.com/timothydodd/couchside/issues">Issues</a></span>
+  </div>
+</footer>
+</body>
+</html>

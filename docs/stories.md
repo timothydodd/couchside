@@ -160,6 +160,8 @@ showing content we have the right to show. Our real libraries can't be that.
   TV side.
 - A script to download and lay out that media and its artwork.
 - No live TV or DVR on the demo (no tuner, and no broadcast content).
+- Served at `https://demo.couchside.app` (a DNS record on our domain pointing
+  at wherever the demo runs).
 - Reviewer notes: address, reviewer name and password, what to try.
 
 **Done when** a Roku on another network can log in to the demo with the
@@ -172,10 +174,14 @@ reviewer notes alone and play a movie and an episode.
 **Scope**
 - A short, honest policy: Couchside runs on your own server; the app talks
   only to the server you enter; no analytics or third-party tracking; what the
-  server stores (watch history, profiles) and where.
-- Published at a stable URL (e.g. GitHub Pages from `docs/`).
+  server stores (watch history, profiles, accounts and sessions) and where;
+  what the server itself sends out (titles to OMDb, the guide request to
+  SiliconDust).
+- Published as `site/privacy.html`, at `https://couchside.app/privacy.html`,
+  and linked from the site's footer. The site is `site/`, deployed to GitHub
+  Pages by `.github/workflows/pages.yml`.
 
-**Done when** the policy is live at a URL the store listing can use.
+**Done when** the policy is live at `https://couchside.app/privacy.html`.
 
 ## S7 · Subtitle and audio track info for TVs
 
