@@ -441,13 +441,24 @@ func (s *Server) playInfo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, p)
 }
 
+func truncate(s string, n int) string {
+	if len(s) > n {
+		return s[:n]
+	}
+	return s
+}
+
 func (s *Server) saveProgress(w http.ResponseWriter, r *http.Request) {
 	id, err := idParam(r)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
-	var in struct{ Position, Duration float64 }
+	var in struct {
+		Position, Duration float64
+		State              string // playing | paused | stopped (older clients send none)
+		Mode               string // how it's playing, shown on the Settings page
+	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, err)
 		return
@@ -455,6 +466,12 @@ func (s *Server) saveProgress(w http.ResponseWriter, r *http.Request) {
 	if in.Position < 0 || in.Duration < 0 {
 		writeErr(w, badRequest("position and duration must be positive"))
 		return
+	}
+	if in.State == "stopped" {
+		s.presence.setPlaying(r, nil)
+	} else {
+		s.presence.setPlaying(r, &playing{Kind: "file", FileID: id, Position: in.Position, Duration: in.Duration,
+			Mode: truncate(in.Mode, 60), Paused: in.State == "paused"})
 	}
 	if err := s.db.SaveProgress(r.Context(), id, in.Position, in.Duration); err != nil {
 		writeErr(w, err)

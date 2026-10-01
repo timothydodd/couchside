@@ -341,28 +341,32 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   };
 
   // --- progress ------------------------------------------------------------------------
+  // Reports also tell the server who's watching what, and how (Settings shows it).
+  const modeRef = useRef("");
+  modeRef.current = describe(source, session);
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    const report = (keepalive = false) => {
+    const report = (keepalive = false, stopped = false) => {
       if (!v.duration || !isFinite(v.duration) || v.currentTime < 1) return;
+      const state = stopped ? "stopped" : v.paused ? "paused" : "playing";
       void fetch(`/api/files/${fileId}/progress`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ position: v.currentTime, duration: v.duration }),
+        body: JSON.stringify({ position: v.currentTime, duration: v.duration, state, mode: modeRef.current }),
         keepalive,
       }).catch(() => {});
     };
     const t = setInterval(() => !v.paused && report(), REPORT_EVERY_MS);
     const onPause = () => report();
     const onHide = () => document.visibilityState === "hidden" && report(true);
-    const onPageHide = () => report(true);
+    const onPageHide = () => report(true, true);
     v.addEventListener("pause", onPause);
     document.addEventListener("visibilitychange", onHide);
     window.addEventListener("pagehide", onPageHide);
     return () => {
       clearInterval(t);
-      report(true);
+      report(true, true);
       v.removeEventListener("pause", onPause);
       document.removeEventListener("visibilitychange", onHide);
       window.removeEventListener("pagehide", onPageHide);
@@ -397,7 +401,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
 
   const onEnded = async () => {
     const v = videoRef.current;
-    if (v?.duration) await api(`/api/files/${fileId}/progress`, { method: "PUT", json: { position: v.duration, duration: v.duration } }).catch(() => {});
+    if (v?.duration) await api(`/api/files/${fileId}/progress`, { method: "PUT", json: { position: v.duration, duration: v.duration, state: "stopped" } }).catch(() => {});
     if (parts && parts.at + 1 < parts.list.length) {
       // The rest of the same movie: always carry on, from the start of the next part.
       partStart = { fileId: parts.list[parts.at + 1].fileId, at: 0 };

@@ -21,6 +21,7 @@ import (
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/livetv"
 	"github.com/timothydodd/couchside/internal/metadata"
+	"github.com/timothydodd/couchside/internal/sysstat"
 	"github.com/timothydodd/couchside/internal/transcode"
 	"github.com/timothydodd/couchside/internal/webui"
 	"github.com/timothydodd/couchside/internal/worker"
@@ -35,6 +36,8 @@ type Server struct {
 	tv        *livetv.Service // nil when no tuner is configured
 	version   string
 	profiles  profileIDs
+	presence  *presence
+	sys       sysstat.Sampler
 }
 
 func init() {
@@ -43,7 +46,7 @@ func init() {
 }
 
 func New(d *db.DB, cfg config.Config, w *worker.Worker, providers *metadata.Chain, tc *transcode.Manager, tv *livetv.Service, version string) *Server {
-	return &Server{db: d, cfg: cfg, worker: w, providers: providers, tc: tc, tv: tv, version: version}
+	return &Server{db: d, cfg: cfg, worker: w, providers: providers, tc: tc, tv: tv, version: version, presence: newPresence()}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -52,8 +55,9 @@ func (s *Server) Handler() http.Handler {
 
 	r.Get("/healthz", s.health)
 	r.Route("/api", func(r chi.Router) {
-		r.Use(middleware.NoCache, s.withProfile)
+		r.Use(middleware.NoCache, s.withProfile, s.presence.track)
 		r.Get("/status", s.status)
+		r.Get("/system", s.system)
 		r.Get("/home", s.home)
 
 		r.Get("/profiles", s.listProfiles)

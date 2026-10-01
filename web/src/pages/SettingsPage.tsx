@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, FolderOpen, RefreshCw, XCircle } from "luc
 import FolderPicker from "../components/FolderPicker";
 import Link from "../components/Link";
 import ProfileAvatar from "../components/ProfileAvatar";
+import ServerNow from "../components/settings/ServerNow";
 import { api, useApi } from "../lib/api";
 import { fmtAgo, fmtDay, fmtTime } from "../lib/format";
 import { BREAK_MODES, SUBTITLE_LANGS } from "../lib/prefs";
@@ -21,6 +22,7 @@ export default function SettingsPage() {
     <div>
       <PageHeader title="Settings" />
       <div className="flex max-w-3xl flex-col gap-4 px-6 py-5">
+        <ServerNow />
         <ProfileSettings />
 
         <section className="card p-4">

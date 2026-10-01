@@ -147,6 +147,11 @@ func (s *Server) tvWatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prog, _ := s.db.ProgramAt(r.Context(), sess.Channel, time.Now().Unix())
+	pl := &playing{Kind: "live", Title: sess.Name, Mode: "Live TV"}
+	if prog != nil {
+		pl.Subtitle = prog.Title
+	}
+	s.presence.setPlaying(r, pl)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"sessionId": sess.ID, "playlist": "/api/live/" + sess.ID + "/index.m3u8",
 		"channel": sess.Channel, "name": sess.Name, "height": sess.Height, "hw": sess.HW, "now": prog,
@@ -159,6 +164,7 @@ func (s *Server) tvLiveFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := chi.URLParam(r, "file")
+	s.presence.keepPlaying(r)
 	p, err := s.tv.LiveFile(chi.URLParam(r, "sid"), name)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -180,6 +186,7 @@ func (s *Server) tvLeave(w http.ResponseWriter, r *http.Request) {
 	if s.tv != nil {
 		s.tv.LeaveLive(chi.URLParam(r, "sid"))
 	}
+	s.presence.setPlaying(r, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -284,6 +291,11 @@ func (s *Server) dvrWatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rec, _ := s.db.Recording(r.Context(), id)
+	pl := &playing{Kind: "recording", Title: sess.Name, Mode: "Recording in progress"}
+	if rec.Title != "" {
+		pl.Title, pl.Subtitle = rec.Title, rec.EpisodeTitle
+	}
+	s.presence.setPlaying(r, pl)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"sessionId": sess.ID, "playlist": "/api/live/" + sess.ID + "/index.m3u8",
 		"channel": sess.Channel, "name": sess.Name, "height": sess.Height, "hw": sess.HW, "recording": rec,

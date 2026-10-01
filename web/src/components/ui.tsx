@@ -44,12 +44,15 @@ export function StatTile({
   value,
   sub,
   tone,
+  meter,
   onClick,
 }: {
   label: string;
   value: ReactNode;
   sub?: ReactNode;
   tone?: "critical" | "warning" | "good";
+  /** 0–100: draws a fill bar under the value. */
+  meter?: number;
   onClick?: () => void;
 }) {
   const ring = tone === "critical" ? "border-critical/50" : tone === "warning" ? "border-warning/50" : "border-border-light";
@@ -61,6 +64,7 @@ export function StatTile({
     >
       <span className="text-xs text-content-muted">{label}</span>
       <span className="text-2xl font-semibold tabular-nums text-content">{value}</span>
+      {meter !== undefined && <Meter value={meter} className="my-0.5" />}
       {sub && <span className="text-xs text-content-secondary">{sub}</span>}
     </Tag>
   );

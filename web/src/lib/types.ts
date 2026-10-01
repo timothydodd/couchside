@@ -194,6 +194,57 @@ export interface TranscodeSession {
   aheadSec: number;
 }
 
+/** GET /api/system: the Settings page's live view of the server. */
+export interface SystemInfo {
+  stats: SystemStats;
+  clients: ConnectedClient[];
+  transcodes: TranscodeSession[];
+  maxStreams: number;
+  hwaccel: string;
+  livetv: { configured: boolean; recording?: number; liveSessions?: number };
+  jobs: JobCounts;
+}
+
+/** CPU percentages are of all the cores available (cores), so 100 = fully busy. */
+export interface SystemStats {
+  available: boolean;
+  scope: "container" | "host";
+  cores: number;
+  cpuPercent: number;
+  memUsed: number;
+  memTotal: number;
+  server: ProcessGroup;
+  encoders: ProcessGroup;
+}
+
+export interface ProcessGroup {
+  count: number;
+  cpuPercent: number;
+  rss: number;
+}
+
+export interface ConnectedClient {
+  profileId: number;
+  name: string;
+  color: ProfileColor;
+  device: string;
+  ip: string;
+  connectedSec: number;
+  you: boolean;
+  playing: NowPlaying | null;
+}
+
+export interface NowPlaying {
+  kind: "file" | "live" | "recording";
+  fileId?: number;
+  title: string;
+  subtitle: string;
+  positionSec: number;
+  durationSec: number;
+  mode: string;
+  paused: boolean;
+}
+
 export interface Home {
   continueWatching: PlayInfo[];
   recentMovies: ItemSummary[];
