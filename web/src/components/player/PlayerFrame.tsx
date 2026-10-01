@@ -14,9 +14,9 @@ import type { BreakMode, Segment } from "../../lib/types";
  * - vod: a file with a fixed duration. With parts, the file is one part of a
  *   movie and the bar spans the whole movie (see PartsTimeline).
  * - live: a growing live stream you can rewind within; "Live" jumps to the edge.
- *   With guide programs, the bar spans the program being watched in clock
- *   time (9:00–10:00 at 9:30 sits in the middle): before the stream started
- *   is shaded, not-yet-aired is hatched.
+ *   The bar spans the program being watched in clock time (9:00–10:00 at
+ *   9:30 sits in the middle), or the half-hour slot when the guide doesn't
+ *   cover it: before the stream started and not-yet-aired are hatched.
  * - recording: a recording in progress, drawn over the whole program
  *   (startAt..endAt as wall-clock unix seconds, video time 0 = startAt).
  */
@@ -60,6 +60,12 @@ export interface PlayerFrameProps {
 }
 
 const LIVE_SLACK = 12; // seconds behind the edge that still counts as "live"
+
+/** The half-hour slot (9:00–9:30, 9:30–10:00) holding clock time t: a stand-in for a missing guide entry. */
+const halfHour = (t: number) => {
+  const startAt = Math.floor(t / 1800) * 1800;
+  return { startAt, endAt: startAt + 1800 };
+};
 
 /** The player shell shared by movies/episodes, live TV and recordings. */
 export default function PlayerFrame(p: PlayerFrameProps) {
@@ -233,7 +239,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
   // Live with a guide: map video time to the clock (the edge is now) and span the
   // program the playhead is in.
   const clockAt = (t: number) => Date.now() / 1000 - (st.seekEnd - t);
-  const program = timeline.kind === "live" ? timeline.programs?.find((g) => clockAt(st.time) >= g.startAt && clockAt(st.time) < g.endAt) : undefined;
+  const program = timeline.kind === "live" ? (timeline.programs?.find((g) => clockAt(st.time) >= g.startAt && clockAt(st.time) < g.endAt) ?? halfHour(clockAt(st.time))) : undefined;
   if (parts) {
     max = parts.total;
     label = (t: number) => `${fmtClock(t)} · Part ${parts.starts.filter((s) => s <= t).length + 1}`;
@@ -244,10 +250,6 @@ export default function PlayerFrame(p: PlayerFrameProps) {
     availableStart = Math.max(min, st.seekStart);
     recordedEnd = st.seekEnd;
     label = (t: number) => fmtTime(clockAt(t));
-  } else if (timeline.kind === "live") {
-    min = st.seekStart;
-    max = Math.max(st.seekEnd, st.seekStart + 1);
-    label = (t: number) => fmtTime(Date.now() / 1000 - (st.seekEnd - t));
   } else if (timeline.kind === "recording") {
     min = 0;
     max = Math.max(timeline.endAt - timeline.startAt, st.seekEnd);
@@ -264,9 +266,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
         ? `${fmtTime(timeline.startAt + st.time)} · ${fmtClock(st.time)} of ${fmtClock(timeline.endAt - timeline.startAt)}`
         : program
           ? `${fmtTime(clockAt(st.time))} · ${fmtClock(Math.max(0, clockAt(st.time) - program.startAt))} of ${fmtClock(program.endAt - program.startAt)}${atLive ? "" : ` · −${fmtClock(behind)}`}`
-          : atLive
-            ? fmtTime(Date.now() / 1000)
-            : `${fmtTime(Date.now() / 1000 - behind)} · −${fmtClock(behind)}`;
+          : "";
 
   const VolIcon = st.muted || st.volume === 0 ? VolumeX : st.volume < 0.5 ? Volume1 : Volume2;
   const show = chrome || menu || !!p.error;
