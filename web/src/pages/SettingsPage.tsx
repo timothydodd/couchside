@@ -4,6 +4,7 @@ import FolderPicker from "../components/FolderPicker";
 import Link from "../components/Link";
 import ProfileAvatar from "../components/ProfileAvatar";
 import ServerNow from "../components/settings/ServerNow";
+import TimingSettings from "../components/settings/TimingSettings";
 import { api, useApi } from "../lib/api";
 import { fmtAgo, fmtDay, fmtTime } from "../lib/format";
 import { BREAK_MODES, SUBTITLE_LANGS } from "../lib/prefs";
@@ -41,6 +42,7 @@ export default function SettingsPage() {
         </section>
 
         <LiveTvSettings />
+        <TimingSettings />
 
         <section className="card p-4">
           <div className="card-title mb-3">Transcoding</div>

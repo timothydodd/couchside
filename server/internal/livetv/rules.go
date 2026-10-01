@@ -332,7 +332,7 @@ func (s *Service) evaluateRule(ctx context.Context, rule db.SeriesRule) (RuleSum
 			sum.Scheduled++
 			continue
 		}
-		padB, padA := int64(s.cfg.PadBefore/time.Second), int64(s.cfg.PadAfter/time.Second)
+		padB, padA := s.Padding(ctx)
 		if n, _ := s.db.Overlapping(ctx, p.StartAt-padB, p.EndAt+padA, 0); tuners > 0 && n >= tuners {
 			sum.Conflicts++ // a later airing of the same episode may still fit
 			continue

@@ -42,7 +42,7 @@ func (s *Server) commercials(w http.ResponseWriter, r *http.Request) {
 		"available": s.worker.CommercialsAvailable(),
 		"status":    status,
 		"error":     msg,
-		"segments":  segs,
+		"segments":  s.trimBreaks(r.Context(), segs), // what will actually be skipped
 	})
 }
 

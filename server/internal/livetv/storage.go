@@ -11,12 +11,47 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/timothydodd/couchside/internal/metadata"
 	"github.com/timothydodd/couchside/internal/parse"
 )
 
-const settingRecordingsDir = "dvr.recordings_dir"
+const (
+	settingRecordingsDir = "dvr.recordings_dir"
+	settingPadBefore     = "dvr.pad_before" // seconds
+	settingPadAfter      = "dvr.pad_after"
+)
+
+// Padding is how many seconds recordings start early and run late: the
+// Settings choice, or COUCHSIDE_DVR_PAD_BEFORE/AFTER.
+func (s *Service) Padding(ctx context.Context) (before, after int64) {
+	get := func(key string, def time.Duration) int64 {
+		if v, err := s.db.Setting(ctx, key); err == nil && v != "" {
+			if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
+				return n
+			}
+		}
+		return int64(def / time.Second)
+	}
+	return get(settingPadBefore, s.cfg.PadBefore), get(settingPadAfter, s.cfg.PadAfter)
+}
+
+// SetPadding saves the padding and applies it to recordings that haven't
+// started yet. Ones already recording keep the times they started with.
+func (s *Service) SetPadding(ctx context.Context, before, after int64) error {
+	if err := s.db.SetSetting(ctx, settingPadBefore, strconv.FormatInt(before, 10)); err != nil {
+		return err
+	}
+	if err := s.db.SetSetting(ctx, settingPadAfter, strconv.FormatInt(after, 10)); err != nil {
+		return err
+	}
+	if err := s.db.SetScheduledPadding(ctx, before, after); err != nil {
+		return err
+	}
+	s.wake()
+	return nil
+}
 
 // RecordingsDir is where new recordings go: the folder chosen in Settings,
 // or COUCHSIDE_RECORDINGS_DIR.

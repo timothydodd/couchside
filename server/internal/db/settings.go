@@ -43,3 +43,9 @@ func (d *DB) LibraryContaining(ctx context.Context, path string) (*Library, erro
 	}
 	return best, nil
 }
+
+// SetScheduledPadding applies new padding to recordings that haven't started.
+func (d *DB) SetScheduledPadding(ctx context.Context, before, after int64) error {
+	_, err := d.sql.ExecContext(ctx, `UPDATE recordings SET pad_before = ?, pad_after = ? WHERE status = 'scheduled'`, before, after)
+	return err
+}

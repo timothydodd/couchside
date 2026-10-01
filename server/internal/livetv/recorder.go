@@ -76,8 +76,8 @@ func (s *Service) Record(ctx context.Context, programID int64) (int64, int, erro
 	}
 	r := db.Recording{Channel: p.Channel, ChannelName: ch.Name, Title: p.Title, EpisodeTitle: p.EpisodeTitle,
 		EpisodeNum: p.EpisodeNum, Synopsis: p.Synopsis, ImageURL: p.ImageURL, SeriesID: p.SeriesID,
-		Categories: p.Categories, StartAt: p.StartAt, EndAt: p.EndAt,
-		PadBefore: int64(s.cfg.PadBefore / time.Second), PadAfter: int64(s.cfg.PadAfter / time.Second)}
+		Categories: p.Categories, StartAt: p.StartAt, EndAt: p.EndAt}
+	r.PadBefore, r.PadAfter = s.Padding(ctx)
 	id, err := s.db.ScheduleRecording(ctx, r)
 	if err != nil {
 		return 0, 0, err

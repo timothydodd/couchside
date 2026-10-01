@@ -116,6 +116,8 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/dvr/recordings/{id}/cancel", s.dvrCancel)
 		r.Post("/dvr/recordings/{id}/watch", s.dvrWatch)
 		r.Delete("/dvr/recordings/{id}", s.dvrDelete)
+		r.Get("/settings/timing", s.getTiming)
+		r.Put("/settings/timing", s.saveTiming)
 		r.Get("/dvr/settings", s.dvrSettings)
 		r.Put("/dvr/settings", s.dvrSaveSettings)
 		r.Get("/dvr/rules", s.rulesList)
