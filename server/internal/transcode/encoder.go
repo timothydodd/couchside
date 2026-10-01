@@ -68,6 +68,7 @@ type VideoOpts struct {
 	HDR         bool // source is PQ/HLG: tone map to SDR
 	File        bool // whole-file encode: slower preset, better compression
 	Deinterlace bool // broadcast TV: deinterlace frames flagged interlaced
+	Live        bool // live TV: steady frame-by-frame output over compression
 }
 
 // Video returns ffmpeg arguments that go before -i (device setup) and after
@@ -125,6 +126,11 @@ func (e Encoder) VideoParts(o VideoOpts) (in []string, chain string, codec []str
 		}
 		codec = []string{"-c:v", "libx264", "-preset", preset, "-crf", crf,
 			"-maxrate", br, "-bufsize", buf, "-profile:v", "high"}
+		if o.Live {
+			// No lookahead or B-frames: frames leave the encoder as they come in,
+			// so segments arrive evenly instead of in bursts the player stalls between.
+			codec = append(codec, "-tune", "zerolatency")
+		}
 	}
 	return in, strings.Join(f, ","), codec
 }

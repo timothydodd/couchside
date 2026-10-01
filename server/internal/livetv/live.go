@@ -122,7 +122,7 @@ func (m *liveManager) startInput(ctx context.Context, key, channel, name string,
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	vIn, vOut := m.enc.Video(transcode.VideoOpts{MaxHeight: height, BitrateK: transcode.BitrateFor(height), Deinterlace: true})
+	vIn, vOut := m.enc.Video(transcode.VideoOpts{MaxHeight: height, BitrateK: transcode.BitrateFor(height), Deinterlace: true, Live: true})
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
 	args = append(args, vIn...)
 	args = append(args, input...)
