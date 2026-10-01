@@ -8,11 +8,14 @@ it's picked up. `R-n` refers to a Roku story.
 
 Suggested order: **search → accounts → store readiness → extras.**
 
+**Done so far:** S1 (search, in the server and the web; the Roku's half is
+R1), S2 and S3 (accounts, sessions and refresh tokens; the Roku's half is R2).
+
 | ID  | Story                                   | Milestone       | Needed by        |
 | --- | --------------------------------------- | --------------- | ---------------- |
-| S1  | Search API                              | Search          | R1, web search   |
-| S2  | Accounts (optional, set at deploy time) | Accounts        | R2, S4           |
-| S3  | Sessions, refresh tokens, throttling    | Accounts        | R2, S4           |
+| S1  | Search API ✓                            | Search          | R1, web search   |
+| S2  | Optional accounts ✓                     | Accounts        | R2, S4           |
+| S3  | Sessions, refresh tokens, throttling ✓  | Accounts        | R2, S4           |
 | S4  | Safe public exposure (HTTPS, docs)      | Store readiness | S5               |
 | S5  | Demo server for Roku reviewers          | Store readiness | R7               |
 | S6  | Privacy policy                          | Store readiness | R7               |
