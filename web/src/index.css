@@ -1,82 +1,84 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------
-   Design tokens — shared with Portside Lite (Dracula/neon palette). Dark is the default;
+   Design tokens, from the C logo (branding/logo-c-original.png): navy ground,
+   electric-blue accent, violet and magenta and cyan as brand colours, and the
+   logo's cyan → blue → violet → magenta sweep as --brand-gradient. Every text
+   pairing meets WCAG AA (4.5:1); see docs/style.md. Dark is the default;
    `[data-theme="light"]` on <html> switches to the light variant. The theme
    store stamps that attribute (see stores/theme.ts).
 --------------------------------------------------------------------------- */
 :root,
 [data-theme="dark"] {
-  --bg-page: #21222c;
-  --bg-surface: #282a36;
-  --bg-raised: #343746;
-  --bg-muted: rgba(255, 255, 255, 0.05);
-  --bg-input: #21222c;
+  --bg-page: #0a1428;
+  --bg-surface: #0f1d39; /* the logo's navy */
+  --bg-raised: #172a4f;
+  --bg-muted: rgba(150, 180, 255, 0.06);
+  --bg-input: #0a1428;
 
-  --text-primary: #f8f8f2;
-  --text-secondary: #c3c5d4;
-  --text-muted: #8b8fa8;
-  --text-on-accent: #ffffff;
+  --text-primary: #eef2fb;
+  --text-secondary: #b4bfd9;
+  --text-muted: #8592b3;
+  /* The dark accent is bright enough for text on navy, so buttons carry navy text. */
+  --text-on-accent: #07122a;
 
-  --border: #44475a;
-  --border-light: #373a4a;
+  --border: #2a3c63;
+  --border-light: #1d2d4f;
 
   /* Brand */
-  --accent: #8a5cff;
-  --accent-hover: #a07cff;
-  --secondary: #49a7ff;
-  --brand-pink: #ff4fd8;
-  --brand-cyan: #3ef2ff;
+  --accent: #5b93ff;
+  --accent-hover: #7ea9ff;
+  --secondary: #a873ff;
+  --brand-pink: #ff4fe6;
+  --brand-cyan: #1feefe;
+  --brand-gradient: linear-gradient(90deg, #1feefe 0%, #3d7bff 38%, #8a3dff 70%, #fa27e8 100%);
 
   /* Status — reserved for state, never reused as a series color. */
-  --critical: #ff5555;
-  --warning: #ffb86c;
-  --info: #49a7ff;
-  --good: #50fa7b;
+  --critical: #ff5c74;
+  --warning: #ffb547;
+  --info: #45c6ff;
+  --good: #3ddc97;
 
-
-
-  --focus-ring: rgba(138, 92, 255, 0.45);
-  --shadow-md: 0 8px 28px rgba(0, 0, 0, 0.45);
+  --focus-ring: rgba(91, 147, 255, 0.5);
+  --shadow-md: 0 8px 28px rgba(2, 6, 20, 0.55);
 
   /* Media */
-  --shadow-poster: 0 10px 28px rgba(0, 0, 0, 0.55);
+  --shadow-poster: 0 10px 28px rgba(2, 6, 20, 0.6);
   --player-bg: #000000;
   color-scheme: dark;
 }
 
 [data-theme="light"] {
-  --bg-page: #f3f3f7;
+  --bg-page: #f2f5fc;
   --bg-surface: #ffffff;
-  --bg-raised: #f7f7fb;
-  --bg-muted: rgba(40, 42, 54, 0.05);
+  --bg-raised: #f7f9fe;
+  --bg-muted: rgba(14, 28, 55, 0.05);
   --bg-input: #ffffff;
 
-  --text-primary: #1f2030;
-  --text-secondary: #4a4d63;
-  --text-muted: #72758c;
+  --text-primary: #0e1c37; /* the logo's navy */
+  --text-secondary: #3b4a6b;
+  --text-muted: #5d6b8c;
   --text-on-accent: #ffffff;
 
-  --border: #d6d7e1;
-  --border-light: #e7e8ef;
+  --border: #cfd8ea;
+  --border-light: #e4e9f5;
 
-  --accent: #6d3fe6;
-  --accent-hover: #5a2fd0;
-  --secondary: #2f7fd6;
-  --brand-pink: #d629b4;
-  --brand-cyan: #0f9fb0;
+  --accent: #1a56e8;
+  --accent-hover: #1446c4;
+  --secondary: #6a24e0;
+  --brand-pink: #b8169f;
+  --brand-cyan: #08788f;
+  --brand-gradient: linear-gradient(90deg, #0a93b0 0%, #1a56e8 38%, #6a24e0 70%, #c4139f 100%);
 
-  --critical: #d63a4a;
-  --warning: #c27417;
-  --info: #2f7fd6;
-  --good: #1f9d55;
+  --critical: #cc2b45;
+  --warning: #a35f00;
+  --info: #0b6fb8;
+  --good: #12805a;
 
+  --focus-ring: rgba(26, 86, 232, 0.3);
+  --shadow-md: 0 8px 28px rgba(14, 28, 55, 0.12);
 
-
-  --focus-ring: rgba(109, 63, 230, 0.3);
-  --shadow-md: 0 8px 28px rgba(0, 0, 0, 0.12);
-
-  --shadow-poster: 0 10px 24px rgba(31, 32, 48, 0.22);
+  --shadow-poster: 0 10px 24px rgba(14, 28, 55, 0.2);
   --player-bg: #000000;
   color-scheme: light;
 }
@@ -317,6 +319,14 @@ body {
   background:
     linear-gradient(to top, var(--bg-page) 0%, color-mix(in srgb, var(--bg-page) 70%, transparent) 35%, transparent 75%),
     linear-gradient(to right, var(--bg-page) 0%, color-mix(in srgb, var(--bg-page) 55%, transparent) 40%, transparent 80%);
+}
+
+/* The logo's colour sweep as text: brand labels only ("media", "Just added"), never body copy. */
+.brand-text {
+  background-image: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 /* Hero backdrop image. Anchored near the top: faces and titles sit high in

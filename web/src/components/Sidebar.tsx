@@ -82,7 +82,7 @@ export default function Sidebar() {
         <img src="/icons/logo-64.png" alt="" className="h-7 w-7" />
         <div className="leading-tight">
           <div className="text-sm font-semibold text-content">Couchside</div>
-          <div className="text-[10px] font-medium uppercase tracking-widest text-brand-pink">media</div>
+          <div className="text-[10px] font-medium uppercase tracking-widest brand-text">media</div>
         </div>
       </Link>
       <div className="flex flex-col gap-0.5">

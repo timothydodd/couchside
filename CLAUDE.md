@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Couchside is a self-hosted media server for k3s. Go backend in `server/`, React frontend in `web/`, Helm chart in `deploy/helm/couchside`. The UI deliberately matches `../portside-lite`: same tokens, component classes and shell layout.
+Couchside is a self-hosted media server for k3s. Go backend in `server/`, React frontend in `web/`, Helm chart in `deploy/helm/couchside`. The UI shares `../portside-lite`'s component classes and shell layout; its colours come from the C logo (see `docs/style.md`).
 
 ## Build & verify (WSL)
 
@@ -10,7 +10,7 @@ Couchside is a self-hosted media server for k3s. Go backend in `server/`, React 
 - Full-stack smoke test: build the binary, then run it with `COUCHSIDE_DATA_DIR`, `COUCHSIDE_MEDIA_ROOT` and `COUCHSIDE_WEB_DIR=<scratch>/web/dist`. Generate sample media with `ffmpeg -f lavfi -i testsrc2=...`.
 - Docker builds and the real deploy run from Windows.
 - **Embedded UI**: `server/internal/webui` embeds `dist/`, which is only a `.gitkeep` in git. The Dockerfile and release workflow copy `web/dist` there before `go build`. `COUCHSIDE_WEB_DIR` overrides it with a folder on disk.
-- **Releases**: push a `v*` tag. `.github/workflows/release.yml` builds zips (linux/darwin amd64 and arm64, windows amd64), a multi-arch ghcr image, and a GitHub Release with SHA256SUMS. `ci.yml` runs vet, test and the web build on pushes and PRs. Icons live in `web/public/icons/logo-<size>.png`, plus `favicon.ico`, `apple-touch-icon.png` and `site.webmanifest`. They're generated from `branding/logo-c-original.png` by `python3 branding/make-icons.py` (Pillow): the C is re-centred on its navy, rounded tiles for 64px and up (C at 72%), a bigger C for 16/32/48 and the .ico (86%), and a full-square apple-touch-icon because iOS rounds it itself.
+- **Releases**: push a `v*` tag. `.github/workflows/release.yml` builds zips (linux/darwin amd64 and arm64, windows amd64), a multi-arch ghcr image, and a GitHub Release with SHA256SUMS. `ci.yml` runs vet, test and the web build on pushes and PRs. Icons live in `web/public/icons/logo-<size>.png`, plus `favicon.ico`, `apple-touch-icon.png` and `site.webmanifest`. They're generated from `branding/logo-c-original.png` by `python3 branding/make-icons.py` (Pillow): the C is re-centred on its navy, rounded tiles for 64px and up (C at 72%), a bigger C for 16/32/48 and the .ico (86%), and a full-square apple-touch-icon because iOS rounds it itself. `branding/make-transparent.py` cuts the C out onto transparency (`branding/logo-c-transparent.png`).
 
 ## Architecture
 
@@ -66,7 +66,8 @@ Couchside is a self-hosted media server for k3s. Go backend in `server/`, React 
 
 ## Styling
 
-- `web/src/index.css` starts from Portside Lite's tokens and component classes (`.card`, `.btn-*`, `.field`, `.navtab`, `.table`, `.tint-*`). Media additions follow the same naming: `.poster`, `.still`, `.row-title`, `.art-badge`, `.chip`, `.hero-fade`, `.poster-placeholder`.
+- Colours: `docs/style.md` (tokens, contrast, rules). The dark accent is bright, so accent fills always pair with `text-on-accent` (navy in dark), never `text-white`. `.brand-text` (the logo's gradient) is for short brand labels only.
+- `web/src/index.css` starts from Portside Lite's component classes (`.card`, `.btn-*`, `.field`, `.navtab`, `.table`, `.tint-*`). Media additions follow the same naming: `.poster`, `.still`, `.row-title`, `.art-badge`, `.chip`, `.hero-fade`, `.poster-placeholder`.
 - Put new reusable styles in `index.css` under `@layer components`. Don't hard-code colours; use the tokens so light mode keeps working.
 
 ## Next milestones
