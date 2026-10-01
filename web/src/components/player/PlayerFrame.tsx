@@ -14,12 +14,15 @@ import type { BreakMode, Segment } from "../../lib/types";
  * - vod: a file with a fixed duration. With parts, the file is one part of a
  *   movie and the bar spans the whole movie (see PartsTimeline).
  * - live: a growing live stream you can rewind within; "Live" jumps to the edge.
+ *   With guide programs, the bar spans the program being watched in clock
+ *   time (9:00–10:00 at 9:30 sits in the middle): before the stream started
+ *   is shaded, not-yet-aired is hatched.
  * - recording: a recording in progress, drawn over the whole program
  *   (startAt..endAt as wall-clock unix seconds, video time 0 = startAt).
  */
 export type Timeline =
   | { kind: "vod"; parts?: PartsTimeline }
-  | { kind: "live" }
+  | { kind: "live"; programs?: { startAt: number; endAt: number }[] }
   | { kind: "recording"; startAt: number; endAt: number };
 
 /**
@@ -226,9 +229,21 @@ export default function PlayerFrame(p: PlayerFrameProps) {
   let max = isFinite(st.duration) ? st.duration : st.seekEnd;
   let recordedEnd: number | undefined;
   let label = (t: number) => fmtClock(t);
+  let availableStart: number | undefined;
+  // Live with a guide: map video time to the clock (the edge is now) and span the
+  // program the playhead is in.
+  const clockAt = (t: number) => Date.now() / 1000 - (st.seekEnd - t);
+  const program = timeline.kind === "live" ? timeline.programs?.find((g) => clockAt(st.time) >= g.startAt && clockAt(st.time) < g.endAt) : undefined;
   if (parts) {
     max = parts.total;
     label = (t: number) => `${fmtClock(t)} · Part ${parts.starts.filter((s) => s <= t).length + 1}`;
+  } else if (program) {
+    const nowSec = Date.now() / 1000;
+    min = st.seekEnd - (nowSec - program.startAt);
+    max = st.seekEnd + (program.endAt - nowSec);
+    availableStart = Math.max(min, st.seekStart);
+    recordedEnd = st.seekEnd;
+    label = (t: number) => fmtTime(clockAt(t));
   } else if (timeline.kind === "live") {
     min = st.seekStart;
     max = Math.max(st.seekEnd, st.seekStart + 1);
@@ -247,9 +262,11 @@ export default function PlayerFrame(p: PlayerFrameProps) {
       ? `${fmtClock(st.time)} / ${isFinite(st.duration) ? fmtClock(st.duration) : "–"}`
       : timeline.kind === "recording"
         ? `${fmtTime(timeline.startAt + st.time)} · ${fmtClock(st.time)} of ${fmtClock(timeline.endAt - timeline.startAt)}`
-        : atLive
-          ? fmtTime(Date.now() / 1000)
-          : `${fmtTime(Date.now() / 1000 - behind)} · −${fmtClock(behind)}`;
+        : program
+          ? `${fmtTime(clockAt(st.time))} · ${fmtClock(Math.max(0, clockAt(st.time) - program.startAt))} of ${fmtClock(program.endAt - program.startAt)}${atLive ? "" : ` · −${fmtClock(behind)}`}`
+          : atLive
+            ? fmtTime(Date.now() / 1000)
+            : `${fmtTime(Date.now() / 1000 - behind)} · −${fmtClock(behind)}`;
 
   const VolIcon = st.muted || st.volume === 0 ? VolumeX : st.volume < 0.5 ? Volume1 : Volume2;
   const show = chrome || menu || !!p.error;
@@ -342,6 +359,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           value={off + st.time}
           bufferedEnd={off + st.bufferedEnd}
           recordedEnd={recordedEnd}
+          availableStart={availableStart}
           breaks={off ? brk.breaks?.map((b) => ({ start: b.start + off, end: b.end + off })) : brk.breaks}
           marks={parts?.starts}
           label={label}

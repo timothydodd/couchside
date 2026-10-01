@@ -38,6 +38,27 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
   const current = channels?.find((c) => c.number === channel);
   const now: Program | null | undefined = current?.now ?? session?.now;
 
+  // Programs seen on this channel this session, so the timeline can span
+  // whichever one the playhead is in, even after rewinding into the last one.
+  const [programs, setPrograms] = useState<Program[]>([]);
+  useEffect(() => setPrograms([]), [channel]);
+  useEffect(() => {
+    const add = [now, current?.next].filter((p): p is Program => !!p);
+    if (!add.length) return;
+    setPrograms((ps) => {
+      const fresh = add.filter((p) => !ps.some((q) => q.startAt === p.startAt));
+      return fresh.length ? [...ps, ...fresh].slice(-6) : ps;
+    });
+  }, [now, current?.next]);
+  // When the show ends, fetch the guide again so the next one's details arrive.
+  useEffect(() => {
+    if (!now) return;
+    const ms = (now.endAt + 2) * 1000 - Date.now();
+    if (ms <= 0 || ms > 6 * 3600_000) return;
+    const t = setTimeout(() => void reloadChannels(), ms);
+    return () => clearTimeout(t);
+  }, [now, reloadChannels]);
+
   const exit = useCallback(() => go("/livetv"), [go]);
   const zap = useCallback(
     (dir: 1 | -1) => {
@@ -184,7 +205,7 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
       }
       title={now ? now.title : current?.name ?? channel}
       subtitle={now ? `${fmtTime(now.startAt)} – ${fmtTime(now.endAt)}${now.episodeTitle ? ` · ${now.episodeTitle}` : ""}` : "No guide information"}
-      timeline={{ kind: "live" }}
+      timeline={{ kind: "live", programs }}
       liveEdge={() => hlsRef.current?.liveSyncPosition ?? null}
       settings={settings}
       onBack={exit}

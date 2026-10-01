@@ -5,6 +5,7 @@ import type { Segment } from "../../lib/types";
  * Scrubber. [min, max] is the whole bar; buffered and recorded ranges are
  * drawn inside it. When recordedEnd is set (a recording still in progress),
  * the part after it is shown as not-yet-recorded and can't be seeked into.
+ * Likewise before availableStart (live TV from before the stream started).
  * Commercial breaks are marked over the track, and marks (where a movie's
  * next part begins) as ticks.
  */
@@ -14,6 +15,7 @@ export default function SeekBar({
   value,
   bufferedEnd,
   recordedEnd,
+  availableStart,
   breaks,
   marks,
   label,
@@ -24,6 +26,7 @@ export default function SeekBar({
   value: number;
   bufferedEnd: number;
   recordedEnd?: number;
+  availableStart?: number;
   breaks?: Segment[];
   marks?: number[];
   label: (t: number) => string;
@@ -34,12 +37,13 @@ export default function SeekBar({
   const [drag, setDrag] = useState<number | null>(null);
   const span = Math.max(0.001, max - min);
   const limit = recordedEnd ?? max;
+  const first = Math.max(min, availableStart ?? min);
   const pct = (t: number) => `${Math.max(0, Math.min(100, ((t - min) / span) * 100))}%`;
 
   const at = (e: PointerEvent) => {
     const r = ref.current!.getBoundingClientRect();
     const t = min + ((e.clientX - r.left) / r.width) * span;
-    return Math.max(min, Math.min(limit, t));
+    return Math.max(first, Math.min(limit, t));
   };
 
   const shown = drag ?? value;
@@ -71,9 +75,13 @@ export default function SeekBar({
           // not-yet-recorded part of the program
           <div className="absolute inset-y-0 right-0 bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.06)_0_4px,transparent_4px_8px)]" style={{ left: pct(limit) }} />
         )}
-        {recordedEnd !== undefined && <div className="absolute inset-y-0 left-0 bg-white/20" style={{ width: pct(limit) }} />}
-        <div className="absolute inset-y-0 left-0 bg-white/35" style={{ width: pct(Math.min(bufferedEnd, limit)) }} />
+        {recordedEnd !== undefined && <div className="absolute inset-y-0 bg-white/20" style={{ left: pct(first), right: `calc(100% - ${pct(limit)})` }} />}
+        <div className="absolute inset-y-0 bg-white/35" style={{ left: pct(first), right: `calc(100% - ${pct(Math.max(first, Math.min(bufferedEnd, limit)))})` }} />
         <div className="absolute inset-y-0 left-0 bg-accent" style={{ width: pct(shown) }} />
+        {first > min && (
+          // before the stream started: shown as progress through the program, but can't be seeked into
+          <div className="absolute inset-y-0 left-0 bg-black/35 bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.12)_0_4px,transparent_4px_8px)]" style={{ width: pct(first) }} />
+        )}
         {breaks?.map((b) => (
           <div key={b.start} className="seek-break" style={{ left: pct(b.start), right: `calc(100% - ${pct(b.end)})` }} />
         ))}
