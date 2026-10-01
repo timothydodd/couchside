@@ -7,12 +7,14 @@ import { api, backdropUrl, posterUrl, stillUrl, useApi } from "../lib/api";
 import { fmtAirDate, fmtBytes, fmtClock, fmtResolution, fmtRuntime } from "../lib/format";
 import { canDirectPlay } from "../lib/playback";
 import { PROBLEM_TEXT, type EpisodeRow, type ItemDetail, type MediaFile } from "../lib/types";
+import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
 
 export default function ItemPage({ id }: { id: number }) {
   const { data, error, loading, reload } = useApi<ItemDetail>(`/api/items/${id}`);
   const back = useRouter((s) => s.back);
+  const admin = useIsAdmin();
 
   if (loading && !data) {
     return (
@@ -111,7 +113,7 @@ export default function ItemPage({ id }: { id: number }) {
               {allWatched ? <EyeOff size={15} /> : <Eye size={15} />}
               {allWatched ? "Mark unwatched" : "Mark watched"}
             </button>
-            <OptimizeButton itemId={item.id} isSeries={isSeries} />
+            {admin && <OptimizeButton itemId={item.id} isSeries={isSeries} />}
           </div>
 
           {item.plot ? (
@@ -124,7 +126,7 @@ export default function ItemPage({ id }: { id: number }) {
             )
           )}
 
-          <MatchPanel id={item.id} status={item.matchStatus} imdbId={item.imdbId} parsed={`${item.parsedTitle}${item.parsedYear ? ` (${item.parsedYear})` : ""}`} onDone={reload} />
+          {admin && <MatchPanel id={item.id} status={item.matchStatus} imdbId={item.imdbId} parsed={`${item.parsedTitle}${item.parsedYear ? ` (${item.parsedYear})` : ""}`} onDone={reload} />}
         </div>
       </div>
 
@@ -420,6 +422,7 @@ function PlaybackChip({ f }: { f: MediaFile }) {
 }
 
 function FilesCard({ files, onChange }: { files: MediaFile[]; onChange: () => void }) {
+  const admin = useIsAdmin();
   const dropOptimized = async (id: number) => {
     await api(`/api/files/${id}/optimized`, { method: "DELETE" });
     onChange();
@@ -461,7 +464,7 @@ function FilesCard({ files, onChange }: { files: MediaFile[]; onChange: () => vo
                 <td>
                   <span className="inline-flex items-center gap-1">
                     <PlaybackChip f={f} />
-                    {f.optimized && (
+                    {f.optimized && admin && (
                       <button className="btn-quiet !p-1 hover:!text-critical" title="Delete the optimized copy" onClick={() => void dropOptimized(f.id)}>
                         <Trash2 size={12} />
                       </button>

@@ -10,6 +10,7 @@ import { nativeHls } from "../lib/playback";
 import type { ChannelNow, LiveSessionInfo, Program } from "../lib/types";
 import { useProfile } from "../stores/profile";
 import { useRouter } from "../stores/router";
+import { useCanRecord } from "../stores/auth";
 
 const LIVE_QUALITIES = [1080, 720, 480] as const;
 let hlsModule: Promise<typeof HlsType> | null = null;
@@ -159,6 +160,7 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
     };
   }, [channel, height, nonce]);
 
+  const canRecord = useCanRecord();
   const toggleRecord = async () => {
     if (!now) return;
     setRecBusy(true);
@@ -225,7 +227,7 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
               <SkipBack size={15} /> Start over
             </TopButton>
           )}
-          {now && now.recordingStatus !== "completed" && (
+          {canRecord && now && now.recordingStatus !== "completed" && (
             <TopButton label={recording ? "Stop recording" : "Record this program"} onClick={() => void toggleRecord()} danger={recording} disabled={recBusy || now.recordingStatus === "scheduled"}>
               {recording ? <Square size={12} className="fill-current" /> : <CircleDot size={15} className="text-critical" />}
               {recording ? "Stop" : "Record"}

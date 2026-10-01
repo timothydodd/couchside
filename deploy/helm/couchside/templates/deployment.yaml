@@ -50,6 +50,10 @@ spec:
               value: {{ .Values.config.encodeWorkers | quote }}
             - name: COUCHSIDE_OPTIMIZE_HEIGHT
               value: {{ .Values.config.optimizeHeight | quote }}
+            {{- if .Values.auth.enabled }}
+            - name: COUCHSIDE_AUTH
+              value: "true"
+            {{- end }}
             {{- if .Values.config.debug }}
             - name: COUCHSIDE_DEBUG
               value: "1"

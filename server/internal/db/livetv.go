@@ -250,20 +250,22 @@ type Recording struct {
 	StartedAt    *int64   `json:"startedAt"`
 	FinishedAt   *int64   `json:"finishedAt"`
 	CreatedAt    int64    `json:"createdAt"`
-	FileID       *int64   `json:"fileId"` // library file once the recording has been scanned
-	RuleID       *int64   `json:"ruleId"` // series rule that scheduled it
+	FileID       *int64   `json:"fileId"`  // library file once the recording has been scanned
+	RuleID       *int64   `json:"ruleId"`  // series rule that scheduled it
+	OwnerID      int64    `json:"ownerId"` // profile that scheduled it (or owns its rule); 0 = admins only
 }
 
 const recCols = `r.id, r.channel, r.channel_name, r.title, r.episode_title, r.episode_num, r.synopsis, r.image_url,
 	r.series_id, r.categories, r.start_at, r.end_at, r.pad_before, r.pad_after, r.status, r.path, r.size, r.error,
-	r.started_at, r.finished_at, r.created_at, (SELECT f.id FROM files f WHERE f.path = r.path AND r.path <> ''), r.rule_id`
+	r.started_at, r.finished_at, r.created_at, (SELECT f.id FROM files f WHERE f.path = r.path AND r.path <> ''), r.rule_id,
+	COALESCE(r.profile_id, (SELECT sr.profile_id FROM series_rules sr WHERE sr.id = r.rule_id), 0)`
 
 func scanRecording(row interface{ Scan(...any) error }) (Recording, error) {
 	var r Recording
 	var cats string
 	err := row.Scan(&r.ID, &r.Channel, &r.ChannelName, &r.Title, &r.EpisodeTitle, &r.EpisodeNum, &r.Synopsis, &r.ImageURL,
 		&r.SeriesID, &cats, &r.StartAt, &r.EndAt, &r.PadBefore, &r.PadAfter, &r.Status, &r.Path, &r.Size, &r.Error,
-		&r.StartedAt, &r.FinishedAt, &r.CreatedAt, &r.FileID, &r.RuleID)
+		&r.StartedAt, &r.FinishedAt, &r.CreatedAt, &r.FileID, &r.RuleID, &r.OwnerID)
 	r.Categories = SplitGenres(cats)
 	return r, err
 }

@@ -2,14 +2,17 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"mime"
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +20,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/timothydodd/couchside/internal/auth"
 	"github.com/timothydodd/couchside/internal/config"
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/livetv"
@@ -39,6 +43,7 @@ type Server struct {
 	presence  *presence
 	sys       sysstat.Sampler
 	index     searchIndex
+	auth      *authState // nil when accounts are off
 }
 
 func init() {
@@ -46,8 +51,28 @@ func init() {
 	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
 }
 
-func New(d *db.DB, cfg config.Config, w *worker.Worker, providers *metadata.Chain, tc *transcode.Manager, tv *livetv.Service, version string) *Server {
-	return &Server{db: d, cfg: cfg, worker: w, providers: providers, tc: tc, tv: tv, version: version, presence: newPresence()}
+func New(d *db.DB, cfg config.Config, w *worker.Worker, providers *metadata.Chain, tc *transcode.Manager, tv *livetv.Service, version string) (*Server, error) {
+	s := &Server{db: d, cfg: cfg, worker: w, providers: providers, tc: tc, tv: tv, version: version, presence: newPresence()}
+	if cfg.Auth {
+		key, err := auth.LoadKey(filepath.Join(cfg.DataDir, "auth.key"))
+		if err != nil {
+			return nil, fmt.Errorf("auth key: %w", err)
+		}
+		s.auth = newAuthState(key)
+	}
+	return s, nil
+}
+
+// Run does the server's background upkeep until ctx ends.
+func (s *Server) Run(ctx context.Context) {
+	if !s.cfg.Auth {
+		return
+	}
+	// Print the setup code at start-up if there's no admin yet.
+	if _, err := s.setupNeeded(ctx); err != nil {
+		slog.Error("accounts", "err", err)
+	}
+	s.pruneSessions(ctx)
 }
 
 func (s *Server) Handler() http.Handler {
@@ -56,88 +81,44 @@ func (s *Server) Handler() http.Handler {
 
 	r.Get("/healthz", s.health)
 	r.Route("/api", func(r chi.Router) {
-		r.Use(middleware.NoCache, s.withProfile, s.presence.track)
-		r.Get("/status", s.status)
-		r.Get("/system", s.system)
-		r.Get("/home", s.home)
-		r.Get("/search", s.search)
+		r.Use(middleware.NoCache)
+		// Open: how to sign in, and signing in.
+		r.Get("/auth", s.authStatus)
+		r.Post("/auth/login", s.login)
+		r.Post("/auth/refresh", s.refresh)
+		r.Post("/auth/setup", s.setup)
 
-		r.Get("/profiles", s.listProfiles)
-		r.Post("/profiles", s.createProfile)
-		r.Put("/profiles/{id}", s.updateProfile)
-		r.Patch("/profiles/{id}/prefs", s.profilePrefs)
-		r.Delete("/profiles/{id}", s.deleteProfile)
-		r.Post("/profiles/{id}/select", s.selectProfile)
+		r.Group(func(r chi.Router) {
+			r.Use(s.authenticate, s.presence.track)
+			// Your own account; reachable while a temporary password still has to be changed.
+			r.Post("/auth/logout", s.logout)
+			r.Post("/auth/password", s.changePassword)
+			r.Get("/auth/sessions", s.mySessions)
+			r.Post("/auth/sessions/others/end", s.endOtherSessions)
+			r.Delete("/auth/sessions/{sid}", s.endSession)
 
-		r.Get("/libraries", s.listLibraries)
-		r.Post("/libraries", s.createLibrary)
-		r.Put("/libraries/{id}", s.updateLibrary)
-		r.Delete("/libraries/{id}", s.deleteLibrary)
-		r.Post("/libraries/{id}/scan", s.scanLibrary)
-		r.Post("/libraries/scan", s.scanAll)
-		r.Post("/libraries/{id}/optimize", s.optimizeLibrary)
-		r.Get("/libraries/{id}/manage", s.manageItems)
-		r.Get("/fs", s.browse)
-
-		r.Get("/items", s.listItems)
-		r.Get("/items/{id}", s.getItem)
-		r.Post("/items/{id}/match", s.rematch)
-		r.Post("/items/{id}/watched", s.itemWatched)
-		r.Post("/items/{id}/optimize", s.optimizeItem)
-		r.Get("/items/{id}/files", s.itemFiles)
-		r.Get("/items/{id}/lookup", s.itemLookup)
-		r.Delete("/items/{id}", s.deleteItem)
-		r.Put("/items/{id}/artwork/{kind}", s.uploadArtwork)
-		r.Delete("/items/{id}/artwork/{kind}", s.resetArtwork)
-
-		r.Get("/files/{id}", s.playInfo)
-		r.Put("/files/{id}/progress", s.saveProgress)
-		r.Post("/files/{id}/watched", s.fileWatched)
-		r.Delete("/files/{id}/optimized", s.deleteOptimized)
-		r.Delete("/files/{id}", s.deleteFile)
-		r.Put("/files/{id}/role", s.setFileRole)
-		r.Post("/files/{id}/hls", s.createHLS)
-		r.Get("/files/{id}/streams", s.fileStreams)
-		r.Get("/files/{id}/commercials", s.commercials)
-		r.Post("/files/{id}/commercials", s.findCommercials)
-		r.Get("/hls/{sid}/index.m3u8", s.hlsPlaylist)
-		r.Get("/hls/{sid}/{seg}", s.hlsSegment)
-		r.Delete("/hls/{sid}", s.closeHLS)
-		r.Get("/transcode", s.transcodeSessions)
-
-		r.Get("/livetv/status", s.tvStatus)
-		r.Post("/livetv/refresh", s.tvRefresh)
-		r.Get("/livetv/channels", s.tvChannels)
-		r.Put("/livetv/channels/{number}/pin", s.tvPin)
-		r.Get("/livetv/guide", s.tvGuide)
-		r.Post("/livetv/watch", s.tvWatch)
-		r.Get("/live/{sid}/{file}", s.tvLiveFile)
-		r.Delete("/live/{sid}", s.tvLeave)
-		r.Get("/dvr/recordings", s.dvrList)
-		r.Post("/dvr/recordings", s.dvrRecord)
-		r.Post("/dvr/recordings/{id}/cancel", s.dvrCancel)
-		r.Post("/dvr/recordings/{id}/watch", s.dvrWatch)
-		r.Delete("/dvr/recordings/{id}", s.dvrDelete)
-		r.Get("/settings/timing", s.getTiming)
-		r.Put("/settings/timing", s.saveTiming)
-		r.Get("/dvr/settings", s.dvrSettings)
-		r.Put("/dvr/settings", s.dvrSaveSettings)
-		r.Get("/dvr/rules", s.rulesList)
-		r.Get("/dvr/rules/options", s.ruleOptions)
-		r.Post("/dvr/rules", s.ruleCreate)
-		r.Put("/dvr/rules/{id}", s.ruleUpdate)
-		r.Delete("/dvr/rules/{id}", s.ruleDelete)
-
-		r.Get("/jobs", s.listJobs)
-		r.Post("/jobs/{id}/retry", s.retryJob)
-		r.Post("/jobs/{id}/cancel", s.cancelJob)
-		r.Post("/jobs/clear", s.clearJobs)
+			r.Group(func(r chi.Router) {
+				r.Use(s.passwordCurrent)
+				s.userRoutes(r)
+				r.Group(func(r chi.Router) {
+					r.Use(recorders)
+					s.recorderRoutes(r)
+				})
+				r.Group(func(r chi.Router) {
+					r.Use(adminOnly)
+					s.adminRoutes(r)
+				})
+			})
+		})
 	})
 	// Artwork and streams sit outside the no-cache group.
-	r.Get("/api/artwork/items/{id}/{kind}", s.itemArtwork)
-	r.Get("/api/artwork/files/{id}/still", s.fileStill)
-	r.Get("/api/files/{id}/stream", s.stream)
-	r.Get("/api/files/{id}/subtitles/{key}", s.subtitleVTT)
+	r.Group(func(r chi.Router) {
+		r.Use(s.authenticate, s.passwordCurrent)
+		r.Get("/api/artwork/items/{id}/{kind}", s.itemArtwork)
+		r.Get("/api/artwork/files/{id}/still", s.fileStill)
+		r.Get("/api/files/{id}/stream", s.stream)
+		r.Get("/api/files/{id}/subtitles/{key}", s.subtitleVTT)
+	})
 
 	switch {
 	case s.cfg.WebDir != "":
@@ -146,6 +127,104 @@ func (s *Server) Handler() http.Handler {
 		r.NotFound(spa(webui.FS()))
 	}
 	return logRequests(r)
+}
+
+// userRoutes are for anyone signed in: browsing, watching, live TV.
+func (s *Server) userRoutes(r chi.Router) {
+	r.Get("/status", s.status)
+	r.Get("/home", s.home)
+	r.Get("/search", s.search)
+
+	r.Get("/profiles", s.listProfiles)
+	r.Post("/profiles", s.createProfile)
+	r.Put("/profiles/{id}", s.updateProfile)
+	r.Patch("/profiles/{id}/prefs", s.profilePrefs)
+	r.Delete("/profiles/{id}", s.deleteProfile)
+	r.Post("/profiles/{id}/select", s.selectProfile)
+
+	r.Get("/items", s.listItems)
+	r.Get("/items/{id}", s.getItem)
+	r.Post("/items/{id}/watched", s.itemWatched)
+
+	r.Get("/files/{id}", s.playInfo)
+	r.Put("/files/{id}/progress", s.saveProgress)
+	r.Post("/files/{id}/watched", s.fileWatched)
+	r.Post("/files/{id}/hls", s.createHLS)
+	r.Get("/files/{id}/streams", s.fileStreams)
+	r.Get("/files/{id}/commercials", s.commercials)
+	r.Post("/files/{id}/commercials", s.findCommercials)
+	r.Get("/hls/{sid}/index.m3u8", s.hlsPlaylist)
+	r.Get("/hls/{sid}/{seg}", s.hlsSegment)
+	r.Delete("/hls/{sid}", s.closeHLS)
+
+	r.Get("/livetv/status", s.tvStatus)
+	r.Get("/livetv/channels", s.tvChannels)
+	r.Put("/livetv/channels/{number}/pin", s.tvPin)
+	r.Get("/livetv/guide", s.tvGuide)
+	r.Post("/livetv/watch", s.tvWatch)
+	r.Get("/live/{sid}/{file}", s.tvLiveFile)
+	r.Delete("/live/{sid}", s.tvLeave)
+	r.Get("/dvr/recordings", s.dvrList)
+	r.Post("/dvr/recordings/{id}/watch", s.dvrWatch)
+	r.Get("/dvr/rules", s.rulesList)
+	r.Get("/dvr/rules/options", s.ruleOptions)
+	r.Get("/settings/timing", s.getTiming)
+}
+
+// recorderRoutes schedule recordings and series rules: admins, and users an
+// admin has allowed to record (who can only change their own).
+func (s *Server) recorderRoutes(r chi.Router) {
+	r.Post("/dvr/recordings", s.dvrRecord)
+	r.Post("/dvr/recordings/{id}/cancel", s.dvrCancel)
+	r.Delete("/dvr/recordings/{id}", s.dvrDelete)
+	r.Post("/dvr/rules", s.ruleCreate)
+	r.Put("/dvr/rules/{id}", s.ruleUpdate)
+	r.Delete("/dvr/rules/{id}", s.ruleDelete)
+}
+
+// adminRoutes are settings, libraries, file management, jobs and accounts.
+func (s *Server) adminRoutes(r chi.Router) {
+	r.Get("/system", s.system)
+
+	r.Get("/accounts", s.listAccounts)
+	r.Post("/accounts", s.createAccount)
+	r.Put("/accounts/{id}", s.updateAccount)
+	r.Post("/accounts/{id}/password", s.resetPassword)
+	r.Delete("/accounts/{id}", s.deleteAccount)
+	r.Get("/accounts/{id}/sessions", s.accountSessions)
+
+	r.Get("/libraries", s.listLibraries)
+	r.Post("/libraries", s.createLibrary)
+	r.Put("/libraries/{id}", s.updateLibrary)
+	r.Delete("/libraries/{id}", s.deleteLibrary)
+	r.Post("/libraries/{id}/scan", s.scanLibrary)
+	r.Post("/libraries/scan", s.scanAll)
+	r.Post("/libraries/{id}/optimize", s.optimizeLibrary)
+	r.Get("/libraries/{id}/manage", s.manageItems)
+	r.Get("/fs", s.browse)
+
+	r.Post("/items/{id}/match", s.rematch)
+	r.Post("/items/{id}/optimize", s.optimizeItem)
+	r.Get("/items/{id}/files", s.itemFiles)
+	r.Get("/items/{id}/lookup", s.itemLookup)
+	r.Delete("/items/{id}", s.deleteItem)
+	r.Put("/items/{id}/artwork/{kind}", s.uploadArtwork)
+	r.Delete("/items/{id}/artwork/{kind}", s.resetArtwork)
+
+	r.Delete("/files/{id}/optimized", s.deleteOptimized)
+	r.Delete("/files/{id}", s.deleteFile)
+	r.Put("/files/{id}/role", s.setFileRole)
+	r.Get("/transcode", s.transcodeSessions)
+
+	r.Post("/livetv/refresh", s.tvRefresh)
+	r.Put("/settings/timing", s.saveTiming)
+	r.Get("/dvr/settings", s.dvrSettings)
+	r.Put("/dvr/settings", s.dvrSaveSettings)
+
+	r.Get("/jobs", s.listJobs)
+	r.Post("/jobs/{id}/retry", s.retryJob)
+	r.Post("/jobs/{id}/cancel", s.cancelJob)
+	r.Post("/jobs/clear", s.clearJobs)
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {

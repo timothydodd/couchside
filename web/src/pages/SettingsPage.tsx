@@ -3,6 +3,8 @@ import { AlertTriangle, CheckCircle2, FolderOpen, RefreshCw, XCircle } from "luc
 import FolderPicker from "../components/FolderPicker";
 import Link from "../components/Link";
 import ProfileAvatar from "../components/ProfileAvatar";
+import AccountManager from "../components/settings/AccountManager";
+import AccountSettings from "../components/settings/AccountSettings";
 import ServerNow from "../components/settings/ServerNow";
 import TimingSettings from "../components/settings/TimingSettings";
 import { api, useApi } from "../lib/api";
@@ -11,6 +13,7 @@ import { BREAK_MODES, SUBTITLE_LANGS } from "../lib/prefs";
 import { languageName } from "../lib/tracks";
 import type { LiveTvStatus } from "../lib/types";
 import { PageHeader, Segmented } from "../components/ui";
+import { useAuth, useIsAdmin } from "../stores/auth";
 import { setTheme, useProfile } from "../stores/profile";
 import { useStatus } from "../stores/status";
 import { useThemeStore, type ThemePref } from "../stores/theme";
@@ -18,6 +21,20 @@ import { useThemeStore, type ThemePref } from "../stores/theme";
 export default function SettingsPage() {
   const status = useStatus((s) => s.status);
   const omdb = status?.providers.includes("omdb");
+  const accounts = useAuth((s) => s.enabled);
+  const admin = useIsAdmin();
+
+  // Users only get their own preferences and account; the rest is the server's.
+  if (!admin)
+    return (
+      <div>
+        <PageHeader title="Settings" />
+        <div className="flex max-w-3xl flex-col gap-4 px-6 py-5">
+          <ProfileSettings />
+          <AccountSettings />
+        </div>
+      </div>
+    );
 
   return (
     <div>
@@ -25,6 +42,8 @@ export default function SettingsPage() {
       <div className="flex max-w-3xl flex-col gap-4 px-6 py-5">
         <ServerNow />
         <ProfileSettings />
+        {accounts && <AccountSettings />}
+        {accounts && <AccountManager />}
 
         <section className="card p-4">
           <div className="card-title mb-3">Metadata</div>
@@ -94,6 +113,7 @@ function ProfileSettings() {
   const setPrefs = useProfile((s) => s.setPrefs);
   const theme = useThemeStore((s) => s.pref);
   const liveTv = useStatus((s) => s.status?.livetv?.configured);
+  const accounts = useAuth((s) => s.enabled);
   if (!profile) return null;
   const p = profile.prefs;
   return (
@@ -105,7 +125,7 @@ function ProfileSettings() {
           <div className="text-xs text-content-muted">Only for {profile.name}. Other profiles keep their own.</div>
         </div>
         <Link to="/profiles" className="btn-quiet !text-xs">
-          Switch or manage profiles
+          {accounts ? "Switch profile" : "Switch or manage profiles"}
         </Link>
       </div>
       <div className="grid grid-cols-[160px_1fr] items-center gap-x-4 gap-y-3 text-sm">

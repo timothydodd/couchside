@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import Sidebar from "./components/Sidebar";
 import StatusBar from "./components/StatusBar";
 import { EmptyState } from "./components/ui";
@@ -14,14 +15,46 @@ import LivePlayerPage from "./pages/LivePlayerPage";
 import RecordingPlayerPage from "./pages/RecordingPlayerPage";
 import SearchPage from "./pages/SearchPage";
 import SettingsPage from "./pages/SettingsPage";
+import ChangePasswordPage from "./pages/ChangePasswordPage";
+import SetupPage from "./pages/SetupPage";
+import SignInPage from "./pages/SignInPage";
+import { useAuth, useIsAdmin } from "./stores/auth";
 import { useProfile } from "./stores/profile";
+import { startStatus } from "./stores/status";
 import { useRouter } from "./stores/router";
 
 export default function App() {
+  const auth = useAuth();
+  const route = useRouter((s) => s.route);
+
+  useEffect(() => {
+    void useAuth.getState().load();
+  }, []);
+
+  if (!auth.loaded) return null;
+  if (auth.error) return <EmptyState title="Can't reach Couchside">{auth.error}</EmptyState>;
+  if (auth.enabled) {
+    if (auth.setupRequired) return <SetupPage />;
+    if (!auth.user) return <SignInPage />;
+    if (auth.user.mustChangePassword) return <ChangePasswordPage />;
+    if (route.name === "profiles") return <SignInPage switching />;
+  }
+  return <Signed />;
+}
+
+/** The app proper, once there's someone to show it to. */
+function Signed() {
   const route = useRouter((s) => s.route);
   const path = useRouter((s) => s.path);
   const loaded = useProfile((s) => s.loaded);
   const mustPick = useProfile((s) => !s.chosen && s.profiles.length > 1);
+  const admin = useIsAdmin();
+  const adminOnly = route.name === "activity" || route.name === "libraries" || route.name === "manage";
+
+  useEffect(() => {
+    void useProfile.getState().load();
+    startStatus();
+  }, []);
 
   // Wait for the profile: everything shown (progress, favourites, theme) belongs to it.
   if (!loaded) return null;
@@ -47,9 +80,10 @@ export default function App() {
           {route.name === "tv" && <LibraryPage kind="series" />}
           {route.name === "item" && <ItemPage id={route.id} />}
           {route.name === "livetv" && <LiveTvPage tab={route.tab} />}
-          {route.name === "activity" && <ActivityPage />}
-          {route.name === "libraries" && <LibrariesPage />}
-          {route.name === "manage" && <LibraryManagePage id={route.id} />}
+          {adminOnly && !admin && <EmptyState title="Admins only">Ask an admin for access to this page.</EmptyState>}
+          {route.name === "activity" && admin && <ActivityPage />}
+          {route.name === "libraries" && admin && <LibrariesPage />}
+          {route.name === "manage" && admin && <LibraryManagePage id={route.id} />}
           {route.name === "settings" && <SettingsPage />}
           {route.name === "search" && <SearchPage q={route.q} />}
           {route.name === "notfound" && <EmptyState title="Nothing here">That page doesn't exist.</EmptyState>}

@@ -65,9 +65,21 @@ A lightweight self-hosted media server for a home k3s cluster. It scans your mov
 - **Commercial skipping.** Each finished recording is checked for commercial breaks with [Comskip](https://github.com/erikkaashoek/Comskip), which is built into the container image. The breaks are marked on the timeline, and the player skips them automatically, with a **Watch it** link to go back. The gear menu's **Commercials** page switches to a skip button (or the S key), or turns skipping off. Other `.ts` files, such as older Plex DVR recordings, can be checked from the same page. The recording file itself is never cut. For zip installs, put `comskip` on the PATH or set `COUCHSIDE_COMSKIP`; `COUCHSIDE_COMSKIP_INI` points at a tuned `comskip.ini`, which must keep `output_edl=1`.
 - **Limits.** ATSC 3.0 channels with DRM can't be watched or recorded outside SiliconDust's apps.
 
+## Accounts
+
+Off by default: anyone who can reach Couchside picks a profile, which suits a trusted home network. Set `COUCHSIDE_AUTH=true` (Helm `auth.enabled`) before putting it on the internet, and serve it over HTTPS.
+
+- **Profiles become accounts.** Each signs in with a name and password (Argon2id hashes). There's no public list of names.
+- **First run.** With no admin yet, the server log prints a one-time setup code. Open the UI and enter it with your name and a password. Use an existing profile's name to keep its watch history.
+- **Roles.** Admins reach settings, libraries, file management, Activity and **Settings → Accounts**. Users watch and change their own preferences and password. Recording is a per-user switch an admin turns on; people allowed to record can change only their own recordings and series.
+- **Account manager.** Add accounts with a temporary password (changed at first sign-in), set role and recording, reset passwords, disable or delete accounts, and sign out their devices.
+- **Sessions.** Access tokens last 15 minutes; refresh tokens are random, stored only as hashes, and replaced on every use. A replayed refresh token ends its session. Web sessions end after 30 days unused, TV apps after 90. Changing a password signs out your other devices.
+- **Guessing.** Failed sign-ins are slowed per address and per account, then locked out for up to 15 minutes, and logged.
+- **Lost the admin password?** `couchside reset-password -admin <name>` inside the container (`kubectl exec -it deploy/couchside -- …`).
+- **TV apps** sign in with `POST /api/auth/login` (`"client": "tv"`), send `Authorization: Bearer <accessToken>`, and renew with `POST /api/auth/refresh` (`{"refreshToken": …}`).
+
 ## Not built yet
 
-- **Auth.** There is no login, and profiles have no passwords. Keep Couchside on your LAN, or put it behind an auth proxy such as Authelia or oauth2-proxy.
 - A Schedules Direct guide source for two weeks of listings.
 - A TMDB provider for real backdrops.
 
@@ -151,6 +163,7 @@ git tag v0.2.0 && git push origin v0.2.0
 | `COUCHSIDE_WORKERS` | `2` | Concurrent background jobs |
 | `COUCHSIDE_SCAN_INTERVAL` | `6h` | Periodic rescan; `0` disables it |
 | `COUCHSIDE_DEBUG` | none | Debug logging |
+| `COUCHSIDE_AUTH` | `false` | Accounts: every profile signs in with a password |
 | `COUCHSIDE_HWACCEL` | `none` | `vaapi`, `qsv` or `nvenc`; falls back to software if unusable |
 | `COUCHSIDE_VAAPI_DEVICE` | `/dev/dri/renderD128` | VAAPI render node |
 | `COUCHSIDE_MAX_TRANSCODES` | `2` | Live transcode sessions at once; idle ones are evicted |

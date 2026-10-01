@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -32,6 +33,13 @@ func main() {
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})))
 
+	if len(os.Args) > 1 && os.Args[1] == "reset-password" {
+		if err := resetPassword(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "reset-password:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
@@ -97,9 +105,17 @@ func run() error {
 		close(tvDone)
 	}
 
+	apiServer, err := api.New(database, cfg, w, providers, tc, tv, version)
+	if err != nil {
+		return err
+	}
+	go apiServer.Run(ctx)
+	if cfg.Auth {
+		slog.Info("accounts are on: every profile signs in with a password")
+	}
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           api.New(database, cfg, w, providers, tc, tv, version).Handler(),
+		Handler:           apiServer.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {

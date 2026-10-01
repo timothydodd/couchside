@@ -9,20 +9,29 @@ import (
 	"strings"
 )
 
-// Profile is one person using Couchside. There are no passwords: profiles keep
-// watch history, favourite channels and preferences apart.
+// Profile is one person using Couchside: profiles keep watch history,
+// favourite channels and preferences apart. With accounts on (COUCHSIDE_AUTH),
+// a profile is also the user that signs in; the account fields mean nothing
+// otherwise.
 type Profile struct {
 	ID        int64           `json:"id"`
 	Name      string          `json:"name"`
 	Color     string          `json:"color"`
 	Prefs     json.RawMessage `json:"prefs"` // a JSON object owned by the UI
 	CreatedAt int64           `json:"createdAt"`
+
+	Role               string `json:"role"` // admin | user
+	CanRecord          bool   `json:"canRecord"`
+	Disabled           bool   `json:"disabled"`
+	MustChangePassword bool   `json:"mustChangePassword"`
+	HasPassword        bool   `json:"hasPassword"`
 }
 
 var (
 	ErrProfileName   = errors.New("that name is already taken")
 	ErrLastProfile   = errors.New("the last profile can't be deleted")
 	ErrPrefsNotAnObj = errors.New("preferences must be a JSON object")
+	ErrLastAdmin     = errors.New("the last admin can't be removed, demoted or disabled")
 )
 
 type profileKey struct{}
@@ -46,12 +55,13 @@ func watchJoin(ctx context.Context) string {
 	return fmt.Sprintf(" LEFT JOIN watch_state w ON w.file_id = f.id AND w.profile_id = %d ", ProfileID(ctx))
 }
 
-const profileCols = `id, name, color, prefs, created_at`
+const profileCols = `id, name, color, prefs, created_at, role, can_record, disabled, must_change_password, password_hash <> ''`
 
 func scanProfile(r interface{ Scan(...any) error }) (Profile, error) {
 	var p Profile
 	var prefs string
-	err := r.Scan(&p.ID, &p.Name, &p.Color, &prefs, &p.CreatedAt)
+	err := r.Scan(&p.ID, &p.Name, &p.Color, &prefs, &p.CreatedAt, &p.Role, &p.CanRecord, &p.Disabled, &p.MustChangePassword,
+		&p.HasPassword)
 	p.Prefs = json.RawMessage(prefs)
 	return p, err
 }
@@ -118,6 +128,9 @@ func (d *DB) DeleteProfile(ctx context.Context, id int64) error {
 	}
 	if n <= 1 {
 		return ErrLastProfile
+	}
+	if err := lastAdminGuard(ctx, tx, id, "user", false); err != nil {
+		return err
 	}
 	res, err := tx.ExecContext(ctx, `DELETE FROM profiles WHERE id = ?`, id)
 	if err != nil {

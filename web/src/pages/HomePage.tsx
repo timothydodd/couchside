@@ -4,6 +4,7 @@ import { ContinueCard, PosterRow, Row } from "../components/Rows";
 import { EmptyState, ErrorNote, Spinner, StatTile } from "../components/ui";
 import { backdropUrl, useApi } from "../lib/api";
 import type { Home, ItemSummary } from "../lib/types";
+import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
 
@@ -11,6 +12,7 @@ export default function HomePage() {
   const { data, error, loading } = useApi<Home>("/api/home", { pollMs: 15000 });
   const status = useStatus((s) => s.status);
   const go = useRouter((s) => s.go);
+  const admin = useIsAdmin();
   const counts = status?.counts;
 
   if (loading && !data) {
@@ -24,11 +26,15 @@ export default function HomePage() {
     return (
       <EmptyState icon={<Sofa size={40} strokeWidth={1.5} />} title="The couch is empty">
         Point Couchside at a folder of movies or TV shows and it will scan them, fetch posters and plots, and fill this page.
-        <div className="mt-4">
-          <Link to="/libraries" className="btn-primary">
-            <FolderPlus size={15} /> Add a library
-          </Link>
-        </div>
+        {admin ? (
+          <div className="mt-4">
+            <Link to="/libraries" className="btn-primary">
+              <FolderPlus size={15} /> Add a library
+            </Link>
+          </div>
+        ) : (
+          " An admin can add one."
+        )}
       </EmptyState>
     );
   }
@@ -51,7 +57,7 @@ export default function HomePage() {
           <StatTile
             label="Unmatched"
             value={counts.unmatched.toLocaleString()}
-            sub={status?.providers.length ? "Fix from the title's page" : "Set OMDB_API_KEY to match"}
+            sub={!admin ? undefined : status?.providers.length ? "Fix from the title's page" : "Set OMDB_API_KEY to match"}
             tone={counts.unmatched ? "warning" : undefined}
           />
         </div>

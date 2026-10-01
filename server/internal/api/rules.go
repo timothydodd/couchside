@@ -61,7 +61,21 @@ func (s *Server) ruleCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	rule, sum, err := s.tv.CreateRule(r.Context(), in.ProgramID, in.Mode, in.Channel, in.MediaItemID, in.KeepLast)
+	ctx := r.Context()
+	u := currentUser(ctx)
+	// A series has one rule; creating it again updates it, so that has to be yours.
+	if p, err := s.db.Program(ctx, in.ProgramID); err == nil && p.SeriesID != "" {
+		exists, owner, err := s.db.RuleOwnerForSeries(ctx, p.SeriesID)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		if exists && !u.mayManage(owner) {
+			writeErr(w, forbidden("someone else already records this series"))
+			return
+		}
+	}
+	rule, sum, err := s.tv.CreateRule(ctx, in.ProgramID, in.Mode, in.Channel, in.MediaItemID, in.KeepLast)
 	if err != nil {
 		if err == db.ErrNotFound {
 			writeErr(w, err)
@@ -70,6 +84,11 @@ func (s *Server) ruleCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, badRequest(err.Error()))
 		return
 	}
+	if err := s.db.SetRuleOwner(ctx, rule.ID, u.ID); err != nil {
+		writeErr(w, err)
+		return
+	}
+	rule.OwnerID = u.ID
 	writeJSON(w, http.StatusCreated, map[string]any{"rule": rule, "summary": sum})
 }
 
@@ -86,6 +105,10 @@ func (s *Server) ruleUpdate(w http.ResponseWriter, r *http.Request) {
 	cur, err := s.db.Rule(r.Context(), id)
 	if err != nil {
 		writeErr(w, err)
+		return
+	}
+	if !currentUser(r.Context()).mayManage(cur.OwnerID) {
+		writeErr(w, forbidden("only whoever made this rule, or an admin, can change it"))
 		return
 	}
 	var in ruleInput
@@ -118,6 +141,15 @@ func (s *Server) ruleDelete(w http.ResponseWriter, r *http.Request) {
 	id, err := idParam(r)
 	if err != nil {
 		writeErr(w, err)
+		return
+	}
+	cur, err := s.db.Rule(r.Context(), id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if !currentUser(r.Context()).mayManage(cur.OwnerID) {
+		writeErr(w, forbidden("only whoever made this rule, or an admin, can delete it"))
 		return
 	}
 	if err := s.tv.DeleteRule(r.Context(), id); err != nil {

@@ -5,11 +5,14 @@ import { api, useApi } from "../../lib/api";
 import { fmtBytes, fmtDay, fmtSlot, fmtTime } from "../../lib/format";
 import type { Recording, RuleMode, SeriesRule } from "../../lib/types";
 import { KEEP_OPTIONS, MODE_TEXT, describeSummary, keepLabel } from "./rules";
+import { useOwnerCheck } from "../../stores/auth";
 
 /** DVR: recording now, upcoming, recorded and failed. */
 export default function Recordings() {
   const { data, error, loading, reload } = useApi<Recording[]>("/api/dvr/recordings", { pollMs: 5000 });
   const { data: rules, reload: reloadRules } = useApi<SeriesRule[]>("/api/dvr/rules", { pollMs: 15000 });
+  // Who may change what: admins anything, people allowed to record their own.
+  const may = useOwnerCheck();
 
   const act = async (path: string, method: "POST" | "DELETE", confirmText?: string) => {
     if (confirmText && !confirm(confirmText)) return;
@@ -84,7 +87,7 @@ export default function Recordings() {
                       {r.scheduled ? `${r.scheduled} upcoming${r.nextAt ? `, next ${fmtDay(r.nextAt)} ${fmtTime(r.nextAt)}` : ""}` : "Nothing upcoming"} · {r.recorded} recorded
                     </div>
                     {summary && <div className="mt-1 line-clamp-2 text-[11px] text-content-muted">{summary}</div>}
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {may(r.ownerId) && <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <select className="field !py-0.5 !text-xs" value={r.mode} onChange={(e) => void updateRule(r, { mode: e.target.value as RuleMode })} aria-label="What to record">
                         {(Object.keys(MODE_TEXT) as RuleMode[]).map((m) => (
                           <option key={m} value={m}>
@@ -105,7 +108,7 @@ export default function Recordings() {
                       <button className="btn-chip hover:!border-critical hover:!text-critical" onClick={() => void deleteRule(r)}>
                         <Trash2 size={11} /> Stop series
                       </button>
-                    </div>
+                    </div>}
                   </div>
                 </div>
               );
@@ -146,9 +149,11 @@ export default function Recordings() {
                   <Link to={`/watch/${r.channel}`} className="btn-ghost" title="Jump to the live broadcast">
                     <RadioTower size={14} /> Live
                   </Link>
-                  <button className="btn-ghost hover:!border-critical hover:!text-critical" onClick={() => void act(`/api/dvr/recordings/${r.id}/cancel`, "POST", `Stop recording "${r.title}"? What's been recorded so far is kept.`)}>
-                    <Square size={12} className="fill-current" /> Stop
-                  </button>
+                  {may(r.ownerId) && (
+                    <button className="btn-ghost hover:!border-critical hover:!text-critical" onClick={() => void act(`/api/dvr/recordings/${r.id}/cancel`, "POST", `Stop recording "${r.title}"? What's been recorded so far is kept.`)}>
+                      <Square size={12} className="fill-current" /> Stop
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -185,9 +190,11 @@ export default function Recordings() {
                       {r.channel} {r.channelName}
                     </td>
                     <td className="text-right">
-                      <button className="btn-chip" onClick={() => void act(`/api/dvr/recordings/${r.id}/cancel`, "POST")}>
-                        <X size={12} /> Cancel
-                      </button>
+                      {may(r.ownerId) && (
+                        <button className="btn-chip" onClick={() => void act(`/api/dvr/recordings/${r.id}/cancel`, "POST")}>
+                          <X size={12} /> Cancel
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -232,12 +239,14 @@ export default function Recordings() {
                           <Film size={11} /> Adding…
                         </span>
                       )}
-                      <button
-                        className="btn-chip hover:!border-critical hover:!text-critical"
-                        onClick={() => void act(`/api/dvr/recordings/${r.id}`, "DELETE", `Delete the recording of "${r.title}"? The file is removed.`)}
-                      >
-                        <Trash2 size={11} /> Delete
-                      </button>
+                      {may(r.ownerId) && (
+                        <button
+                          className="btn-chip hover:!border-critical hover:!text-critical"
+                          onClick={() => void act(`/api/dvr/recordings/${r.id}`, "DELETE", `Delete the recording of "${r.title}"? The file is removed.`)}
+                        >
+                          <Trash2 size={11} /> Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -265,9 +274,11 @@ export default function Recordings() {
                       {fmtDay(r.startAt)} {fmtTime(r.startAt)} · {r.channelName || r.channel}
                     </td>
                     <td className="text-right">
-                      <button className="btn-chip" onClick={() => void act(`/api/dvr/recordings/${r.id}`, "DELETE")}>
-                        <X size={11} /> Dismiss
-                      </button>
+                      {may(r.ownerId) && (
+                        <button className="btn-chip" onClick={() => void act(`/api/dvr/recordings/${r.id}`, "DELETE")}>
+                          <X size={11} /> Dismiss
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

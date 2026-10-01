@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, CircleDot, Play, Repeat, Square, X } from "lucide-react";
 import SeriesForm from "./SeriesForm";
+import { useCanRecord } from "../../stores/auth";
 import Link from "../Link";
 import { ApiError, api } from "../../lib/api";
 import { fmtSlot } from "../../lib/format";
@@ -25,6 +26,7 @@ export default function ProgramDialog({
   const airing = program.startAt <= now && program.endAt > now;
   const ended = program.endAt <= now;
   const drm = channel?.drm;
+  const canRecord = useCanRecord();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -130,17 +132,17 @@ export default function ProgramDialog({
                 <Play size={15} className="fill-current" /> Watch live
               </Link>
             )}
-            {!ended && !drm && !program.recordingStatus && (
+            {canRecord && !ended && !drm && !program.recordingStatus && (
               <button className="btn-ghost hover:!border-critical" disabled={busy} onClick={() => void record()}>
                 <CircleDot size={15} className="text-critical" /> Record
               </button>
             )}
-            {program.recordingStatus === "scheduled" && (
+            {canRecord && program.recordingStatus === "scheduled" && (
               <button className="btn-ghost" disabled={busy} onClick={() => void cancel()}>
                 <X size={15} /> Don't record
               </button>
             )}
-            {program.recordingStatus === "recording" && (
+            {canRecord && program.recordingStatus === "recording" && (
               <button className="btn-ghost hover:!border-critical hover:!text-critical" disabled={busy} onClick={() => void cancel()}>
                 <Square size={13} className="fill-current" /> Stop recording
               </button>
@@ -150,7 +152,7 @@ export default function ProgramDialog({
                 Recorded
               </Link>
             )}
-            {program.seriesId && !drm && !series && (
+            {canRecord && program.seriesId && !drm && !series && (
               <button className="btn-ghost" onClick={() => setSeries(true)}>
                 <Repeat size={15} /> {program.ruleId ? "Series settings" : "Record series"}
               </button>

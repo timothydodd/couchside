@@ -9,13 +9,43 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T = void>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
-  const { json, ...rest } = init ?? {};
+/**
+ * Set by the auth store when accounts are on: refresh renews an expired
+ * access token (false when the session is over), and passwordChange is told
+ * when the server wants a temporary password replaced first.
+ */
+interface AuthHooks {
+  refresh: () => Promise<boolean>;
+  passwordChange: () => void;
+}
+let authHooks: AuthHooks | null = null;
+export const setAuthHooks = (h: AuthHooks) => {
+  authHooks = h;
+};
+
+async function send(path: string, init: RequestInit & { json?: unknown }, retried = false): Promise<Response> {
+  const { json, ...rest } = init;
   const res = await fetch(path, {
     ...rest,
     headers: json !== undefined ? { "Content-Type": "application/json", ...rest.headers } : rest.headers,
     body: json !== undefined ? JSON.stringify(json) : rest.body,
   });
+  // An expired access token: renew it once and try again.
+  if (res.status === 401 && authHooks && !retried && !path.startsWith("/api/auth")) {
+    if (await authHooks.refresh()) return send(path, init, true);
+  }
+  if (res.status === 403 && authHooks) {
+    const body = await res
+      .clone()
+      .json()
+      .catch(() => null);
+    if (body?.code === "password_change_required") authHooks.passwordChange();
+  }
+  return res;
+}
+
+export async function api<T = void>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
+  const res = await send(path, init ?? {});
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`;
     try {

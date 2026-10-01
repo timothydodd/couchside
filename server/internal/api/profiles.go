@@ -68,15 +68,18 @@ func (s *Server) resolveProfile(r *http.Request) (int64, bool) {
 	return c.first, false
 }
 
-// withProfile scopes each API request's context to its profile.
-func (s *Server) withProfile(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, _ := s.resolveProfile(r)
-		next.ServeHTTP(w, r.WithContext(db.WithProfile(r.Context(), id)))
-	})
-}
-
 func (s *Server) listProfiles(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Auth {
+		// Signed in, you see yourself; other accounts are in the account manager.
+		u := currentUser(r.Context())
+		p, err := s.db.Profile(r.Context(), u.ID)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"profiles": []db.Profile{p}, "current": p.ID, "chosen": true})
+		return
+	}
 	ps, err := s.db.Profiles(r.Context())
 	if err != nil {
 		writeErr(w, err)
@@ -112,7 +115,14 @@ func profileErr(err error) error {
 	return err
 }
 
+// errUseAccounts refuses the picker's profile management when accounts are on.
+var errUseAccounts = badRequest("accounts are on: add and remove people in Settings → Accounts")
+
 func (s *Server) createProfile(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Auth {
+		writeErr(w, errUseAccounts)
+		return
+	}
 	var in profileInput
 	if err := decode(r, &in); err != nil {
 		writeErr(w, err)
@@ -135,6 +145,10 @@ func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
 	id, err := idParam(r)
 	if err != nil {
 		writeErr(w, err)
+		return
+	}
+	if !currentUser(r.Context()).mayManage(id) {
+		writeErr(w, db.ErrNotFound)
 		return
 	}
 	var in profileInput
@@ -161,6 +175,10 @@ func (s *Server) profilePrefs(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	if s.cfg.Auth && id != currentUser(r.Context()).ID {
+		writeErr(w, db.ErrNotFound)
+		return
+	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
 	if err != nil || !json.Valid(body) {
 		writeErr(w, badRequest("bad JSON body"))
@@ -175,6 +193,10 @@ func (s *Server) profilePrefs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) deleteProfile(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Auth {
+		writeErr(w, errUseAccounts)
+		return
+	}
 	id, err := idParam(r)
 	if err != nil {
 		writeErr(w, err)
@@ -190,6 +212,10 @@ func (s *Server) deleteProfile(w http.ResponseWriter, r *http.Request) {
 
 // selectProfile remembers the chosen profile in this browser for a year.
 func (s *Server) selectProfile(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Auth {
+		writeErr(w, badRequest("accounts are on: sign in to switch profiles"))
+		return
+	}
 	id, err := idParam(r)
 	if err != nil {
 		writeErr(w, err)

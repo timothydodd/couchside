@@ -224,6 +224,10 @@ func (s *Server) dvrRecord(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, badRequest(err.Error()))
 		return
 	}
+	if err := s.db.SetRecordingOwner(r.Context(), id, currentUser(r.Context()).ID); err != nil {
+		writeErr(w, err)
+		return
+	}
 	tuners := 0
 	if st := s.tv.Status(r.Context()); st.Device != nil {
 		tuners = st.Device.TunerCount
@@ -239,6 +243,10 @@ func (s *Server) dvrCancel(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := idParam(r)
 	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := s.ownRecording(r, id); err != nil {
 		writeErr(w, err)
 		return
 	}
@@ -259,11 +267,28 @@ func (s *Server) dvrDelete(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	if err := s.ownRecording(r, id); err != nil {
+		writeErr(w, err)
+		return
+	}
 	if err := s.tv.Delete(r.Context(), id); err != nil {
 		writeErr(w, badRequest(err.Error()))
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ownRecording refuses changes to a recording someone else scheduled, unless
+// the user is an admin.
+func (s *Server) ownRecording(r *http.Request, id int64) error {
+	rec, err := s.db.Recording(r.Context(), id)
+	if err != nil {
+		return err
+	}
+	if !currentUser(r.Context()).mayManage(rec.OwnerID) {
+		return forbidden("only whoever scheduled this recording, or an admin, can change it")
+	}
+	return nil
 }
 
 // dvrWatch starts playback of an in-progress recording from its beginning.

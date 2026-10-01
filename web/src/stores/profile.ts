@@ -63,7 +63,6 @@ export const useProfile = create<ProfileState>((set, get) => ({
   },
 }));
 
-void useProfile.getState().load();
 
 /** The current profile's preferences. */
 export const usePrefs = (): Prefs => useProfile((s) => s.current?.prefs) ?? NO_PREFS;

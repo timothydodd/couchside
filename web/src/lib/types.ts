@@ -147,6 +147,12 @@ export interface Profile {
   color: ProfileColor;
   prefs: Prefs;
   createdAt: number;
+  // Accounts (only meaningful when the server has them on).
+  role: "admin" | "user";
+  canRecord: boolean;
+  disabled: boolean;
+  mustChangePassword: boolean;
+  hasPassword: boolean;
 }
 
 /** Set by the scanner for files that can't be played at all. */
@@ -402,6 +408,8 @@ export interface Recording {
   finishedAt: number | null;
   fileId: number | null;
   ruleId: number | null;
+  /** Profile that scheduled it (or owns its series rule); 0 = admins only. */
+  ownerId: number;
 }
 
 export type RuleMode = "missing" | "new" | "all";
@@ -423,6 +431,8 @@ export interface SeriesRule {
   scheduled: number;
   recorded: number;
   nextAt: number | null;
+  /** Profile that made it; 0 = admins only. */
+  ownerId: number;
 }
 
 export interface RuleSummary {
@@ -520,4 +530,35 @@ export interface SearchResult {
   episodes: PlayInfo[];
   channels: TvChannel[];
   programs: { program: Program; channel: TvChannel | null }[];
+}
+
+// --- Accounts ----------------------------------------------------------------------
+
+export interface AuthInfo {
+  enabled: boolean;
+  setupRequired: boolean;
+  user: Profile | null;
+  accessExpiresAt?: number;
+  /** Profiles this browser holds a session for (switch without a password). */
+  signedIn: Pick<Profile, "id" | "name" | "color">[];
+}
+
+/** What sign-in, setup and refresh return to the web (tokens travel as cookies). */
+export interface SignedIn {
+  user: Profile;
+  accessExpiresAt: number;
+  sessionId: string;
+}
+
+export interface DeviceSession {
+  id: string;
+  profileId: number;
+  client: "web" | "tv";
+  device: string;
+  userAgent: string;
+  ip: string;
+  createdAt: number;
+  lastUsedAt: number;
+  expiresAt: number;
+  current: boolean;
 }

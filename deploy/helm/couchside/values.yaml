@@ -12,6 +12,14 @@ omdb:
   existingSecret: ""
   existingSecretKey: omdb-api-key
 
+# Accounts: every profile signs in with a password (Argon2id), with admin and
+# user roles. Off, anyone who can reach Couchside picks a profile. When turned
+# on with no admin yet, the pod log prints a one-time setup code; open the UI
+# and enter it to create the first admin. Lost the admin password?
+#   kubectl exec -it deploy/couchside -- couchside reset-password -admin <name>
+auth:
+  enabled: false
+
 config:
   workers: 2            # concurrent scan/match/thumbnail jobs
   scanInterval: 6h      # "0" disables periodic rescans

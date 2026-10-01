@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -30,6 +31,10 @@ type Config struct {
 	RecordingsDir string        // COUCHSIDE_RECORDINGS_DIR: where the DVR writes (must be writable)
 	PadBefore     time.Duration // COUCHSIDE_DVR_PAD_BEFORE, default 10s (Settings overrides)
 	PadAfter      time.Duration // COUCHSIDE_DVR_PAD_AFTER, default 10s (Settings overrides)
+
+	// COUCHSIDE_AUTH: accounts. Off (the default), anyone who can reach the
+	// server picks a profile. On, every profile is a user with a password.
+	Auth bool
 
 	Comskip    string // COUCHSIDE_COMSKIP: comskip binary; commercial detection is off when it isn't found
 	ComskipINI string // COUCHSIDE_COMSKIP_INI: your own comskip.ini; empty uses Couchside's defaults
@@ -59,6 +64,8 @@ func Load() Config {
 		RecordingsDir: filepath.Clean(env("COUCHSIDE_RECORDINGS_DIR", filepath.Join(data, "recordings"))),
 		PadBefore:     envDur("COUCHSIDE_DVR_PAD_BEFORE", 10*time.Second),
 		PadAfter:      envDur("COUCHSIDE_DVR_PAD_AFTER", 10*time.Second),
+
+		Auth: envBool("COUCHSIDE_AUTH"),
 
 		Comskip:    env("COUCHSIDE_COMSKIP", "comskip"),
 		ComskipINI: os.Getenv("COUCHSIDE_COMSKIP_INI"),
@@ -96,4 +103,12 @@ func env(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func envBool(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
 }

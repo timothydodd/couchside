@@ -27,4 +27,10 @@ async function poll() {
   const busy = !!j && j.queued + j.running > 0;
   setTimeout(poll, document.visibilityState === "visible" ? (busy ? 2000 : 8000) : 30000);
 }
-void poll();
+let polling = false;
+/** Start polling once there's someone signed in to poll for. */
+export function startStatus() {
+  if (polling) return;
+  polling = true;
+  void poll();
+}

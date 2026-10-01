@@ -23,6 +23,7 @@ type SeriesRule struct {
 	Scheduled   int     `json:"scheduled"`    // upcoming recordings from this rule
 	Recorded    int     `json:"recorded"`     // completed recordings from this rule
 	NextAt      *int64  `json:"nextAt"`       // next scheduled start
+	OwnerID     int64   `json:"ownerId"`      // profile that made it; 0 = admins only
 }
 
 const ruleCols = `r.id, r.series_id, r.title, r.image_url, r.mode, r.channel, r.media_item_id, r.keep_last, r.enabled,
@@ -30,12 +31,13 @@ const ruleCols = `r.id, r.series_id, r.title, r.image_url, r.mode, r.channel, r.
 	(SELECT m.title || COALESCE(' (' || m.year || ')', '') FROM media_items m WHERE m.id = r.media_item_id),
 	(SELECT COUNT(*) FROM recordings x WHERE x.rule_id = r.id AND x.status IN ('scheduled', 'recording')),
 	(SELECT COUNT(*) FROM recordings x WHERE x.rule_id = r.id AND x.status = 'completed'),
-	(SELECT MIN(x.start_at) FROM recordings x WHERE x.rule_id = r.id AND x.status = 'scheduled')`
+	(SELECT MIN(x.start_at) FROM recordings x WHERE x.rule_id = r.id AND x.status = 'scheduled'),
+	COALESCE(r.profile_id, 0)`
 
 func scanRule(row interface{ Scan(...any) error }) (SeriesRule, error) {
 	var r SeriesRule
 	err := row.Scan(&r.ID, &r.SeriesID, &r.Title, &r.ImageURL, &r.Mode, &r.Channel, &r.MediaItemID, &r.KeepLast, &r.Enabled,
-		&r.LastRunAt, &r.LastSummary, &r.CreatedAt, &r.LibraryName, &r.Scheduled, &r.Recorded, &r.NextAt)
+		&r.LastRunAt, &r.LastSummary, &r.CreatedAt, &r.LibraryName, &r.Scheduled, &r.Recorded, &r.NextAt, &r.OwnerID)
 	return r, err
 }
 

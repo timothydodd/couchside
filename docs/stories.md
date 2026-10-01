@@ -101,8 +101,8 @@ signed in for months without keeping anything that's dangerous if stolen.
 - **Refresh tokens**: 256-bit random, stored server-side only as a SHA-256
   hash in a `sessions` table (user, device name, user agent, IP, created,
   last used, expiry). Rotated on every refresh; reusing an old refresh token
-  revokes the whole session (theft detection). Sliding expiry: 30 days for
-  the web, 180 for TV apps, ending early after 60 days unused.
+  revokes the whole session (theft detection). Sliding expiry: a session
+  ends after 30 days unused on the web, 90 on TV apps.
 - **Web**: both tokens in HttpOnly cookies (`<video>`, `<img>` and hls.js
   can't send headers): access cookie `SameSite=Lax`, refresh cookie
   `SameSite=Strict` with `Path=/api/auth`; `Secure` over HTTPS. State-changing
@@ -135,6 +135,9 @@ plain HTTP over the internet.
   timeouts (HLS, live TV).
 - Refuse, or warn loudly in the log and on the login page, when accounts are
   on and requests arrive over plain HTTP from outside the LAN.
+- Trust `X-Forwarded-For` / `X-Real-IP` only from configured proxies. Today
+  chi's `RealIP` accepts them from anyone, so a client exposed directly can
+  dodge the per-address login throttle (the per-account one still holds).
 - Secure, SameSite cookies when served over HTTPS.
 
 **Done when** README/Helm docs walk through an HTTPS setup, and the server
