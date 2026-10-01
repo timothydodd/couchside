@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { InputHTMLAttributes, ReactNode, Ref } from "react";
 import { Loader2, Search } from "lucide-react";
 
 // Shared primitives, ported from Portside Lite's components/ui.tsx so both
@@ -134,16 +134,19 @@ export function SearchInput({
   onChange,
   placeholder = "Filter…",
   className = "",
+  ...input
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   className?: string;
-}) {
+} & Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "placeholder" | "className"> & {
+    ref?: Ref<HTMLInputElement>;
+  }) {
   return (
     <div className={`relative ${className}`}>
       <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-content-muted" />
-      <input className="field w-full pl-8" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+      <input {...input} className="field w-full pl-8" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
     </div>
   );
 }

@@ -14,10 +14,14 @@ export type Route =
   | { name: "manage"; id: number }
   | { name: "settings" }
   | { name: "profiles" }
+  | { name: "search"; q: string }
   | { name: "notfound" };
 
+/** Parses a path, with its query string if it has one. */
 export function parseRoute(path: string): Route {
-  const p = path.replace(/\/+$/, "") || "/";
+  const [pathname, query = ""] = path.split("?", 2);
+  const p = pathname.replace(/\/+$/, "") || "/";
+  if (p === "/search") return { name: "search", q: new URLSearchParams(query).get("q") ?? "" };
   if (p === "/") return { name: "home" };
   if (p === "/movies") return { name: "movies" };
   if (p === "/tv") return { name: "tv" };
@@ -50,8 +54,8 @@ interface RouterState {
 
 /** Tiny history-API router: a handful of routes doesn't justify react-router. */
 export const useRouter = create<RouterState>((set, get) => ({
-  path: location.pathname,
-  route: parseRoute(location.pathname),
+  path: here(),
+  route: parseRoute(here()),
   go: (path, opts) => {
     if (path === get().path) return;
     if (opts?.replace) history.replaceState({ couchside: true }, "", path);
@@ -65,6 +69,10 @@ export const useRouter = create<RouterState>((set, get) => ({
   },
 }));
 
+function here() {
+  return location.pathname + location.search;
+}
+
 window.addEventListener("popstate", () => {
-  useRouter.setState({ path: location.pathname, route: parseRoute(location.pathname) });
+  useRouter.setState({ path: here(), route: parseRoute(here()) });
 });

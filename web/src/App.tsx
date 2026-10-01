@@ -12,6 +12,7 @@ import ProfilesPage from "./pages/ProfilesPage";
 import LiveTvPage from "./pages/LiveTvPage";
 import LivePlayerPage from "./pages/LivePlayerPage";
 import RecordingPlayerPage from "./pages/RecordingPlayerPage";
+import SearchPage from "./pages/SearchPage";
 import SettingsPage from "./pages/SettingsPage";
 import { useProfile } from "./stores/profile";
 import { useRouter } from "./stores/router";
@@ -38,7 +39,7 @@ export default function App() {
         <Sidebar />
         {/* Grid pages manage their own scroll (virtualised); the rest scroll here. */}
         <main
-          key={route.name === "livetv" ? "livetv" : path}
+          key={route.name === "livetv" || route.name === "search" ? route.name : path}
           className={`min-w-0 flex-1 ${route.name === "movies" || route.name === "tv" || route.name === "livetv" ? "overflow-hidden" : "overflow-auto"}`}
         >
           {route.name === "home" && <HomePage />}
@@ -50,6 +51,7 @@ export default function App() {
           {route.name === "libraries" && <LibrariesPage />}
           {route.name === "manage" && <LibraryManagePage id={route.id} />}
           {route.name === "settings" && <SettingsPage />}
+          {route.name === "search" && <SearchPage q={route.q} />}
           {route.name === "notfound" && <EmptyState title="Nothing here">That page doesn't exist.</EmptyState>}
         </main>
       </div>

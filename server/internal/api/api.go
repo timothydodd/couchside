@@ -38,6 +38,7 @@ type Server struct {
 	profiles  profileIDs
 	presence  *presence
 	sys       sysstat.Sampler
+	index     searchIndex
 }
 
 func init() {
@@ -59,6 +60,7 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/status", s.status)
 		r.Get("/system", s.system)
 		r.Get("/home", s.home)
+		r.Get("/search", s.search)
 
 		r.Get("/profiles", s.listProfiles)
 		r.Post("/profiles", s.createProfile)

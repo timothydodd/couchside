@@ -1,6 +1,8 @@
 import { Activity, Clapperboard, FolderOpen, Home, Moon, RadioTower, Settings, Sun, Tv, type LucideIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import Link from "./Link";
 import ProfileAvatar from "./ProfileAvatar";
+import { SearchInput } from "./ui";
 import { useRouter, type Route } from "../stores/router";
 import { useStatus } from "../stores/status";
 import { setTheme, useProfile } from "../stores/profile";
@@ -85,6 +87,7 @@ export default function Sidebar() {
           <div className="text-[10px] font-medium uppercase tracking-widest brand-text">media</div>
         </div>
       </Link>
+      <SearchBox />
       <div className="flex flex-col gap-0.5">
         {ITEMS.map(item)}
         {liveTv?.configured && item(LIVE)}
@@ -111,6 +114,67 @@ export default function Sidebar() {
         </button>
       </div>
     </nav>
+  );
+}
+
+/**
+ * Searches as you type: the first keystroke opens /search, later ones replace
+ * its query so Back leaves the results instead of stepping through each letter.
+ * "/" focuses it from anywhere.
+ */
+function SearchBox() {
+  const route = useRouter((s) => s.route);
+  const go = useRouter((s) => s.go);
+  const routeQ = route.name === "search" ? route.q : "";
+  const [q, setQ] = useState(routeQ);
+  const ref = useRef<HTMLInputElement>(null);
+
+  // Follow the URL (Back, leaving the page) unless someone is typing here.
+  useEffect(() => {
+    if (document.activeElement !== ref.current) setQ(routeQ);
+  }, [routeQ]);
+
+  const submit = (text: string) => {
+    const onPage = useRouter.getState().route.name === "search";
+    if (!text.trim() && !onPage) return;
+    go(`/search?q=${encodeURIComponent(text)}`, { replace: onPage });
+  };
+
+  useEffect(() => {
+    if (q === routeQ) return;
+    const t = setTimeout(() => submit(q), 200);
+    return () => clearTimeout(t);
+    // Only typing triggers a search; routeQ changes come from it or from navigation.
+  }, [q]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey || t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+      e.preventDefault();
+      ref.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  return (
+    <SearchInput
+      ref={ref}
+      type="search"
+      value={q}
+      onChange={setQ}
+      placeholder="Search…"
+      aria-label="Search"
+      className="mb-4"
+      onKeyDown={(e) => {
+        if (e.key === "Enter") submit(q);
+        if (e.key === "Escape") {
+          setQ("");
+          e.currentTarget.blur();
+        }
+      }}
+    />
   );
 }
 

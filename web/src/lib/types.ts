@@ -510,3 +510,14 @@ export interface DeleteResult {
   itemsRemoved: number[];
   keptFolders: string[];
 }
+
+// --- Search ----------------------------------------------------------------------
+
+export interface SearchResult {
+  query: string;
+  movies: ItemSummary[];
+  series: ItemSummary[];
+  episodes: PlayInfo[];
+  channels: TvChannel[];
+  programs: { program: Program; channel: TvChannel | null }[];
+}

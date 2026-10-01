@@ -38,10 +38,10 @@ export function PosterRow({ title, items, action }: { title: string; items: Item
  */
 export function ContinueCard({ p }: { p: PlayInfo }) {
   const img = p.hasStill ? stillUrl(p.fileId) : p.hasBackdrop ? backdropUrl({ id: p.itemId, updatedAt: p.updatedAt }) : null;
-  const left = p.durationSec ? Math.max(0, p.durationSec - p.positionSec) : 0;
+  const left = p.durationSec && p.positionSec > 0 ? Math.max(0, p.durationSec - p.positionSec) : 0;
   return (
     <div className="w-72 shrink-0">
-      <Link to={`/play/${p.fileId}`} className="still-link group block" aria-label={`Resume ${p.title}`}>
+      <Link to={`/play/${p.fileId}`} className="still-link group block" aria-label={`${p.positionSec > 0 ? "Resume" : "Play"} ${p.title}`}>
         <div className="still">
           {img ? (
             <img src={img} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
