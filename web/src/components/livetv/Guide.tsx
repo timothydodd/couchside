@@ -174,8 +174,8 @@ export default function Guide({ filters, setFilters }: { filters: TvFilters; set
 
             {/* now line */}
             {nowX > 0 && nowX < width && (
-              <div className="pointer-events-none absolute bottom-0 top-0 z-[5] w-0.5 bg-brand-pink/80" style={{ left: CHANNEL_COL + nowX }}>
-                <div className="sticky top-9 -ml-[3px] h-2 w-2 rounded-full bg-brand-pink" />
+              <div className="pointer-events-none absolute bottom-0 top-0 z-[5] w-0.5 bg-brand-seafoam/80" style={{ left: CHANNEL_COL + nowX }}>
+                <div className="sticky top-9 -ml-[3px] h-2 w-2 rounded-full bg-brand-seafoam" />
               </div>
             )}
           </div>

@@ -1,37 +1,39 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------
-   Design tokens, from the C logo (branding/logo-c-original.png): navy ground,
-   electric-blue accent, violet and magenta and cyan as brand colours, and the
-   logo's cyan → blue → violet → magenta sweep as --brand-gradient. Every text
+   Design tokens, from the C logo (branding/logo-c-original.png): dark gray
+   surfaces, the C's electric blue as the accent, cyan and seafoam as brand
+   colours, and the logo's cyan → blue → seafoam sweep as --brand-gradient.
+   Violet and pink are avatar colours only. Every text
    pairing meets WCAG AA (4.5:1); see docs/style.md. Dark is the default;
    `[data-theme="light"]` on <html> switches to the light variant. The theme
    store stamps that attribute (see stores/theme.ts).
 --------------------------------------------------------------------------- */
 :root,
 [data-theme="dark"] {
-  --bg-page: #0a1428;
-  --bg-surface: #0f1d39; /* the logo's navy */
-  --bg-raised: #172a4f;
-  --bg-muted: rgba(150, 180, 255, 0.06);
-  --bg-input: #0a1428;
+  --bg-page: #111315;
+  --bg-surface: #181b1f;
+  --bg-raised: #22262b;
+  --bg-muted: rgba(255, 255, 255, 0.05);
+  --bg-input: #111315;
 
-  --text-primary: #eef2fb;
-  --text-secondary: #b4bfd9;
-  --text-muted: #8592b3;
+  --text-primary: #eceff3;
+  --text-secondary: #b3bac4;
+  --text-muted: #8c949f;
   /* The dark accent is bright enough for text on navy, so buttons carry navy text. */
   --text-on-accent: #07122a;
 
-  --border: #2a3c63;
-  --border-light: #1d2d4f;
+  --border: #343a42;
+  --border-light: #262a30;
 
   /* Brand */
   --accent: #5b93ff;
   --accent-hover: #7ea9ff;
-  --secondary: #a873ff;
-  --brand-pink: #ff4fe6;
+  --secondary: #a873ff; /* avatar colour only */
+  --brand-pink: #ff4fe6; /* avatar colour only */
   --brand-cyan: #1feefe;
-  --brand-gradient: linear-gradient(90deg, #1feefe 0%, #3d7bff 38%, #8a3dff 70%, #fa27e8 100%);
+  --brand-seafoam: #5af6b9;
+  --brand-gradient: linear-gradient(90deg, #1feefe 0%, #2f7dff 40%, #06b6f3 70%, #5af6b9 100%);
 
   /* Status — reserved for state, never reused as a series color. */
   --critical: #ff5c74;
@@ -40,45 +42,46 @@
   --good: #3ddc97;
 
   --focus-ring: rgba(91, 147, 255, 0.5);
-  --shadow-md: 0 8px 28px rgba(2, 6, 20, 0.55);
+  --shadow-md: 0 8px 28px rgba(0, 0, 0, 0.55);
 
   /* Media */
-  --shadow-poster: 0 10px 28px rgba(2, 6, 20, 0.6);
+  --shadow-poster: 0 10px 28px rgba(0, 0, 0, 0.6);
   --player-bg: #000000;
   color-scheme: dark;
 }
 
 [data-theme="light"] {
-  --bg-page: #f2f5fc;
+  --bg-page: #f3f4f6;
   --bg-surface: #ffffff;
-  --bg-raised: #f7f9fe;
-  --bg-muted: rgba(14, 28, 55, 0.05);
+  --bg-raised: #f8f9fa;
+  --bg-muted: rgba(21, 24, 28, 0.05);
   --bg-input: #ffffff;
 
-  --text-primary: #0e1c37; /* the logo's navy */
-  --text-secondary: #3b4a6b;
-  --text-muted: #5d6b8c;
+  --text-primary: #15181c;
+  --text-secondary: #3f4650;
+  --text-muted: #5e6672;
   --text-on-accent: #ffffff;
 
-  --border: #cfd8ea;
-  --border-light: #e4e9f5;
+  --border: #d5d9df;
+  --border-light: #e6e8ec;
 
   --accent: #1a56e8;
   --accent-hover: #1446c4;
-  --secondary: #6a24e0;
-  --brand-pink: #b8169f;
+  --secondary: #6a24e0; /* avatar colour only */
+  --brand-pink: #b8169f; /* avatar colour only */
   --brand-cyan: #08788f;
-  --brand-gradient: linear-gradient(90deg, #0a93b0 0%, #1a56e8 38%, #6a24e0 70%, #c4139f 100%);
+  --brand-seafoam: #0b7f5c;
+  --brand-gradient: linear-gradient(90deg, #0891a8 0%, #1a56e8 40%, #0a86b8 70%, #0b8f66 100%);
 
   --critical: #cc2b45;
   --warning: #a35f00;
   --info: #0b6fb8;
-  --good: #12805a;
+  --good: #107553;
 
   --focus-ring: rgba(26, 86, 232, 0.3);
-  --shadow-md: 0 8px 28px rgba(14, 28, 55, 0.12);
+  --shadow-md: 0 8px 28px rgba(21, 24, 28, 0.12);
 
-  --shadow-poster: 0 10px 24px rgba(14, 28, 55, 0.2);
+  --shadow-poster: 0 10px 24px rgba(21, 24, 28, 0.2);
   --player-bg: #000000;
   color-scheme: light;
 }
@@ -104,6 +107,7 @@
   --color-secondary: var(--secondary);
   --color-brand-pink: var(--brand-pink);
   --color-brand-cyan: var(--brand-cyan);
+  --color-brand-seafoam: var(--brand-seafoam);
 
   --color-critical: var(--critical);
   --color-warning: var(--warning);
@@ -309,7 +313,7 @@ body {
 .poster-placeholder {
   background:
     radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, var(--accent) 38%, transparent), transparent 60%),
-    radial-gradient(120% 80% at 100% 100%, color-mix(in srgb, var(--brand-pink) 26%, transparent), transparent 60%),
+    radial-gradient(120% 80% at 100% 100%, color-mix(in srgb, var(--brand-seafoam) 22%, transparent), transparent 60%),
     linear-gradient(var(--ph-angle, 160deg), var(--bg-raised), var(--bg-surface));
 }
 

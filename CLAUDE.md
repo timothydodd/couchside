@@ -69,7 +69,7 @@ Couchside is a self-hosted media server for k3s. Go backend in `server/`, React 
 
 ## Styling
 
-- Colours: `docs/style.md` (tokens, contrast, rules). The dark accent is bright, so accent fills always pair with `text-on-accent` (navy in dark), never `text-white`. `.brand-text` (the logo's gradient) is for short brand labels only.
+- Colours: `docs/style.md` (tokens, contrast, rules). Surfaces are neutral dark grays; navy lives only in the logo tile. Brand colours are cyan and seafoam (`--brand-seafoam`); violet (`--secondary`) and `--brand-pink` are kept only as avatar colours. The dark accent is bright, so accent fills always pair with `text-on-accent` (navy in dark), never `text-white`. `.brand-text` (the logo's gradient) is for short brand labels only.
 - `web/src/index.css` starts from Portside Lite's component classes (`.card`, `.btn-*`, `.field`, `.navtab`, `.table`, `.tint-*`). Media additions follow the same naming: `.poster`, `.still`, `.row-title`, `.art-badge`, `.chip`, `.hero-fade`, `.poster-placeholder`.
 - Put new reusable styles in `index.css` under `@layer components`. Don't hard-code colours; use the tokens so light mode keeps working.
 
