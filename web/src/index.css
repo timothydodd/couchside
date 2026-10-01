@@ -264,6 +264,10 @@ body {
   .poster-title {
     @apply mt-2 truncate text-sm font-medium text-content;
   }
+  /* A title that opens its page: plain text until hovered. */
+  .title-link {
+    @apply transition-colors hover:text-accent focus-visible:text-accent focus-visible:outline-none;
+  }
   .poster-meta {
     @apply truncate text-xs tabular-nums text-content-muted;
   }

@@ -92,7 +92,11 @@ function Hero({ item }: { item: ItemSummary }) {
       <div className="hero-fade absolute inset-0" />
       <div className="absolute inset-x-0 bottom-0 max-w-2xl px-6 pb-6">
         <div className="text-[11px] font-semibold uppercase tracking-widest text-brand-pink">Just added</div>
-        <h1 className="mt-1 text-3xl font-bold leading-tight text-content md:text-4xl">{item.title}</h1>
+        <h1 className="mt-1 text-3xl font-bold leading-tight text-content md:text-4xl">
+          <Link to={`/item/${item.id}`} className="title-link">
+            {item.title}
+          </Link>
+        </h1>
         <div className="mt-1 text-sm text-content-secondary">
           {[item.year, item.genres.slice(0, 3).join(", ")].filter(Boolean).join(" · ")}
         </div>
