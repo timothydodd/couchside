@@ -31,7 +31,15 @@ ARG COMSKIP_REF=V0.83
 RUN apk add --no-cache build-base autoconf automake libtool pkgconf git ffmpeg-dev
 # Older C in both projects; gcc 14 would otherwise stop on implicit declarations.
 ENV CFLAGS="-O2 -std=gnu17 -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion"
-RUN wget -qO- https://downloads.sourceforge.net/argtable/argtable2-13.tar.gz | tar xz -C /tmp \
+# Debian's copy of the upstream tarball first: SourceForge downloads go down
+# (HTTP 522 broke the v0.4.0 build). The checksum pins it either way.
+ARG ARGTABLE_SHA256=8f77e8a7ced5301af6e22f47302fdbc3b1ff41f2b83c43c77ae5ca041771ddbf
+RUN for u in http://deb.debian.org/debian/pool/main/a/argtable2/argtable2_13.orig.tar.gz \
+             https://downloads.sourceforge.net/argtable/argtable2-13.tar.gz; do \
+      wget -qO /tmp/argtable2.tgz "$u" && echo "${ARGTABLE_SHA256}  /tmp/argtable2.tgz" | sha256sum -c - && break; \
+      rm -f /tmp/argtable2.tgz; \
+    done \
+ && tar xzf /tmp/argtable2.tgz -C /tmp \
  && cd /tmp/argtable2-13 \
  && cp /usr/share/automake-*/config.guess /usr/share/automake-*/config.sub . \
  && ./configure --prefix=/usr/local --disable-shared --enable-static \
