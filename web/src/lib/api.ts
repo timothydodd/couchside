@@ -56,8 +56,10 @@ export async function api<T = void>(path: string, init?: RequestInit & { json?: 
     }
     throw new ApiError(res.status, msg);
   }
-  if (res.status === 204 || res.status === 202 || res.headers.get("content-length") === "0") return undefined as T;
-  return (await res.json()) as T;
+  if (res.status === 204 || res.headers.get("content-length") === "0") return undefined as T;
+  // 202 Accepted may or may not carry a body (an optimize answers {queued}, a scan nothing).
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 // Last response per URL, so navigating back paints instantly while it refreshes.
