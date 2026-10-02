@@ -78,6 +78,6 @@ ENV COUCHSIDE_ADDR=:8080 \
     COUCHSIDE_RECORDINGS_DIR=/recordings
 
 USER 1000:1000
-EXPOSE 8080
+EXPOSE 8080 1900/udp
 VOLUME ["/data", "/cache", "/recordings"]
 ENTRYPOINT ["couchside"]

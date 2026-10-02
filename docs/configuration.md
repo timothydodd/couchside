@@ -21,6 +21,11 @@ UI that are stored in its database. Release builds work with none of them set.
 | `OMDB_API_KEY` | none | Optional fallback metadata source; free keys at omdbapi.com |
 | **Accounts** | | |
 | `COUCHSIDE_AUTH` | `false` | Require passwords: no passwordless sign-in. Set it for a server on the internet |
+| **LAN discovery** | | |
+| `COUCHSIDE_DISCOVERY` | on | Answer SSDP searches so TV apps find the server; `false` turns it off |
+| `COUCHSIDE_SERVER_NAME` | host name | The name TV apps list the server under |
+| `COUCHSIDE_DISCOVERY_URL` | this machine's address and port | Base URL to advertise instead, when the LAN reaches Couchside on another port or name (Docker `-p 8095:8080`, a NodePort) |
+| `COUCHSIDE_DISCOVERY_INTERFACE` | the default one | Network interface to listen on, on a machine with several |
 | **Transcoding** | | |
 | `COUCHSIDE_FFMPEG` / `COUCHSIDE_FFPROBE` | `ffmpeg` / `ffprobe` | Paths to ffmpeg and ffprobe |
 | `COUCHSIDE_HWACCEL` | `none` | `vaapi`, `qsv` or `nvenc`; falls back to software if unusable |

@@ -86,6 +86,7 @@ func (s *Server) Handler() http.Handler {
 	r.Use(middleware.RealIP, middleware.Recoverer)
 
 	r.Get("/healthz", s.health)
+	r.Get("/api/discovery", s.discovery)
 	r.Route("/api", func(r chi.Router) {
 		r.Use(middleware.NoCache)
 		// Open: how to sign in, and signing in.
@@ -329,5 +330,23 @@ func logRequests(next http.Handler) http.Handler {
 		if strings.HasPrefix(r.URL.Path, "/api/") && ww.Status() >= 400 {
 			slog.Warn("http", "method", r.Method, "path", r.URL.Path, "status", ww.Status(), "took", time.Since(start))
 		}
+	})
+}
+
+// SignInMode is how this server signs people in, for LAN discovery:
+// "passwordless" (pick a profile) or "password".
+func (s *Server) SignInMode(ctx context.Context) string {
+	if on, _, err := s.passwordless(ctx); err == nil && on {
+		return "passwordless"
+	}
+	return "password"
+}
+
+// discovery is what an SSDP answer's LOCATION points at: enough for a TV's
+// server list, before anyone signs in.
+func (s *Server) discovery(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"app": "couchside", "id": s.cfg.ServerID, "name": s.cfg.ServerName, "version": s.version,
+		"signIn": s.SignInMode(r.Context()),
 	})
 }
