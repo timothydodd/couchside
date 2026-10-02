@@ -54,7 +54,10 @@ func (d *DB) ClaimJob(ctx context.Context, encode bool) (*Job, error) {
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
-	return &j, err
+	if err != nil {
+		return nil, err
+	}
+	return &j, nil
 }
 
 func (d *DB) FinishJob(ctx context.Context, id int64, jobErr error) error {
@@ -92,10 +95,41 @@ func (d *DB) Job(ctx context.Context, id int64) (Job, error) {
 	return j, notFound(err)
 }
 
-// RequeueRunning resets jobs left running by a crash or restart.
+// maxAttempts is how many times a job may start. One still running at a
+// restart after that many has probably taken the server down with it.
+const maxAttempts = 3
+
+// RequeueRunning resets jobs left running by a crash or restart, failing
+// those that have already started maxAttempts times.
 func (d *DB) RequeueRunning(ctx context.Context) error {
+	if _, err := d.sql.ExecContext(ctx, `UPDATE jobs SET status = 'failed', finished_at = unixepoch(),
+		error = 'interrupted by a server restart ' || attempts || ' times; retry it from Activity'
+		WHERE status = 'running' AND attempts >= ?`, maxAttempts); err != nil {
+		return err
+	}
 	_, err := d.sql.ExecContext(ctx, `UPDATE jobs SET status = 'queued' WHERE status = 'running'`)
 	return err
+}
+
+// PendingMatches lists a library's items whose match never finished: the
+// provider couldn't be reached (network, rate limit, server error). Items it
+// answered "not found" are 'unmatched' and aren't listed.
+func (d *DB) PendingMatches(ctx context.Context, libraryID int64) ([]ItemRef, error) {
+	rows, err := d.sql.QueryContext(ctx, `SELECT m.id, m.parsed_title FROM media_items m WHERE m.library_id = ? AND m.match_status = 'pending'
+		AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.kind = 'match' AND j.ref_id = m.id AND j.status IN ('queued', 'running'))`, libraryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ItemRef
+	for rows.Next() {
+		var r ItemRef
+		if err := rows.Scan(&r.ID, &r.Title); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
 
 func (d *DB) RetryJob(ctx context.Context, id int64) error {
