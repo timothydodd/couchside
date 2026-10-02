@@ -27,6 +27,7 @@ import (
 	"github.com/timothydodd/couchside/internal/metadata"
 	"github.com/timothydodd/couchside/internal/sysstat"
 	"github.com/timothydodd/couchside/internal/transcode"
+	"github.com/timothydodd/couchside/internal/usererr"
 	"github.com/timothydodd/couchside/internal/webui"
 	"github.com/timothydodd/couchside/internal/worker"
 )
@@ -67,6 +68,7 @@ func (s *Server) Run(ctx context.Context) {
 		defer t.Stop()
 		for {
 			s.pruneRemote()
+			s.pruneTables(ctx)
 			select {
 			case <-ctx.Done():
 				return
@@ -79,13 +81,46 @@ func (s *Server) Run(ctx context.Context) {
 		slog.Error("accounts", "err", err)
 	}
 	s.pruneSessions(ctx)
+	if s.cfg.Auth {
+		// Passwords are required now; sessions from passwordless days end.
+		if err := s.endPasswordlessSessions(ctx); err != nil {
+			slog.Error("accounts", "err", err)
+		}
+	}
+}
+
+// pruneTables drops rows that would otherwise only grow: finished jobs after
+// two weeks, provider responses past the longest cache time (30 days).
+func (s *Server) pruneTables(ctx context.Context) {
+	now := time.Now()
+	jobs, err := s.db.PruneJobs(ctx, now.Add(-14*24*time.Hour).Unix())
+	if err != nil {
+		slog.Warn("prune jobs", "err", err)
+	}
+	cached, err := s.db.PruneCache(ctx, now.Add(-31*24*time.Hour).Unix())
+	if err != nil {
+		slog.Warn("prune provider cache", "err", err)
+	}
+	if jobs+cached > 0 {
+		slog.Info("pruned old rows", "jobs", jobs, "providerResponses", cached)
+	}
+}
+
+// securityHeaders: nothing is sniffed into another type, and the UI can't be
+// framed by another site.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) Handler() http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.RealIP, middleware.Recoverer)
+	r.Use(middleware.RealIP, middleware.Recoverer, securityHeaders)
 
 	r.Get("/healthz", s.health)
+	r.Get("/api/discovery", s.discovery)
 	r.Route("/api", func(r chi.Router) {
 		r.Use(middleware.NoCache)
 		// Open: how to sign in, and signing in.
@@ -272,7 +307,11 @@ func writeErr(w http.ResponseWriter, err error) {
 			return
 		}
 		slog.Error("request failed", "err", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		msg := "internal error; see the server log"
+		if usererr.Is(err) {
+			msg = err.Error() // written for the user ("all tuners are busy")
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg})
 	}
 }
 
@@ -317,6 +356,7 @@ func spa(fsys fs.FS) http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Content-Security-Policy", "frame-ancestors 'self'")
 		http.ServeFileFS(w, r, fsys, "index.html")
 	}
 }
@@ -329,5 +369,23 @@ func logRequests(next http.Handler) http.Handler {
 		if strings.HasPrefix(r.URL.Path, "/api/") && ww.Status() >= 400 {
 			slog.Warn("http", "method", r.Method, "path", r.URL.Path, "status", ww.Status(), "took", time.Since(start))
 		}
+	})
+}
+
+// SignInMode is how this server signs people in, for LAN discovery:
+// "passwordless" (pick a profile) or "password".
+func (s *Server) SignInMode(ctx context.Context) string {
+	if on, _, err := s.passwordless(ctx); err == nil && on {
+		return "passwordless"
+	}
+	return "password"
+}
+
+// discovery is what an SSDP answer's LOCATION points at: enough for a TV's
+// server list, before anyone signs in.
+func (s *Server) discovery(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"app": "couchside", "id": s.cfg.ServerID, "name": s.cfg.ServerName, "version": s.version,
+		"signIn": s.SignInMode(r.Context()),
 	})
 }

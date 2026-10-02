@@ -184,6 +184,8 @@ export default function PlayerFrame(p: PlayerFrameProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.closest("input, select, textarea")) return;
+      // Alt+Left is the browser's Back, Ctrl+F its Find: leave those alone.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       poke();
       if (p.onKey?.(e)) return;
       const el = v();

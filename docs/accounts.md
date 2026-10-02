@@ -47,14 +47,38 @@ rules and server settings are shared. Switch profiles from the sidebar.
   a replayed refresh token ends its session. A session ends after a year
   unused (each use pushes that out again), so devices stay signed in. Signing
   out, changing a password, or an admin signing a device out or disabling the
-  account ends sessions straight away.
+  account ends sessions straight away. So does turning passwordless sign-in
+  off (or starting with `COUCHSIDE_AUTH=true`) for profiles without a
+  password. A profile keeps at most 50 sessions; signing in again drops the
+  least recently used.
 - Failed sign-ins are slowed per address and per account, then locked out for
-  up to 15 minutes, and logged.
+  up to 15 minutes, and logged. The per-account limit means someone who knows
+  a name can keep that account locked by failing on purpose; that's the price
+  of stopping password guessing from many addresses. Passwordless picks are
+  limited to 20 per address per 10 minutes.
 - **Open without a session:** `/healthz`, the sign-in endpoints, and artwork
   (posters, backdrops, episode stills), so TV apps can load images without a
   token. Everything else, streams included, needs a session.
 
 ## For TV apps
+
+**Finding the server.** Send an SSDP search to `239.255.255.250:1900`:
+
+```
+M-SEARCH * HTTP/1.1
+HOST: 239.255.255.250:1900
+MAN: "ssdp:discover"
+MX: 1
+ST: urn:couchside-app:device:server:1
+```
+
+Each Couchside on the LAN answers (unicast, within a second) with
+`LOCATION: <base>/api/discovery`, `USN: uuid:<server id>::…` and
+`X-COUCHSIDE-NAME`, `X-COUCHSIDE-VERSION`, `X-COUCHSIDE-URL` (the base URL)
+and `X-COUCHSIDE-SIGNIN` (`passwordless` or `password`). `GET /api/discovery`
+returns the same as JSON without signing in. The server id survives restarts,
+so a TV can remember which server it picked. Discovery only works on the same
+network segment; typing the address stays the fallback.
 
 Read `GET /api/auth`, sign in with `POST /api/auth/pick`
 (`{"profileId", "client": "tv"}`, passwordless) or `POST /api/auth/login`

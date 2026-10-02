@@ -7,28 +7,29 @@ import { api, useApi } from "../lib/api";
 import { fmtAgo } from "../lib/format";
 import type { Library } from "../lib/types";
 import { useStatus } from "../stores/status";
+import { attempt } from "../lib/notices";
 
 export default function LibrariesPage() {
   const { data, error, reload } = useApi<Library[]>("/api/libraries", { pollMs: 5000 });
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
 
-  const scan = async (id: number) => {
+  const scan = attempt("Couldn't start the scan", async (id: number) => {
     await api(`/api/libraries/${id}/scan`, { method: "POST" });
     void useStatus.getState().refresh();
-  };
-  const rematch = async (l: Library) => {
+  });
+  const rematch = attempt("Couldn't re-match the library", async (l: Library) => {
     if (!confirm(`Look up every title in "${l.name}" again?\n\nThis refreshes details, posters, backdrops and cast from the metadata providers. Matches you fixed by hand stay as they are.`)) return;
     const r = await api<{ queued: number }>(`/api/libraries/${l.id}/rematch`, { method: "POST" });
     alert(`Queued ${r.queued} lookups. Follow them on the Activity page.`);
     void useStatus.getState().refresh();
-  };
-  const remove = async (l: Library) => {
+  });
+  const remove = attempt("Couldn't remove the library", async (l: Library) => {
     if (!confirm(`Remove "${l.name}" from Couchside? Your files are not touched; only the library entry, watch history and artwork go.`)) return;
     await api(`/api/libraries/${l.id}`, { method: "DELETE" });
     await reload();
     void useStatus.getState().refresh();
-  };
+  });
 
   return (
     <div>

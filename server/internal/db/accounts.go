@@ -272,6 +272,23 @@ func (d *DB) DeleteSessions(ctx context.Context, profileID int64, keep string) e
 	return err
 }
 
+// DeleteSessionsWithoutPassword signs out every profile that has no
+// password: once passwordless sign-in is off, they couldn't sign in again.
+func (d *DB) DeleteSessionsWithoutPassword(ctx context.Context) (int64, error) {
+	res, err := d.sql.ExecContext(ctx, `DELETE FROM sessions WHERE profile_id IN (SELECT id FROM profiles WHERE password_hash = '')`)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// TrimSessions keeps a profile's newest keep sessions and deletes the rest.
+func (d *DB) TrimSessions(ctx context.Context, profileID int64, keep int) error {
+	_, err := d.sql.ExecContext(ctx, `DELETE FROM sessions WHERE profile_id = ? AND id NOT IN
+		(SELECT id FROM sessions WHERE profile_id = ? ORDER BY last_used_at DESC, created_at DESC LIMIT ?)`, profileID, profileID, keep)
+	return err
+}
+
 // PruneSessions drops expired sessions (and with them their used tokens).
 func (d *DB) PruneSessions(ctx context.Context, now int64) error {
 	_, err := d.sql.ExecContext(ctx, `DELETE FROM sessions WHERE expires_at <= ?`, now)

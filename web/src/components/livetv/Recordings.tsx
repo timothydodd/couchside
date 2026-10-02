@@ -6,6 +6,7 @@ import { fmtBytes, fmtDay, fmtSlot, fmtTime } from "../../lib/format";
 import type { Recording, RuleMode, SeriesRule } from "../../lib/types";
 import { KEEP_OPTIONS, MODE_TEXT, describeSummary, keepLabel } from "./rules";
 import { useOwnerCheck } from "../../stores/auth";
+import { attempt } from "../../lib/notices";
 
 /** DVR: recording now, upcoming, recorded and failed. */
 export default function Recordings() {
@@ -14,11 +15,11 @@ export default function Recordings() {
   // Who may change what: admins anything, people allowed to record their own.
   const may = useOwnerCheck();
 
-  const act = async (path: string, method: "POST" | "DELETE", confirmText?: string) => {
+  const act = attempt("Couldn't change the recording", async (path: string, method: "POST" | "DELETE", confirmText?: string) => {
     if (confirmText && !confirm(confirmText)) return;
     await api(path, { method });
     await reload();
-  };
+  });
 
   if (loading && !data)
     return (
@@ -36,19 +37,19 @@ export default function Recordings() {
 
   const label = (r: Recording) => [r.episodeNum, r.episodeTitle].filter(Boolean).join(" · ");
 
-  const updateRule = async (r: SeriesRule, patch: Partial<SeriesRule>) => {
+  const updateRule = attempt("Couldn't update the series", async (r: SeriesRule, patch: Partial<SeriesRule>) => {
     const next = { ...r, ...patch };
     await api(`/api/dvr/rules/${r.id}`, {
       method: "PUT",
       json: { mode: next.mode, channel: next.channel, mediaItemId: next.mediaItemId, keepLast: next.keepLast, enabled: next.enabled },
     });
     await Promise.all([reloadRules(), reload()]);
-  };
-  const deleteRule = async (r: SeriesRule) => {
+  });
+  const deleteRule = attempt("Couldn't stop recording the series", async (r: SeriesRule) => {
     if (!confirm(`Stop recording "${r.title}" as a series? Upcoming recordings from it are cancelled; finished ones are kept.`)) return;
     await api(`/api/dvr/rules/${r.id}`, { method: "DELETE" });
     await Promise.all([reloadRules(), reload()]);
-  };
+  });
 
   return (
     <div className="min-h-0 flex-1 overflow-auto gutter pb-8">

@@ -5,6 +5,7 @@ import SessionList from "./SessionList";
 import { ErrorNote } from "../ui";
 import { api } from "../../lib/api";
 import { authError, useAuth } from "../../stores/auth";
+import { attempt } from "../../lib/notices";
 
 /** Your own account: password, signed-in devices, sign out. Only with accounts on. */
 export default function AccountSettings() {
@@ -41,10 +42,10 @@ export default function AccountSettings() {
     }
   };
 
-  const signOutOthers = async () => {
+  const signOutOthers = attempt("Couldn't sign out other devices", async () => {
     await api("/api/auth/sessions/others/end", { method: "POST" });
     setDevicesKey((k) => k + 1);
-  };
+  });
 
   return (
     <section className="card p-4">
