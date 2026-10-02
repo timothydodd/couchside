@@ -10,6 +10,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/timothydodd/couchside/internal/config"
@@ -361,6 +362,22 @@ func TestPasswordLocked(t *testing.T) {
 	admin.do("PUT", "/api/accounts/1", map[string]any{"name": "Me", "role": "admin", "passwordLocked": true}, &me)
 	if me.PasswordLocked {
 		t.Fatal("an admin was locked")
+	}
+}
+
+// A forged X-Forwarded-For from a peer that isn't a trusted proxy doesn't
+// change the address the sign-in throttle counts.
+func TestForgedForwardedForDoesNotDodgeThrottle(t *testing.T) {
+	_, ts := authServer(t)
+	c := newClient(t, ts.URL)
+	code := 0
+	for i := 0; i < 8; i++ {
+		c.header = map[string]string{"X-Forwarded-For": "198.51.100." + strconv.Itoa(i), "X-Real-IP": "198.51.100." + strconv.Itoa(i)}
+		// A different name each time, so only the per-address limit can apply.
+		code = c.do("POST", "/api/auth/login", map[string]string{"name": "nobody" + strconv.Itoa(i), "password": "wrong"}, nil)
+	}
+	if code != http.StatusTooManyRequests {
+		t.Fatalf("8th failed sign-in with a new forged address each time = %d, want 429", code)
 	}
 }
 

@@ -259,7 +259,7 @@ func TestRecordingPathSkipsOneInProgress(t *testing.T) {
 
 	// Before its first part appears, the row's path alone holds it.
 	os.Remove(part)
-	id, err := d.ScheduleRecording(ctx, db.Recording{Channel: "2.1", Title: "Ghosts", StartAt: start, EndAt: start + 1800})
+	id, _, err := d.ScheduleRecording(ctx, db.Recording{Channel: "2.1", Title: "Ghosts", StartAt: start, EndAt: start + 1800}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

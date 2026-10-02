@@ -7,7 +7,8 @@ profile with a password still asks for it, so lock the admin's.
 
 Before putting Couchside on the internet, turn passwordless sign-in off in
 **Settings → Accounts**, or for good with `COUCHSIDE_AUTH=true` (Helm
-`auth.enabled`), and serve it over HTTPS.
+`auth.enabled`), and serve it over HTTPS behind a proxy you name in
+`COUCHSIDE_TRUSTED_PROXIES` ([install.md](install.md#putting-it-on-the-internet)).
 
 ## Profiles
 

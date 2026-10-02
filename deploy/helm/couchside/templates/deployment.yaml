@@ -67,6 +67,10 @@ spec:
             - name: COUCHSIDE_AUTH
               value: "true"
             {{- end }}
+            {{- with .Values.auth.trustedProxies }}
+            - name: COUCHSIDE_TRUSTED_PROXIES
+              value: {{ join "," . | quote }}
+            {{- end }}
             {{- with .Values.livetv.hdhomerun }}
             - name: COUCHSIDE_HDHOMERUN
               value: {{ . | quote }}

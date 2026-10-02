@@ -295,6 +295,7 @@ type authInfo struct {
 	User               *db.Profile   `json:"user"`
 	AccessExpiresAt    int64         `json:"accessExpiresAt,omitempty"`
 	SignedIn           []profileStub `json:"signedIn"` // web: profiles this browser holds a session for
+	Insecure           bool          `json:"insecure"` // this request is plain HTTP from an internet address
 }
 
 type profileStub struct {
@@ -307,7 +308,7 @@ type profileStub struct {
 // authStatus is open to everyone: it tells an app whether to show sign-in.
 func (s *Server) authStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	out := authInfo{Enabled: true, SignedIn: []profileStub{}, Profiles: []profileStub{}}
+	out := authInfo{Enabled: true, SignedIn: []profileStub{}, Profiles: []profileStub{}, Insecure: plainHTTPFromInternet(r)}
 	var err error
 	if out.Passwordless, out.PasswordlessLocked, err = s.passwordless(ctx); err != nil {
 		writeErr(w, err)
@@ -376,9 +377,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	// RealIP has already applied X-Forwarded-For; trusting it only from known
-	// proxies is part of S4.
-	ip := clientIP(r)
+	ip := clientIP(r) // X-Forwarded-For counts only from trusted proxies (realIP)
 	nameKey := strings.ToLower(strings.Join(strings.Fields(in.Name), " "))
 	if utf8.RuneCountInString(nameKey) > maxProfileName {
 		// No account has a name this long. Refuse it before it becomes a
@@ -463,6 +462,10 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, p db.Profi
 		slog.Warn("trim sessions", "err", err)
 	}
 	slog.Info("signed in", "profile", p.Name, "client", client, "ip", sess.IP)
+	if plainHTTPFromInternet(r) {
+		slog.Warn("sign-in over plain HTTP from the internet: passwords and tokens travel unencrypted; serve Couchside over HTTPS (docs/install.md)",
+			"profile", p.Name, "ip", sess.IP)
+	}
 	s.issue(w, r, p, sess, refresh)
 }
 
@@ -492,8 +495,9 @@ func (s *Server) issue(w http.ResponseWriter, r *http.Request, p db.Profile, ses
 
 func refreshCookie(profileID int64) string { return refreshPrefix + strconv.FormatInt(profileID, 10) }
 
+// isHTTPS: X-Forwarded-Proto counts only from a trusted proxy (see realIP).
 func isHTTPS(r *http.Request) bool {
-	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	return r.TLS != nil || viaHTTPS(r)
 }
 
 func clip(s string, n int) string {

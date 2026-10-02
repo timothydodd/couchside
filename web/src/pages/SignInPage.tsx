@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ArrowLeft, Lock, LogIn } from "lucide-react";
 import AuthShell from "../components/auth/AuthShell";
 import ProfileAvatar from "../components/ProfileAvatar";
-import { ErrorNote } from "../components/ui";
+import { ErrorNote, WarningNote } from "../components/ui";
 import type { ProfileStub } from "../lib/types";
 import { authError, useAuth } from "../stores/auth";
 import { useRouter } from "../stores/router";
@@ -15,7 +15,7 @@ import { useRouter } from "../stores/router";
  * sidebar.
  */
 export default function SignInPage({ switching = false }: { switching?: boolean }) {
-  const { passwordless, profiles, signedIn, user, login, pick, switchTo } = useAuth();
+  const { passwordless, profiles, signedIn, user, insecure, login, pick, switchTo } = useAuth();
   const back = useRouter((s) => s.back);
   const tiles = passwordless ? profiles : signedIn;
   const [asking, setAsking] = useState<ProfileStub | null>(null); // the profile whose password we want
@@ -69,6 +69,14 @@ export default function SignInPage({ switching = false }: { switching?: boolean 
         )
       }
     >
+      {insecure && (
+        <div className="mt-6 w-full max-w-sm">
+          <WarningNote>
+            This connection isn't encrypted. Signing in sends your password and session across the internet in the clear. Whoever runs this
+            Couchside should serve it over HTTPS.
+          </WarningNote>
+        </div>
+      )}
       {tiles.length > 0 && !asking && (
         <div className="mt-8 flex flex-wrap justify-center gap-6">
           {tiles.map((p) => (

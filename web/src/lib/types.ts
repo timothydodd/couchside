@@ -590,6 +590,8 @@ export interface AuthInfo {
   accessExpiresAt?: number;
   /** Profiles this browser holds a session for (switch without a password). */
   signedIn: ProfileStub[];
+  /** This connection is plain HTTP from an internet address. */
+  insecure?: boolean;
 }
 
 export type ProfileStub = Pick<Profile, "id" | "name" | "color" | "hasPassword">;

@@ -38,6 +38,9 @@ type Config struct {
 	// Settings, which is the default on a server where nobody has a password.
 	// Set it for a server reachable from the internet.
 	Auth bool
+	// COUCHSIDE_TRUSTED_PROXIES: CIDRs or addresses of reverse proxies whose
+	// X-Forwarded-For and X-Forwarded-Proto are believed. Empty trusts nobody.
+	TrustedProxies []string
 
 	// LAN discovery (SSDP), so TV apps find the server without typing its address.
 	Discovery          bool   // COUCHSIDE_DISCOVERY: answer SSDP searches (default on; "false" turns it off)
@@ -76,7 +79,8 @@ func Load() Config {
 		PadBefore:     envDur("COUCHSIDE_DVR_PAD_BEFORE", 10*time.Second),
 		PadAfter:      envDur("COUCHSIDE_DVR_PAD_AFTER", 10*time.Second),
 
-		Auth: envBool("COUCHSIDE_AUTH"),
+		Auth:           envBool("COUCHSIDE_AUTH"),
+		TrustedProxies: strings.FieldsFunc(os.Getenv("COUCHSIDE_TRUSTED_PROXIES"), func(r rune) bool { return r == ',' || r == ' ' }),
 
 		Discovery:          !envFalse("COUCHSIDE_DISCOVERY"),
 		DiscoveryURL:       os.Getenv("COUCHSIDE_DISCOVERY_URL"),
