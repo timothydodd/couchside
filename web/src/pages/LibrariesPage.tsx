@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Clapperboard, Cpu, Folder, FolderPlus, Pencil, RefreshCw, ScanSearch, SlidersHorizontal, Trash2, Tv } from "lucide-react";
+import { Check, Clapperboard, Folder, FolderPlus, Pencil, RefreshCw, ScanSearch, SlidersHorizontal, Trash2, Tv } from "lucide-react";
 import Link from "../components/Link";
 import FolderPicker from "../components/FolderPicker";
 import { EmptyState, ErrorNote, PageHeader, Spinner } from "../components/ui";
@@ -15,12 +15,6 @@ export default function LibrariesPage() {
 
   const scan = async (id: number) => {
     await api(`/api/libraries/${id}/scan`, { method: "POST" });
-    void useStatus.getState().refresh();
-  };
-  const optimize = async (l: Library) => {
-    if (!confirm(`Encode browser-friendly copies of everything in "${l.name}" that can't play directly?\n\nThis runs in the background, one file at a time, and the copies take disk space in the cache volume (roughly 1-4 GB per movie at 1080p).`)) return;
-    const r = await api<{ queued: number }>(`/api/libraries/${l.id}/optimize`, { method: "POST" });
-    alert(r.queued ? `Queued ${r.queued} encodes. Follow them on the Activity page.` : "Nothing to do: everything already plays directly or has an optimized copy.");
     void useStatus.getState().refresh();
   };
   const rematch = async (l: Library) => {
@@ -95,7 +89,7 @@ export default function LibrariesPage() {
                 <div className="text-content-muted">Scanned {fmtAgo(l.lastScanAt)}</div>
               </div>
               <div className="flex flex-wrap gap-1.5 whitespace-nowrap">
-                <Link to={`/libraries/${l.id}`} className="btn-ghost" title="Sort by quality, find duplicates, fix matches, artwork and deletes">
+                <Link to={`/libraries/${l.id}`} className="btn-ghost" title="Sort by quality, find duplicates, fix matches, artwork, optimize and delete">
                   <SlidersHorizontal size={15} /> Manage
                 </Link>
                 <button className="btn-ghost" onClick={() => void scan(l.id)}>
@@ -103,9 +97,6 @@ export default function LibrariesPage() {
                 </button>
                 <button className="btn-ghost" onClick={() => void rematch(l)} title="Look up details, artwork and cast again for every title">
                   <RefreshCw size={15} /> Re-match
-                </button>
-                <button className="btn-ghost" onClick={() => void optimize(l)} title="Encode browser-friendly copies of files that need transcoding">
-                  <Cpu size={15} /> Optimize
                 </button>
                 <button className="btn-quiet" onClick={() => setEditing(l.id)} title="Rename or change folder">
                   <Pencil size={15} />

@@ -1,16 +1,24 @@
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowUp, Copy, ImageUp } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Copy, Cpu, ImageUp } from "lucide-react";
 import Link from "../components/Link";
 import ItemPanel from "../components/manage/ItemPanel";
 import { PosterArt } from "../components/PosterCard";
 import { EmptyState, ErrorNote, PageHeader, SearchInput, Spinner } from "../components/ui";
-import { useApi } from "../lib/api";
+import { api, useApi } from "../lib/api";
 import { fmtAgo, fmtBytes } from "../lib/format";
 import { codecLabel, extraFiles, qualityLabel, qualityTier, qualityTone } from "../lib/quality";
 import type { Library, ManageRow } from "../lib/types";
+import { useStatus } from "../stores/status";
 
 type Filter = "all" | "duplicates" | "unmatched" | "low";
 type SortKey = "title" | "quality" | "files" | "size" | "added";
+
+const optimizeAll = async (l: Library) => {
+  if (!confirm(`Encode browser-friendly copies of everything in "${l.name}" that can't play directly?\n\nThis runs in the background, one file at a time, and the copies take disk space in the cache volume (roughly 1-4 GB per movie at 1080p).`)) return;
+  const r = await api<{ queued: number }>(`/api/libraries/${l.id}/optimize`, { method: "POST" });
+  alert(r.queued ? `Queued ${r.queued} encodes. Follow them on the Activity page.` : "Nothing to do: everything already plays directly or has an optimized copy.");
+  void useStatus.getState().refresh();
+};
 
 const isDuplicate = (r: ManageRow) => extraFiles(r) > 0 || r.sameImdb > 0;
 const isLow = (r: ManageRow) => qualityTier(r.maxHeight) <= 1;
@@ -88,6 +96,11 @@ export default function LibraryManagePage({ id }: { id: number }) {
         <Link to="/libraries" className="btn-quiet">
           <ArrowLeft size={15} /> Libraries
         </Link>
+        {lib && (
+          <button className="btn-ghost" onClick={() => void optimizeAll(lib)} title="Encode browser-friendly copies of every file that needs transcoding">
+            <Cpu size={15} /> Optimize all
+          </button>
+        )}
       </PageHeader>
       <div className="flex flex-col gap-3 gutter py-4">
         {error && <ErrorNote>{error}</ErrorNote>}

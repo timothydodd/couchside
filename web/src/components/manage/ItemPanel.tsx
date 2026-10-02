@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ExternalLink, Trash2, X } from "lucide-react";
+import { Cpu, ExternalLink, Trash2, X } from "lucide-react";
 import Link from "../Link";
 import { PosterArt } from "../PosterCard";
 import { ErrorNote } from "../ui";
@@ -9,6 +9,7 @@ import MetadataSearch from "./MetadataSearch";
 import { api, useApi } from "../../lib/api";
 import { fmtBytes, relPath } from "../../lib/format";
 import type { DeleteResult, Library, ManageFile, ManageRow } from "../../lib/types";
+import { useStatus } from "../../stores/status";
 
 /** Everything you can do to one movie or show, in a drawer over the Manage table. */
 export default function ItemPanel({ row, library, onClose, onChanged }: { row: ManageRow; library: Library; onClose: () => void; onChanged: () => void }) {
@@ -70,10 +71,66 @@ export default function ItemPanel({ row, library, onClose, onChanged }: { row: M
           <MetadataSearch row={row} onMatched={onChanged} />
           <ArtworkEditor row={row} onChanged={onChanged} />
           <FileList kind={row.kind} files={files} libraryPath={library.path} onDeleted={deleted} onChanged={changed} />
+          <OptimizeItem row={row} />
           <DeleteItem row={row} onDeleted={deleted} />
         </div>
       </aside>
     </>
+  );
+}
+
+/** Queue background encodes that make browser-friendly copies of this title. */
+function OptimizeItem({ row }: { row: ManageRow }) {
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setMsg(null), [row.id]);
+  const series = row.kind === "series";
+  const run = async () => {
+    setBusy(true);
+    try {
+      const r = await api<{ queued: number }>(`/api/items/${row.id}/optimize`, { method: "POST" });
+      setMsg(
+        r.queued
+          ? `Queued ${r.queued} encode${r.queued === 1 ? "" : "s"}; progress is on the Activity page.`
+          : series
+            ? "Every episode already plays in the browser or has an optimized copy."
+            : "This already plays in the browser or has an optimized copy.",
+      );
+      void useStatus.getState().refresh();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="panel-section">
+      <div className="card-title mb-2">Optimize</div>
+      <p className="text-xs text-content-muted">
+        Encodes a browser-friendly H.264 copy of {series ? "each episode" : "this movie"} that can't play directly, so it plays without live transcoding.
+        Copies go in the cache volume (roughly 1&ndash;4 GB per movie at 1080p).
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button className="btn-ghost" disabled={busy} onClick={() => void run()}>
+          <Cpu size={14} /> Optimize {series ? "all episodes" : "movie"}
+        </button>
+        {msg && (
+          <span className="text-xs text-content-muted">
+            {msg.includes("Activity") ? (
+              <>
+                {msg.split("Activity")[0]}
+                <Link to="/activity" className="text-accent hover:underline">
+                  Activity
+                </Link>
+                {msg.split("Activity")[1]}
+              </>
+            ) : (
+              msg
+            )}
+          </span>
+        )}
+      </div>
+    </section>
   );
 }
 

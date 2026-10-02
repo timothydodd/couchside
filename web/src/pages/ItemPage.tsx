@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, Cpu, Eye, EyeOff, MoreHorizontal, Play, RotateCcw, Star, Trash2, Wand2 } from "lucide-react";
+import { ArrowLeft, Check, Eye, EyeOff, MoreHorizontal, Play, RotateCcw, Star, Trash2, Wand2 } from "lucide-react";
 import { CastRow, CrewLine } from "../components/Credits";
 import Link from "../components/Link";
 import { PosterArt } from "../components/PosterCard";
@@ -115,7 +115,6 @@ export default function ItemPage({ id }: { id: number }) {
               {allWatched ? <EyeOff size={15} /> : <Eye size={15} />}
               {allWatched ? "Mark unwatched" : "Mark watched"}
             </button>
-            {admin && <OptimizeButton itemId={item.id} isSeries={isSeries} />}
             {admin && <MoreActions itemId={item.id} isSeries={isSeries} />}
           </div>
 
@@ -359,42 +358,6 @@ function StillRow({
         )}
       </Link>
     </li>
-  );
-}
-
-/** Queue background encodes that make browser-friendly copies. */
-function OptimizeButton({ itemId, isSeries }: { itemId: number; isSeries: boolean }) {
-  const [msg, setMsg] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const run = async () => {
-    setBusy(true);
-    try {
-      const r = await api<{ queued: number }>(`/api/items/${itemId}/optimize`, { method: "POST" });
-      setMsg(
-        r.queued
-          ? `Queued ${r.queued} encode${r.queued === 1 ? "" : "s"}; progress is on the Activity page.`
-          : isSeries
-            ? "Every episode already plays in the browser or has an optimized copy."
-            : "This already plays in the browser or has an optimized copy.",
-      );
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <>
-      <button
-        className="btn-ghost !py-2"
-        disabled={busy}
-        onClick={() => void run()}
-        title="Encode a browser-friendly H.264 copy so it plays without live transcoding"
-      >
-        <Cpu size={15} /> Optimize
-      </button>
-      {msg && <JobNote msg={msg} />}
-    </>
   );
 }
 
