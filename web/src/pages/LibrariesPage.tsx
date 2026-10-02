@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Check, Clapperboard, Folder, FolderPlus, Pencil, RefreshCw, ScanSearch, SlidersHorizontal, Trash2, Tv } from "lucide-react";
+import { Check, ChevronDown, Clapperboard, Folder, FolderPlus, Pencil, RefreshCw, ScanSearch, SlidersHorizontal, Trash2, Tv } from "lucide-react";
 import Link from "../components/Link";
 import FolderPicker from "../components/FolderPicker";
-import { EmptyState, ErrorNote, PageHeader, Spinner } from "../components/ui";
+import { EmptyState, ErrorNote, MenuButton, PageHeader, Spinner } from "../components/ui";
 import { api, useApi } from "../lib/api";
 import { fmtAgo } from "../lib/format";
 import type { Library } from "../lib/types";
@@ -88,22 +88,35 @@ export default function LibrariesPage() {
                 </div>
                 <div className="text-content-muted">Scanned {fmtAgo(l.lastScanAt)}</div>
               </div>
-              <div className="flex flex-wrap gap-1.5 whitespace-nowrap">
-                <Link to={`/libraries/${l.id}`} className="btn-ghost" title="Sort by quality, find duplicates, fix matches, artwork, optimize and delete">
+              <div className="split-btn ml-auto">
+                <Link to={`/libraries/${l.id}`} className="btn-ghost" title="Sort by quality, find duplicates, fix matches, artwork, optimize and delete files">
                   <SlidersHorizontal size={15} /> Manage
                 </Link>
-                <button className="btn-ghost" onClick={() => void scan(l.id)}>
-                  <ScanSearch size={15} /> Scan
-                </button>
-                <button className="btn-ghost" onClick={() => void rematch(l)} title="Look up details, artwork and cast again for every title">
-                  <RefreshCw size={15} /> Re-match
-                </button>
-                <button className="btn-quiet" onClick={() => setEditing(l.id)} title="Rename or change folder">
-                  <Pencil size={15} />
-                </button>
-                <button className="btn-quiet hover:!text-critical" onClick={() => void remove(l)} title="Remove library">
-                  <Trash2 size={15} />
-                </button>
+                <MenuButton
+                  label={`More for ${l.name}`}
+                  icon={<ChevronDown size={15} />}
+                  align="end"
+                  className="btn-ghost split-btn-menu"
+                  items={[
+                    { id: "scan", label: "Scan", detail: "Look for new, changed and removed files.", icon: <ScanSearch size={15} />, onSelect: () => void scan(l.id) },
+                    {
+                      id: "rematch",
+                      label: "Re-match",
+                      detail: "Look up details, artwork and cast again for every title.",
+                      icon: <RefreshCw size={15} />,
+                      onSelect: () => void rematch(l),
+                    },
+                    { id: "edit", label: "Edit", detail: "Rename or change the folder.", icon: <Pencil size={15} />, onSelect: () => setEditing(l.id) },
+                    {
+                      id: "delete",
+                      label: "Remove library",
+                      detail: "Files on disk stay; its watch history and artwork go.",
+                      icon: <Trash2 size={15} />,
+                      danger: true,
+                      onSelect: () => void remove(l),
+                    },
+                  ]}
+                />
               </div>
             </div>
           ),

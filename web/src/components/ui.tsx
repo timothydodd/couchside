@@ -168,11 +168,31 @@ export interface MenuItem {
   id: string;
   label: string;
   detail?: string;
+  icon?: ReactNode;
+  /** Destructive: shown in the critical colour. */
+  danger?: boolean;
   onSelect: () => void;
 }
 
 /** A small button that opens a list of less-used actions. Closes on pick, outside click or Escape. */
-export function MenuButton({ label, icon, items }: { label: string; icon: ReactNode; items: MenuItem[] }) {
+/**
+ * An icon button that opens a menu. align="end" lines the menu up with the
+ * button's right edge (for buttons near the right of the screen); className
+ * styles the button (e.g. the right half of a split button).
+ */
+export function MenuButton({
+  label,
+  icon,
+  items,
+  align = "start",
+  className = "btn-ghost !px-2 !py-2",
+}: {
+  label: string;
+  icon: ReactNode;
+  items: MenuItem[];
+  align?: "start" | "end";
+  className?: string;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -188,23 +208,26 @@ export function MenuButton({ label, icon, items }: { label: string; icon: ReactN
   }, [open]);
   return (
     <div ref={ref} className="relative inline-flex">
-      <button className="btn-ghost !px-2 !py-2" aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button className={className} aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         {icon}
       </button>
       {open && (
-        <div role="menu" className="menu">
+        <div role="menu" className={`menu ${align === "end" ? "menu-end" : ""}`}>
           {items.map((it) => (
             <button
               key={it.id}
               role="menuitem"
-              className="menu-item"
+              className={`menu-item ${it.danger ? "menu-item-danger" : ""}`}
               onClick={() => {
                 setOpen(false);
                 it.onSelect();
               }}
             >
-              {it.label}
-              {it.detail && <span className="menu-detail">{it.detail}</span>}
+              <span className="flex items-center gap-2">
+                {it.icon}
+                {it.label}
+              </span>
+              {it.detail && <span className={`menu-detail ${it.icon ? "pl-6" : ""}`}>{it.detail}</span>}
             </button>
           ))}
         </div>

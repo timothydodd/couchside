@@ -225,11 +225,27 @@ body {
   }
   /* Dropdown of less-used actions (MenuButton). */
   .menu {
-    @apply absolute left-0 top-full z-20 mt-1 flex w-72 flex-col rounded-lg border border-border-light bg-raised p-1;
+    @apply absolute left-0 top-full z-20 mt-1 flex w-72 max-w-[calc(100vw-2rem)] flex-col rounded-lg border border-border-light bg-raised p-1;
     box-shadow: var(--shadow-md);
   }
   .menu-item {
     @apply flex flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left text-sm text-content hover:bg-muted focus-visible:bg-muted focus-visible:outline-none;
+  }
+  .menu-end {
+    @apply left-auto right-0;
+  }
+  .menu-item-danger {
+    @apply text-critical;
+  }
+  /* Two buttons joined into one: the main action, then a menu of the rest. */
+  .split-btn {
+    @apply inline-flex;
+  }
+  .split-btn > :first-child {
+    @apply rounded-r-none;
+  }
+  .split-btn-menu {
+    @apply -ml-px rounded-l-none px-2;
   }
   .menu-detail {
     @apply text-xs text-content-muted;
