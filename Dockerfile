@@ -3,7 +3,7 @@
 # build machine's native platform; Go cross-compiles for the target.
 
 # --- web: build the React UI once --------------------------------------------
-FROM --platform=$BUILDPLATFORM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS web
+FROM --platform=$BUILDPLATFORM node:26-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80 AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
@@ -11,7 +11,7 @@ COPY web/ ./
 RUN npm run build
 
 # --- server: static Go binary with the UI embedded -----------------------------
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c AS server
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS server
 ARG TARGETOS TARGETARCH VERSION=dev
 WORKDIR /src
 COPY server/go.mod server/go.sum ./
@@ -31,11 +31,11 @@ RUN --mount=type=secret,id=tmdb_key \
 # argtable2 (only in edge) is built static so the runtime needs no extra package;
 # its 2005 config.guess/config.sub don't know aarch64, so automake's replace them.
 # Runs on the target platform: it links the same ffmpeg libraries as the runtime.
-FROM alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8 AS comskip
+FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS comskip
 ARG COMSKIP_REF=V0.83
 # The tag's commit: the build stops if the tag is ever moved.
 ARG COMSKIP_COMMIT=55b0bcd018ddb9dacfad79addc48df55c1411073
-RUN apk add --no-cache build-base autoconf automake libtool pkgconf git ffmpeg-dev
+RUN apk add --no-cache build-base autoconf automake libtool pkgconf git ffmpeg-dev ffmpeg
 # Older C in both projects; gcc 14 would otherwise stop on implicit declarations.
 ENV CFLAGS="-O2 -std=gnu17 -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion"
 # Debian's copy of the upstream tarball first: SourceForge downloads go down
@@ -54,14 +54,33 @@ RUN for u in http://deb.debian.org/debian/pool/main/a/argtable2/argtable2_13.ori
  && make -j"$(nproc)" && make install
 # Both are GPL/LGPL and comskip is shipped as a binary, so their exact source
 # goes into the image too (/usr/share/src).
+#
+# FFmpeg 8 removed AVCodecContext.ticks_per_frame, which V0.83 reads. Its
+# documented replacement is 2 for codecs that code fields (MPEG-2, H.264) and
+# 1 otherwise. (Upstream PR #187 uses "props & AV_CODEC_PROP_FIELDS", which
+# is 16 or 0, and would break broadcast timing.) The patch is shipped with the
+# source.
 RUN git clone --depth 1 --branch ${COMSKIP_REF} https://github.com/erikkaashoek/Comskip /comskip \
  && test "$(git -C /comskip rev-parse HEAD)" = "${COMSKIP_COMMIT}" \
  && git -C /comskip archive --format=tar.gz --prefix=comskip-${COMSKIP_REF}/ -o /src/comskip-${COMSKIP_REF}.tar.gz HEAD \
- && cd /comskip && ./autogen.sh && PKG_CONFIG_PATH=/usr/local/lib/pkgconfig ./configure \
+ && cd /comskip \
+ && sed -i -e 's/is->dec_ctx->ticks_per_frame = 1;/;/' \
+      -e 's/is->dec_ctx->ticks_per_frame/COMSKIP_TICKS(is->dec_ctx)/g' mpeg2dec.c \
+ && sed -i '1i #define COMSKIP_TICKS(c) (((c)->codec_descriptor \&\& ((c)->codec_descriptor->props \& AV_CODEC_PROP_FIELDS)) ? 2 : 1)' mpeg2dec.c \
+ && ! grep -q 'dec_ctx->ticks_per_frame' mpeg2dec.c \
+ && git diff > /src/comskip-${COMSKIP_REF}-ffmpeg8.patch \
+ && ./autogen.sh && PKG_CONFIG_PATH=/usr/local/lib/pkgconfig ./configure \
  && make -j"$(nproc)" && strip comskip
+# Smoke test: comskip reads an MPEG-2 broadcast-like clip and writes an EDL.
+# (It can exit 1 on success, so the EDL is what counts.)
+RUN ffmpeg -loglevel error -f lavfi -i testsrc2=size=320x240:rate=30000/1001 -f lavfi -i sine=frequency=440 \
+      -t 20 -c:v mpeg2video -flags +ilme+ildct -c:a mp2 -f mpegts /tmp/clip.ts \
+ && printf 'output_edl=1\n' > /tmp/test.ini \
+ && mkdir -p /tmp/out && (/comskip/comskip --ini=/tmp/test.ini --output=/tmp/out /tmp/clip.ts || true) \
+ && test -f /tmp/out/clip.edl
 
 # --- runtime: Alpine for ffmpeg ------------------------------------------------
-FROM alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
+FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 # Intel VAAPI drivers (iHD for Broadwell and newer, i965 for older chips) so
 # COUCHSIDE_HWACCEL=vaapi can use /dev/dri. x86 only.
 RUN apk add --no-cache ffmpeg ca-certificates tzdata \
