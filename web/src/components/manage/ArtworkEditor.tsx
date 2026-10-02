@@ -15,8 +15,8 @@ export default function ArtworkEditor({ row, onChanged }: { row: ManageRow; onCh
     setBusy(kind);
     setErr(null);
     try {
-      const res = await fetch(`/api/items/${row.id}/artwork/${kind}`, { method: "PUT", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file });
-      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? `Upload failed (HTTP ${res.status})`);
+      // Through api(), so an expired access token is renewed and the upload retried.
+      await api(`/api/items/${row.id}/artwork/${kind}`, { method: "PUT", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file });
       onChanged();
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));

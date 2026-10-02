@@ -46,7 +46,9 @@ func (s *Server) personPhoto(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if path, err = s.worker.PersonPhoto(r.Context(), id, p.ProfilePath); err != nil {
-			slog.Warn("person photo", "person", id, "err", err)
+			if !errors.Is(err, worker.ErrNoPhoto) {
+				slog.Warn("person photo", "person", id, "err", err)
+			}
 			http.NotFound(w, r)
 			return
 		}

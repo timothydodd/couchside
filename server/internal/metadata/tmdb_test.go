@@ -153,3 +153,29 @@ func TestTMDBID(t *testing.T) {
 		}
 	}
 }
+
+// A captive portal answers 200 with HTML: that mustn't be cached as TMDB's answer.
+func TestTMDBUndecodableResponseIsNotCached(t *testing.T) {
+	portal := true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if portal {
+			w.Write([]byte("<html><body>Sign in to the hotel Wi-Fi</body></html>"))
+			return
+		}
+		w.Write([]byte(`{"results":[{"id":603,"title":"The Matrix","release_date":"1999-03-30"}]}`))
+	}))
+	defer srv.Close()
+	cache := &memCache{m: map[string][]byte{}}
+	p := NewTMDB("k", cache)
+	p.base = srv.URL
+	if _, err := p.SearchTitles(context.Background(), Movie, "The Matrix", 1999); err == nil {
+		t.Fatal("an HTML page decoded as a TMDB response")
+	}
+	if len(cache.m) != 0 {
+		t.Fatalf("the portal page was cached: %d entries", len(cache.m))
+	}
+	portal = false
+	if res, err := p.SearchTitles(context.Background(), Movie, "The Matrix", 1999); err != nil || len(res) == 0 {
+		t.Fatalf("after the portal: %v, %v", res, err)
+	}
+}

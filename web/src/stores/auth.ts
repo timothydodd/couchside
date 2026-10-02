@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { create } from "zustand";
 import { ApiError, api, setAuthHooks } from "../lib/api";
 import type { AuthInfo, Profile, SignedIn } from "../lib/types";
+import { stopStatus } from "./status";
 
 /**
  * Accounts are always on. Signing in is by name and password, or with
@@ -63,14 +64,17 @@ export const useAuth = create<AuthState>((set, get) => ({
   },
   login: async (name, password) => {
     await api<SignedIn>("/api/auth/login", { method: "POST", json: { name, password, client: "web" } });
+    announceProfileChange();
     location.assign("/");
   },
   pick: async (profileId) => {
     await api<SignedIn>("/api/auth/pick", { method: "POST", json: { profileId, client: "web" } });
+    announceProfileChange();
     location.assign("/");
   },
   setup: async (code, name, password) => {
     await api<SignedIn>("/api/auth/setup", { method: "POST", json: { code, name, password } });
+    announceProfileChange();
     location.assign("/");
   },
   switchTo: async (profileId) => {
@@ -78,11 +82,13 @@ export const useAuth = create<AuthState>((set, get) => ({
       await get().load();
       throw new Error("That sign-in has ended; enter the password again.");
     }
-    // Everything on screen belongs to the old profile.
+    // Everything on screen belongs to the old profile, here and in other tabs.
+    announceProfileChange();
     location.assign("/");
   },
   logout: async (everywhere = false) => {
     await api("/api/auth/logout", { method: "POST", json: { everywhere } });
+    announceProfileChange();
     location.assign("/");
   },
   changePassword: async (current, password) => {
@@ -91,6 +97,22 @@ export const useAuth = create<AuthState>((set, get) => ({
     if (u?.mustChangePassword) set({ user: { ...u, mustChangePassword: false } });
   },
 }));
+
+// --- other tabs ---------------------------------------------------------------------
+
+// Cookies are shared by every tab, so after a sign-in, sign-out or profile
+// switch here, other tabs would carry on as the new profile (a player writing
+// its progress into someone else's history). Tell them to reload.
+const tabs = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("couchside-profile");
+tabs?.addEventListener("message", () => location.reload());
+function announceProfileChange() {
+  tabs?.postMessage("changed");
+}
+
+// Nobody's signed in: stop asking the server for status.
+useAuth.subscribe((s, prev) => {
+  if (prev.user && !s.user) stopStatus();
+});
 
 // --- keeping the access token fresh ------------------------------------------------
 
