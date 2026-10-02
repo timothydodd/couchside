@@ -23,19 +23,28 @@ spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets: {{- toYaml . | nindent 8 }}
       {{- end }}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
-        {{- with .Values.hwaccel.dri.groups }}
-        supplementalGroups: {{ toJson . }}
-        {{- end }}
+      {{- $psc := deepCopy (.Values.podSecurityContext | default dict) }}
+      {{- with .Values.hwaccel.dri.groups }}
+      {{- $_ := set $psc "supplementalGroups" . }}
+      {{- end }}
+      {{- with $psc }}
+      securityContext: {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: couchside
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- if and .Values.hwaccel.dri.enabled .Values.hwaccel.dri.privileged }}
           securityContext:
+            {{- if and .Values.hwaccel.dri.enabled .Values.hwaccel.dri.privileged }}
             privileged: true
-          {{- end }}
+            {{- else if not .Values.hwaccel.dri.enabled }}
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: [ALL]
+            {{- else }}
+            allowPrivilegeEscalation: false
+            {{- end }}
           ports:
             - name: http
               containerPort: 8080
@@ -57,6 +66,14 @@ spec:
             {{- if .Values.auth.enabled }}
             - name: COUCHSIDE_AUTH
               value: "true"
+            {{- end }}
+            {{- with .Values.livetv.hdhomerun }}
+            - name: COUCHSIDE_HDHOMERUN
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.timezone }}
+            - name: TZ
+              value: {{ . | quote }}
             {{- end }}
             {{- if not .Values.discovery.enabled }}
             - name: COUCHSIDE_DISCOVERY
@@ -91,6 +108,9 @@ spec:
                   name: {{ include "couchside.omdbSecret" . }}
                   key: {{ .Values.omdb.existingSecretKey }}
             {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           volumeMounts:
             - name: data
               mountPath: /data
@@ -98,7 +118,11 @@ spec:
               mountPath: /cache
             - name: media
               mountPath: {{ .Values.media.mountPath }}
-              readOnly: true
+              readOnly: {{ .Values.media.readOnly }}
+            {{- if .Values.persistence.recordings.enabled }}
+            - name: recordings
+              mountPath: /recordings
+            {{- end }}
             {{- if .Values.hwaccel.dri.enabled }}
             - name: dri
               mountPath: /dev/dri
@@ -123,7 +147,7 @@ spec:
           nfs:
             server: {{ required "media.nfs.server is required" .Values.media.nfs.server }}
             path: {{ required "media.nfs.path is required" .Values.media.nfs.path }}
-            readOnly: true
+            readOnly: {{ .Values.media.readOnly }}
           {{- else if eq .Values.media.type "hostPath" }}
           hostPath:
             path: {{ required "media.hostPath.path is required" .Values.media.hostPath.path }}
@@ -131,10 +155,15 @@ spec:
           {{- else if eq .Values.media.type "pvc" }}
           persistentVolumeClaim:
             claimName: {{ required "media.pvc.claimName is required" .Values.media.pvc.claimName }}
-            readOnly: true
+            readOnly: {{ .Values.media.readOnly }}
           {{- else }}
           {{- fail "media.type must be nfs, hostPath or pvc" }}
           {{- end }}
+        {{- if .Values.persistence.recordings.enabled }}
+        - name: recordings
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.recordings.existingClaim | default (printf "%s-recordings" (include "couchside.fullname" .)) }}
+        {{- end }}
         {{- if .Values.hwaccel.dri.enabled }}
         - name: dri
           hostPath:

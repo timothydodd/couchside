@@ -1,6 +1,5 @@
 Couchside is starting.
-
-{{- if .Values.ingress.enabled }}
+{{ if .Values.ingress.enabled }}
 Open: http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}
 {{- else }}
 Port-forward to try it:
@@ -9,11 +8,24 @@ Port-forward to try it:
 {{- end }}
 
 Then add libraries under {{ .Values.media.mountPath }} on the Libraries page.
-{{- if not (or .Values.omdb.apiKey .Values.omdb.existingSecret) }}
+Titles, posters and backdrops come from TMDB{{ if not .Values.tmdb.enabled }} (turned off: tmdb.enabled is false){{ end }}.
+{{- if .Values.auth.enabled }}
 
-No OMDb key configured: titles come from filenames and there are no posters.
-  kubectl -n {{ .Release.Namespace }} create secret generic couchside-omdb --from-literal=omdb-api-key=<key>
-  helm upgrade {{ .Release.Name }} ... --set omdb.existingSecret=couchside-omdb
+Passwords are required (auth.enabled). If no admin has one yet, the log
+prints a one-time setup code:
+  kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "couchside.fullname" . }} | grep -i "setup code"
+{{- else }}
+
+Sign-in is passwordless at first: pick a profile. Before putting Couchside on
+the internet, set auth.enabled=true, give every account a password and serve
+it over HTTPS (docs/install.md).
 {{- end }}
 
-Couchside has no login yet. Keep it on your LAN or behind an auth proxy.
+Lost the admin password?
+  kubectl -n {{ .Release.Namespace }} exec -it deploy/{{ include "couchside.fullname" . }} -- couchside reset-password -admin <name>
+{{- if and .Values.livetv.hdhomerun (not .Values.persistence.recordings.enabled) }}
+
+Live TV is on but persistence.recordings isn't: recordings go to the
+container and are lost on restart. Enable it, or pick a folder under a
+writable {{ .Values.media.mountPath }} (media.readOnly=false) in Settings.
+{{- end }}

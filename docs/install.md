@@ -57,7 +57,15 @@ helm install couchside deploy/helm/couchside -n media \
 ```
 
 - Media can be NFS, a hostPath or an existing PVC (`media.type`). The SQLite
-  database lives on its own PVC.
+  database lives on its own PVC. Media is mounted read-only unless you set
+  `media.readOnly=false`, which recording into a library folder and deleting
+  files from the Manage view both need.
+- Live TV: `--set livetv.hdhomerun=<tuner IP> --set timezone=America/New_York`,
+  and `persistence.recordings.enabled=true` for a recordings volume (without
+  one, recordings are lost when the pod restarts). Anything else goes in
+  `extraEnv`.
+- The memory limit (4Gi) covers the server and every ffmpeg it runs; raise it
+  for several software 4K transcodes at once.
 - The Deployment uses `strategy: Recreate` because the database sits on a
   ReadWriteOnce volume. Don't scale it past one replica.
 - LAN discovery needs `discovery.hostNetwork=true` (multicast doesn't reach
