@@ -90,7 +90,10 @@ used instead.
 - Skipping starts 1 second into a break and stops 1 second before its end, so
   it never cuts into the show (Settings → Advanced).
 - Other `.ts` files, such as older Plex DVR recordings, can be checked from the
-  player's Commercials page.
+  player's Commercials page, or a whole show at once: on its page, the **⋯**
+  menu has **Find commercials in every episode** (only episodes not checked
+  yet) and **Check every episode again**. Admins only; the jobs show on the
+  Activity page.
 - Zip installs: put `comskip` on the PATH or set `COUCHSIDE_COMSKIP`;
   `COUCHSIDE_COMSKIP_INI` points at a tuned `comskip.ini` (keep `output_edl=1`).
 

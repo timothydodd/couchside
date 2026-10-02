@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, ReactNode, Ref } from "react";
+import { useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode, type Ref } from "react";
 import { Loader2, Search } from "lucide-react";
 
 // Shared primitives, ported from Portside Lite's components/ui.tsx so both
@@ -148,6 +148,55 @@ export function SearchInput({
     <div className={`relative ${className}`}>
       <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-content-muted" />
       <input {...input} className="field w-full pl-8" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+    </div>
+  );
+}
+
+export interface MenuItem {
+  id: string;
+  label: string;
+  detail?: string;
+  onSelect: () => void;
+}
+
+/** A small button that opens a list of less-used actions. Closes on pick, outside click or Escape. */
+export function MenuButton({ label, icon, items }: { label: string; icon: ReactNode; items: MenuItem[] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  return (
+    <div ref={ref} className="relative inline-flex">
+      <button className="btn-ghost !px-2 !py-2" aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        {icon}
+      </button>
+      {open && (
+        <div role="menu" className="menu">
+          {items.map((it) => (
+            <button
+              key={it.id}
+              role="menuitem"
+              className="menu-item"
+              onClick={() => {
+                setOpen(false);
+                it.onSelect();
+              }}
+            >
+              {it.label}
+              {it.detail && <span className="menu-detail">{it.detail}</span>}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

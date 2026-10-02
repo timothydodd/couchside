@@ -312,6 +312,7 @@ export interface Status {
   jobs: JobCounts;
   scanEvery: string;
   workers: number;
+  comskip?: boolean; // commercial detection is available
   transcode?: {
     hwaccel: string;
     requested: string;

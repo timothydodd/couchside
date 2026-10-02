@@ -158,6 +158,17 @@ body {
   .card {
     @apply rounded-lg border border-border-light bg-surface;
   }
+  /* Dropdown of less-used actions (MenuButton). */
+  .menu {
+    @apply absolute left-0 top-full z-20 mt-1 flex w-72 flex-col rounded-lg border border-border-light bg-raised p-1;
+    box-shadow: var(--shadow-md);
+  }
+  .menu-item {
+    @apply flex flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left text-sm text-content hover:bg-muted focus-visible:bg-muted focus-visible:outline-none;
+  }
+  .menu-detail {
+    @apply text-xs text-content-muted;
+  }
   .card-title {
     @apply text-xs font-semibold uppercase tracking-wide text-content-muted;
   }

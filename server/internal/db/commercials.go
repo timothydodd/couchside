@@ -63,3 +63,13 @@ func (d *DB) LatestJob(ctx context.Context, kind string, refID int64) (*Job, err
 	}
 	return &j, nil
 }
+
+// CommercialCandidates lists an item's files to check for commercials, in
+// episode order: playable, not extras, and (unless redo) not already checked
+// since they last changed.
+func (d *DB) CommercialCandidates(ctx context.Context, itemID int64, redo bool) ([]File, error) {
+	return d.queryFiles(ctx, `LEFT JOIN episodes e ON e.id = f.episode_id
+		WHERE f.media_item_id = ? AND f.problem = '' AND f.role <> 'extra'
+		  AND (? OR NOT EXISTS (SELECT 1 FROM commercials c WHERE c.file_id = f.id AND c.size = f.size AND c.mtime = f.mtime))
+		ORDER BY COALESCE(e.season, 0), COALESCE(e.episode, 0), f.part_no, f.size DESC`, itemID, redo)
+}

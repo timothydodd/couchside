@@ -72,3 +72,39 @@ func (s *Server) findCommercials(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusAccepted)
 }
+
+// findItemCommercials queues commercial detection for every file of a movie
+// or series: only ones not checked yet, or all of them with {"redo": true}.
+func (s *Server) findItemCommercials(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	var in struct{ Redo bool }
+	if err := decode(r, &in); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if !s.worker.CommercialsAvailable() {
+		writeErr(w, badRequest("commercial detection needs comskip installed on the server"))
+		return
+	}
+	ctx := r.Context()
+	if _, err := s.db.Item(ctx, id); err != nil {
+		writeErr(w, err)
+		return
+	}
+	files, err := s.db.CommercialCandidates(ctx, id, in.Redo)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	for _, f := range files {
+		if err := s.worker.EnqueueCommercials(ctx, f.ID, f.Path); err != nil {
+			writeErr(w, err)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"queued": len(files)})
+}
