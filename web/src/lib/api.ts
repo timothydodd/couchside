@@ -65,11 +65,16 @@ export async function api<T = void>(path: string, init?: RequestInit & { json?: 
 // Last response per URL, so navigating back paints instantly while it refreshes.
 const cache = new Map<string, unknown>();
 
-/** Fetch JSON with stale-while-revalidate caching and optional polling. */
-export function useApi<T>(url: string | null, opts: { pollMs?: number } = {}) {
-  const [data, setData] = useState<T | undefined>(() => (url ? (cache.get(url) as T | undefined) : undefined));
+/**
+ * Fetch JSON with stale-while-revalidate caching and optional polling. With
+ * fresh, nothing is shown from the cache: data stays undefined until this
+ * request answers (for values that mustn't be stale, like a resume point).
+ */
+export function useApi<T>(url: string | null, opts: { pollMs?: number; fresh?: boolean } = {}) {
+  const cached = (u: string | null) => (u && !opts.fresh ? (cache.get(u) as T | undefined) : undefined);
+  const [data, setData] = useState<T | undefined>(() => cached(url));
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(!!url && !cache.has(url));
+  const [loading, setLoading] = useState(!!url && cached(url) === undefined);
   const urlRef = useRef(url);
   urlRef.current = url;
 
@@ -92,14 +97,16 @@ export function useApi<T>(url: string | null, opts: { pollMs?: number } = {}) {
 
   useEffect(() => {
     if (!url) return;
-    setData(cache.get(url) as T | undefined);
-    setLoading(!cache.has(url));
+    const seed = cached(url);
+    setData(seed);
+    setLoading(seed === undefined);
     void reload();
     if (!opts.pollMs) return;
     const t = setInterval(() => {
       if (document.visibilityState === "visible") void reload();
     }, opts.pollMs);
     return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, opts.pollMs, reload]);
 
   return { data, error, loading, reload };
