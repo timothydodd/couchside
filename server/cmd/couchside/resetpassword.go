@@ -82,9 +82,6 @@ func resetPassword(args []string) error {
 		return err
 	}
 	fmt.Printf("Password set for %s (%s); signed out everywhere.\n", p.Name, role)
-	if !cfg.Auth {
-		fmt.Println("Accounts are off on this server (COUCHSIDE_AUTH), so it isn't used yet.")
-	}
 	return nil
 }
 

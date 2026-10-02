@@ -93,10 +93,11 @@ func (d *DB) SetupAdmin(ctx context.Context, name, hash string) (Profile, error)
 	return p, uniqueName(err)
 }
 
-// CreateAccount adds a profile that signs in with a (temporary) password.
+// CreateAccount adds a profile, with a temporary password or (passwordless sign-in) none.
 func (d *DB) CreateAccount(ctx context.Context, name, color, role string, canRecord bool, hash string) (Profile, error) {
+	// A temporary password must be replaced at first sign-in; no password means passwordless.
 	p, err := scanProfile(d.sql.QueryRowContext(ctx, `INSERT INTO profiles (name, color, role, can_record, password_hash,
-		must_change_password) VALUES (?, ?, ?, ?, ?, 1) RETURNING `+profileCols, name, color, role, canRecord, hash))
+		must_change_password) VALUES (?, ?, ?, ?, ?, ?) RETURNING `+profileCols, name, color, role, canRecord, hash, hash != ""))
 	return p, uniqueName(err)
 }
 
@@ -301,4 +302,11 @@ func (d *DB) RuleOwnerForSeries(ctx context.Context, seriesID string) (bool, int
 		return false, 0, nil
 	}
 	return err == nil, owner, err
+}
+
+// AnyPassword reports whether any profile has a password set.
+func (d *DB) AnyPassword(ctx context.Context) (bool, error) {
+	var n int
+	err := d.sql.QueryRowContext(ctx, `SELECT COUNT(*) FROM profiles WHERE password_hash <> ''`).Scan(&n)
+	return n > 0, err
 }

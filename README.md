@@ -73,17 +73,17 @@ A lightweight self-hosted media server for a home k3s cluster. It scans your mov
 
 ## Accounts
 
-Off by default: anyone who can reach Couchside picks a profile, which suits a trusted home network. Set `COUCHSIDE_AUTH=true` (Helm `auth.enabled`) before putting it on the internet, and serve it over HTTPS.
+Every profile is an account and every request carries a session, but at home nobody has to type a password: **passwordless sign-in** (on by default) lists the profiles, and picking one signs in. A profile with a password still asks for it, so lock the admin's. Turn passwordless off in **Settings → Accounts**, or for good with `COUCHSIDE_AUTH=true` (Helm `auth.enabled`), before putting Couchside on the internet, and serve it over HTTPS.
 
-- **Profiles become accounts.** Each signs in with a name and password (Argon2id hashes). There's no public list of names.
-- **First run.** With no admin yet, the server log prints a one-time setup code. Open the UI and enter it with your name and a password. Use an existing profile's name to keep its watch history.
+- **Profiles are accounts.** Passwords are optional while passwordless sign-in is on (Argon2id hashes when set). With it off, sign-in is by name and password and no list of names is shown.
+- **First run.** A new server is passwordless with one admin profile, "Me". With `COUCHSIDE_AUTH=true` and no admin password yet, the server log prints a one-time setup code; open the UI and enter it with your name and a password. Use an existing profile's name to keep its watch history.
 - **Roles.** Admins reach settings, libraries, file management, Activity and **Settings → Accounts**. Users watch and change their own preferences and password. Recording is a per-user switch an admin turns on; people allowed to record can change only their own recordings and series.
-- **Account manager.** Add accounts with a temporary password (changed at first sign-in), set role and recording, reset passwords, disable or delete accounts, and sign out their devices.
-- **Sessions.** Access tokens last 15 minutes; refresh tokens are random, stored only as hashes, and replaced on every use. A replayed refresh token ends its session. Web sessions end after 30 days unused, TV apps after 90. Changing a password signs out your other devices.
+- **Account manager.** Add accounts (with a temporary password changed at first sign-in, or none when passwordless), set role and recording, reset or remove passwords, disable or delete accounts, and sign out their devices.
+- **Sessions.** Access tokens last 15 minutes in browsers (renewed in the background) and 12 hours on TVs, whose video players can't swap tokens mid-film; signing a device out stops it at once either way. Refresh tokens are random, stored only as hashes, and replaced on every use. A replayed refresh token ends its session. Web sessions end after 30 days unused, TV apps after 90. Changing a password signs out your other devices.
 - **Guessing.** Failed sign-ins are slowed per address and per account, then locked out for up to 15 minutes, and logged.
 - **Lost the admin password?** `couchside reset-password -admin <name>` inside the container (`kubectl exec -it deploy/couchside -- …`).
 - **Open to anyone:** `/healthz`, the sign-in endpoints, and artwork (posters, backdrops, episode stills), so TV apps can load images without a token. Everything else, streams included, needs a session.
-- **TV apps** sign in with `POST /api/auth/login` (`"client": "tv"`), send `Authorization: Bearer <accessToken>`, and renew with `POST /api/auth/refresh` (`{"refreshToken": …}`).
+- **TV apps** read `GET /api/auth`, sign in with `POST /api/auth/pick` (`{"profileId", "client": "tv"}`, passwordless) or `POST /api/auth/login` (`"client": "tv"`), send `Authorization: Bearer <accessToken>`, and renew with `POST /api/auth/refresh` (`{"refreshToken": …}`).
 
 ## Not built yet
 
@@ -170,7 +170,7 @@ git tag v0.2.0 && git push origin v0.2.0
 | `COUCHSIDE_WORKERS` | `2` | Concurrent background jobs |
 | `COUCHSIDE_SCAN_INTERVAL` | `6h` | Periodic rescan; `0` disables it |
 | `COUCHSIDE_DEBUG` | none | Debug logging |
-| `COUCHSIDE_AUTH` | `false` | Accounts: every profile signs in with a password |
+| `COUCHSIDE_AUTH` | `false` | Require passwords: no passwordless sign-in (for servers on the internet) |
 | `COUCHSIDE_HWACCEL` | `none` | `vaapi`, `qsv` or `nvenc`; falls back to software if unusable |
 | `COUCHSIDE_VAAPI_DEVICE` | `/dev/dri/renderD128` | VAAPI render node |
 | `COUCHSIDE_MAX_TRANSCODES` | `2` | Live transcode sessions at once; idle ones are evicted |

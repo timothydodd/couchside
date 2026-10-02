@@ -9,7 +9,6 @@ import LibrariesPage from "./pages/LibrariesPage";
 import LibraryPage from "./pages/LibraryPage";
 import LibraryManagePage from "./pages/LibraryManagePage";
 import PlayerPage from "./pages/PlayerPage";
-import ProfilesPage from "./pages/ProfilesPage";
 import LiveTvPage from "./pages/LiveTvPage";
 import LivePlayerPage from "./pages/LivePlayerPage";
 import RecordingPlayerPage from "./pages/RecordingPlayerPage";
@@ -34,12 +33,10 @@ export default function App() {
 
   if (!auth.loaded) return null;
   if (auth.error) return <EmptyState title="Can't reach Couchside">{auth.error}</EmptyState>;
-  if (auth.enabled) {
-    if (auth.setupRequired) return <SetupPage />;
-    if (!auth.user) return <SignInPage />;
-    if (auth.user.mustChangePassword) return <ChangePasswordPage />;
-    if (route.name === "profiles") return <SignInPage switching />;
-  }
+  if (auth.setupRequired) return <SetupPage />;
+  if (!auth.user) return <SignInPage />;
+  if (auth.user.mustChangePassword) return <ChangePasswordPage />;
+  if (route.name === "profiles") return <SignInPage switching />;
   return <Signed />;
 }
 
@@ -48,7 +45,6 @@ function Signed() {
   const route = useRouter((s) => s.route);
   const path = useRouter((s) => s.path);
   const loaded = useProfile((s) => s.loaded);
-  const mustPick = useProfile((s) => !s.chosen && s.profiles.length > 1);
   const admin = useIsAdmin();
   const adminOnly = route.name === "activity" || route.name === "libraries" || route.name === "manage";
 
@@ -57,10 +53,8 @@ function Signed() {
     startStatus();
   }, []);
 
-  // Wait for the profile: everything shown (progress, favourites, theme) belongs to it.
+  // Wait for the profile: everything shown (progress, favourites) belongs to it.
   if (!loaded) return null;
-  // With several profiles, this browser picks one first; with one, it's used silently.
-  if (mustPick || route.name === "profiles") return <ProfilesPage />;
 
   // The player takes over the whole window.
   if (route.name === "play") return <PlayerPage fileId={route.fileId} />;

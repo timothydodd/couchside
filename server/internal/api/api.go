@@ -39,11 +39,10 @@ type Server struct {
 	tc        *transcode.Manager
 	tv        *livetv.Service // nil when no tuner is configured
 	version   string
-	profiles  profileIDs
 	presence  *presence
 	sys       sysstat.Sampler
 	index     searchIndex
-	auth      *authState // nil when accounts are off
+	auth      *authState
 }
 
 func init() {
@@ -53,13 +52,11 @@ func init() {
 
 func New(d *db.DB, cfg config.Config, w *worker.Worker, providers *metadata.Chain, tc *transcode.Manager, tv *livetv.Service, version string) (*Server, error) {
 	s := &Server{db: d, cfg: cfg, worker: w, providers: providers, tc: tc, tv: tv, version: version, presence: newPresence()}
-	if cfg.Auth {
-		key, err := auth.LoadKey(filepath.Join(cfg.DataDir, "auth.key"))
-		if err != nil {
-			return nil, fmt.Errorf("auth key: %w", err)
-		}
-		s.auth = newAuthState(key)
+	key, err := auth.LoadKey(filepath.Join(cfg.DataDir, "auth.key"))
+	if err != nil {
+		return nil, fmt.Errorf("auth key: %w", err)
 	}
+	s.auth = newAuthState(key)
 	return s, nil
 }
 
@@ -77,9 +74,6 @@ func (s *Server) Run(ctx context.Context) {
 			}
 		}
 	}()
-	if !s.cfg.Auth {
-		return
-	}
 	// Print the setup code at start-up if there's no admin yet.
 	if _, err := s.setupNeeded(ctx); err != nil {
 		slog.Error("accounts", "err", err)
@@ -99,6 +93,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/login", s.login)
 		r.Post("/auth/refresh", s.refresh)
 		r.Post("/auth/setup", s.setup)
+		r.Post("/auth/pick", s.pick)
 
 		r.Group(func(r chi.Router) {
 			r.Use(s.authenticate, s.presence.track)
@@ -151,11 +146,8 @@ func (s *Server) userRoutes(r chi.Router) {
 	r.Get("/search", s.search)
 
 	r.Get("/profiles", s.listProfiles)
-	r.Post("/profiles", s.createProfile)
 	r.Put("/profiles/{id}", s.updateProfile)
 	r.Patch("/profiles/{id}/prefs", s.profilePrefs)
-	r.Delete("/profiles/{id}", s.deleteProfile)
-	r.Post("/profiles/{id}/select", s.selectProfile)
 
 	r.Get("/items", s.listItems)
 	r.Get("/items/{id}", s.getItem)
@@ -203,6 +195,7 @@ func (s *Server) adminRoutes(r chi.Router) {
 	r.Get("/system", s.system)
 
 	r.Get("/accounts", s.listAccounts)
+	r.Put("/settings/passwordless", s.setPasswordless)
 	r.Post("/accounts", s.createAccount)
 	r.Put("/accounts/{id}", s.updateAccount)
 	r.Post("/accounts/{id}/password", s.resetPassword)

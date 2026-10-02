@@ -16,6 +16,18 @@ import { authError, useAuth } from "../../stores/auth";
 export default function AccountManager() {
   const { data, error, loading, reload } = useApi<Profile[]>("/api/accounts");
   const [open, setOpen] = useState<number | "new" | null>(null);
+  const { passwordless, passwordlessLocked } = useAuth();
+  const [toggleErr, setToggleErr] = useState<string | null>(null);
+
+  const setPasswordless = async (enabled: boolean) => {
+    setToggleErr(null);
+    try {
+      await api("/api/settings/passwordless", { method: "PUT", json: { enabled } });
+      await useAuth.getState().load();
+    } catch (e) {
+      setToggleErr(authError(e));
+    }
+  };
 
   return (
     <section className="card p-4">
@@ -30,6 +42,24 @@ export default function AccountManager() {
           </button>
         )}
       </div>
+      <label className="mb-3 flex items-start gap-2 rounded-md border border-border-light p-3 text-sm text-content-secondary">
+        <input
+          type="checkbox"
+          className="accent-brand mt-0.5"
+          checked={passwordless}
+          disabled={passwordlessLocked}
+          onChange={(e) => void setPasswordless(e.target.checked)}
+        />
+        <span>
+          <span className="font-medium text-content">Passwordless sign-in</span>
+          <span className="block text-xs text-content-muted">
+            {passwordlessLocked
+              ? "Off: COUCHSIDE_AUTH=true on the server requires passwords."
+              : "Anyone who can reach Couchside picks a profile to sign in. Profiles with a password still ask for it, so lock admin accounts. Turn this off before exposing Couchside to the internet."}
+          </span>
+        </span>
+      </label>
+      {toggleErr && <ErrorNote>{toggleErr}</ErrorNote>}
       {loading && !data && <Spinner />}
       {error && <ErrorNote>{error}</ErrorNote>}
       {open === "new" && (
@@ -69,6 +99,7 @@ export default function AccountManager() {
 }
 
 function AccountBadges({ p }: { p: Profile }) {
+  const passwordless = useAuth((s) => s.passwordless);
   return (
     <span className="flex shrink-0 items-center gap-1.5">
       {p.role === "admin" && <span className="tint-info rounded px-1.5 text-[11px] font-semibold">Admin</span>}
@@ -77,7 +108,7 @@ function AccountBadges({ p }: { p: Profile }) {
           <CircleDot size={10} /> Records
         </span>
       )}
-      {!p.hasPassword && <span className="tint-warning rounded px-1.5 text-[11px] font-semibold">No password</span>}
+      {!p.hasPassword && <span className={`${passwordless ? "tint-muted" : "tint-warning"} rounded px-1.5 text-[11px] font-semibold`}>No password</span>}
       {p.hasPassword && p.mustChangePassword && <span className="tint-muted rounded px-1.5 text-[11px] font-semibold">Temporary password</span>}
       {p.disabled && <span className="tint-critical rounded px-1.5 text-[11px] font-semibold">Disabled</span>}
     </span>
@@ -87,6 +118,7 @@ function AccountBadges({ p }: { p: Profile }) {
 /** Add an account (no account given) or edit one. */
 function AccountForm({ account, onDone, onChanged }: { account?: Profile; onDone: () => void; onChanged?: () => void }) {
   const me = useAuth((s) => s.user);
+  const passwordless = useAuth((s) => s.passwordless);
   const [name, setName] = useState(account?.name ?? "");
   const [color, setColor] = useState<ProfileColor>(account?.color ?? "accent");
   const [role, setRole] = useState<Profile["role"]>(account?.role ?? "user");
@@ -185,17 +217,21 @@ function AccountForm({ account, onDone, onChanged }: { account?: Profile; onDone
         )}
         {!account && (
           <>
-            <span className="text-content-muted">Temporary password</span>
+            <span className="text-content-muted">{passwordless ? "Password" : "Temporary password"}</span>
             <div>
               <input className="field w-full max-w-xs" type="text" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} />
-              <p className="mt-1 text-xs text-content-muted">At least {MIN_PASSWORD} characters. They'll choose their own when they first sign in.</p>
+              <p className="mt-1 text-xs text-content-muted">
+                {passwordless
+                  ? `Optional. Leave it empty to sign in by picking the profile; a temporary password (at least ${MIN_PASSWORD} characters) is replaced at first sign-in.`
+                  : `At least ${MIN_PASSWORD} characters. They'll choose their own when they first sign in.`}
+              </p>
             </div>
           </>
         )}
       </div>
       {msg && (msg.ok ? <span className="text-xs text-good">{msg.text}</span> : <ErrorNote>{msg.text}</ErrorNote>)}
       <div className="flex items-center gap-2">
-        <button type="submit" className="btn-primary" disabled={busy || !name.trim() || (!account && password.trim().length < MIN_PASSWORD)}>
+        <button type="submit" className="btn-primary" disabled={busy || !name.trim() || (!account && (password !== "" || !passwordless) && password.trim().length < MIN_PASSWORD)}>
           {account ? (
             "Save"
           ) : (
@@ -237,6 +273,22 @@ function AccountForm({ account, onDone, onChanged }: { account?: Profile; onDone
                 >
                   <KeyRound size={14} /> Reset
                 </button>
+                {passwordless && account.hasPassword && (
+                  <button
+                    type="button"
+                    className="btn-quiet"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(
+                        () => api(`/api/accounts/${account.id}/password`, { method: "POST", json: { password: "" } }),
+                        `${account.name} now signs in by picking the profile.`,
+                        false,
+                      )
+                    }
+                  >
+                    Remove password
+                  </button>
+                )}
               </div>
             </div>
           )}

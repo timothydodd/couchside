@@ -4,20 +4,27 @@ import { ApiError, api, setAuthHooks } from "../lib/api";
 import type { AuthInfo, Profile, SignedIn } from "../lib/types";
 
 /**
- * Accounts, when the server has them on (COUCHSIDE_AUTH). Tokens live in
- * HttpOnly cookies: a 15-minute access cookie, renewed in the background
- * before it runs out (video, images and hls.js use it too and can't retry),
- * and a refresh cookie per signed-in profile that only /api/auth sees.
+ * Accounts are always on. Signing in is by name and password, or with
+ * passwordless sign-in on (the default at home) by picking a profile. Tokens
+ * live in HttpOnly cookies: a 15-minute access cookie, renewed in the
+ * background before it runs out (video, images and hls.js use it too and
+ * can't retry), and a refresh cookie per signed-in profile that only
+ * /api/auth sees.
  */
 interface AuthState {
   loaded: boolean;
   error: string | null;
-  enabled: boolean;
+  passwordless: boolean;
+  passwordlessLocked: boolean;
+  /** Passwordless: every profile; otherwise none. */
+  profiles: AuthInfo["profiles"];
   setupRequired: boolean;
   user: Profile | null;
   signedIn: AuthInfo["signedIn"];
   load: () => Promise<void>;
   login: (name: string, password: string) => Promise<void>;
+  /** Passwordless sign-in to a profile without a password. */
+  pick: (profileId: number) => Promise<void>;
   setup: (code: string, name: string, password: string) => Promise<void>;
   /** Switch to another profile this browser is signed in to. */
   switchTo: (profileId: number) => Promise<void>;
@@ -28,17 +35,27 @@ interface AuthState {
 export const useAuth = create<AuthState>((set, get) => ({
   loaded: false,
   error: null,
-  enabled: false,
+  passwordless: false,
+  passwordlessLocked: false,
+  profiles: [],
   setupRequired: false,
   user: null,
   signedIn: [],
   load: async () => {
     try {
       const info = await api<AuthInfo>("/api/auth");
-      set({ enabled: info.enabled, setupRequired: info.setupRequired, user: info.user, signedIn: info.signedIn, error: null });
+      set({
+        passwordless: info.passwordless,
+        passwordlessLocked: info.passwordlessLocked,
+        profiles: info.profiles ?? [],
+        setupRequired: info.setupRequired,
+        user: info.user,
+        signedIn: info.signedIn,
+        error: null,
+      });
       if (info.user && info.accessExpiresAt) schedule(info.accessExpiresAt);
       // The access cookie ran out while we were away; the refresh cookie may still be good.
-      else if (info.enabled && !info.user && info.signedIn.length) await refreshSession();
+      else if (!info.user && info.signedIn.length) await refreshSession();
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) });
     }
@@ -46,6 +63,10 @@ export const useAuth = create<AuthState>((set, get) => ({
   },
   login: async (name, password) => {
     await api<SignedIn>("/api/auth/login", { method: "POST", json: { name, password, client: "web" } });
+    location.assign("/");
+  },
+  pick: async (profileId) => {
+    await api<SignedIn>("/api/auth/pick", { method: "POST", json: { profileId, client: "web" } });
     location.assign("/");
   },
   setup: async (code, name, password) => {
@@ -118,14 +139,12 @@ function schedule(exp: number) {
 
 // Timers stall in background tabs and sleeping laptops; catch up on return.
 document.addEventListener("visibilitychange", () => {
-  const { enabled, user } = useAuth.getState();
-  if (document.visibilityState === "visible" && enabled && user && expiresAt * 1000 - Date.now() < 180_000) void refreshSession();
+  const { user } = useAuth.getState();
+  if (document.visibilityState === "visible" && user && expiresAt * 1000 - Date.now() < 180_000) void refreshSession();
 });
 
 setAuthHooks({
   refresh: async () => {
-    const st = useAuth.getState();
-    if (!st.enabled) return false;
     const ok = await refreshSession();
     // The session is over (signed out elsewhere, expired): back to sign-in.
     if (!ok) useAuth.setState({ user: null });
@@ -138,9 +157,9 @@ setAuthHooks({
 });
 
 /** Admins can reach settings, libraries and management (everyone, with accounts off). */
-export const useIsAdmin = () => useAuth((s) => !s.enabled || s.user?.role === "admin");
+export const useIsAdmin = () => useAuth((s) => s.user?.role === "admin");
 /** Admins, and users an admin has allowed, can schedule recordings. */
-export const useCanRecord = () => useAuth((s) => !s.enabled || s.user?.role === "admin" || !!s.user?.canRecord);
+export const useCanRecord = () => useAuth((s) => s.user?.role === "admin" || !!s.user?.canRecord);
 /** Checks whether the user may change a recording or rule by its ownerId (0 = admins only). */
 export function useOwnerCheck() {
   const admin = useIsAdmin();

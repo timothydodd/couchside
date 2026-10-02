@@ -116,7 +116,7 @@ func run() error {
 	}
 	go apiServer.Run(ctx)
 	if cfg.Auth {
-		slog.Info("accounts are on: every profile signs in with a password")
+		slog.Info("COUCHSIDE_AUTH is set: every profile signs in with a password (no passwordless sign-in)")
 	}
 	srv := &http.Server{
 		Addr:              cfg.Addr,

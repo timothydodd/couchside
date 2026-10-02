@@ -568,13 +568,21 @@ export interface SearchResult {
 // --- Accounts ----------------------------------------------------------------------
 
 export interface AuthInfo {
-  enabled: boolean;
+  enabled: boolean; // always true
+  /** Picking a profile signs in (profiles with a password still ask for it). */
+  passwordless: boolean;
+  /** COUCHSIDE_AUTH=true on the server requires passwords. */
+  passwordlessLocked: boolean;
+  /** Passwordless: every profile to pick from. */
+  profiles: ProfileStub[];
   setupRequired: boolean;
   user: Profile | null;
   accessExpiresAt?: number;
   /** Profiles this browser holds a session for (switch without a password). */
-  signedIn: Pick<Profile, "id" | "name" | "color">[];
+  signedIn: ProfileStub[];
 }
+
+export type ProfileStub = Pick<Profile, "id" | "name" | "color" | "hasPassword">;
 
 /** What sign-in, setup and refresh return to the web (tokens travel as cookies). */
 export interface SignedIn {

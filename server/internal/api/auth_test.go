@@ -226,30 +226,71 @@ func TestAccountsFlow(t *testing.T) {
 	}
 }
 
-func TestAccountsOffChangesNothing(t *testing.T) {
-	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+func TestPasswordless(t *testing.T) {
+	dir := t.TempDir()
+	d, err := db.Open(filepath.Join(dir, "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	s, err := New(d, config.Config{}, nil, nil, nil, nil, "test")
+	s, err := New(d, config.Config{DataDir: dir}, nil, nil, nil, nil, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 	c := newClient(t, ts.URL)
-	for _, path := range []string{"/api/home", "/api/libraries", "/api/accounts", "/api/profiles"} {
-		if code := c.do("GET", path, nil, nil); code != 200 {
-			t.Errorf("%s = %d", path, code)
-		}
+
+	// Accounts are always on: nothing answers without a session.
+	if code := c.do("GET", "/api/home", nil, nil); code != 401 {
+		t.Fatalf("home without a session = %d", code)
 	}
+	// A server where nobody has a password is passwordless, and lists its profiles.
 	var info authInfo
 	c.do("GET", "/api/auth", nil, &info)
-	if info.Enabled {
-		t.Fatal("accounts should be off")
+	if !info.Passwordless || info.SetupRequired || len(info.Profiles) != 1 || info.Profiles[0].Name != "Me" {
+		t.Fatalf("auth info = %+v", info)
 	}
-	if code := c.do("POST", "/api/auth/login", map[string]string{"name": "Me", "password": "whatever1"}, nil); code != 400 {
-		t.Fatalf("login with accounts off = %d", code)
+	// Picking a profile signs in with real tokens; the oldest profile is the admin.
+	var tk tokens
+	if code := c.do("POST", "/api/auth/pick", map[string]any{"profileId": info.Profiles[0].ID}, &tk); code != 200 {
+		t.Fatalf("pick = %d", code)
+	}
+	if tk.User.Role != "admin" || !tk.User.CanRecord {
+		t.Fatalf("picked user = %+v", tk.User)
+	}
+	if code := c.do("GET", "/api/libraries", nil, nil); code != 200 {
+		t.Fatalf("admin route after picking = %d", code)
+	}
+	// Accounts can be made without a password, and picked.
+	var kid db.Profile
+	if code := c.do("POST", "/api/accounts", map[string]any{"name": "Kid"}, &kid); code != 201 || kid.HasPassword || kid.MustChangePassword {
+		t.Fatalf("passwordless account = %d %+v", code, kid)
+	}
+	// An admin who sets a password is asked for it, even in passwordless mode.
+	if code := c.do("POST", "/api/auth/password", map[string]string{"current": "", "password": "admin password"}, nil); code != 204 {
+		t.Fatalf("first password = %d", code)
+	}
+	tv := newClient(t, ts.URL)
+	var res map[string]string
+	if code := tv.do("POST", "/api/auth/pick", map[string]any{"profileId": 1, "client": "tv"}, &res); code != 401 || res["code"] != "password_required" {
+		t.Fatalf("picking a profile with a password = %d %v", code, res)
+	}
+	if code := tv.do("POST", "/api/auth/pick", map[string]any{"profileId": kid.ID, "client": "tv"}, &tk); code != 200 || tk.AccessToken == "" {
+		t.Fatalf("tv pick = %d %+v", code, tk)
+	}
+	// Turning passwordless off: picking stops working, passwords don't.
+	if code := c.do("PUT", "/api/settings/passwordless", map[string]bool{"enabled": false}, nil); code != 204 {
+		t.Fatalf("passwordless off = %d", code)
+	}
+	if code := tv.do("POST", "/api/auth/pick", map[string]any{"profileId": kid.ID, "client": "tv"}, nil); code != 403 {
+		t.Fatalf("pick with passwordless off = %d", code)
+	}
+	c.do("GET", "/api/auth", nil, &info)
+	if info.Passwordless || len(info.Profiles) != 0 {
+		t.Fatalf("auth info with passwordless off = %+v (no profile list for strangers)", info)
+	}
+	if code := newClient(t, ts.URL).do("POST", "/api/auth/login", map[string]string{"name": "Me", "password": "admin password"}, nil); code != 200 {
+		t.Fatalf("password login = %d", code)
 	}
 }

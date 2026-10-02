@@ -9,6 +9,7 @@ import { authError, useAuth } from "../../stores/auth";
 /** Your own account: password, signed-in devices, sign out. Only with accounts on. */
 export default function AccountSettings() {
   const { user, changePassword, logout } = useAuth();
+  const hasPassword = !!user?.hasPassword;
   const [current, setCurrent] = useState("");
   const [password, setPassword] = useState<string | null>(null);
   const [formKey, setFormKey] = useState(0);
@@ -26,7 +27,11 @@ export default function AccountSettings() {
       setPassword(null);
       setFormKey((k) => k + 1);
       setDevicesKey((k) => k + 1);
-      setMsg({ ok: true, text: "Password changed. Your other devices have been signed out." });
+      setMsg({
+        ok: true,
+        text: hasPassword ? "Password changed. Your other devices have been signed out." : "Password set. Picking your profile now asks for it.",
+      });
+      void useAuth.getState().load();
     } catch (e) {
       setMsg({ ok: false, text: authError(e) });
     } finally {
@@ -62,14 +67,20 @@ export default function AccountSettings() {
           void save();
         }}
       >
-        <label className="block">
-          <span className="field-label">Current password</span>
-          <input className="field w-full" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
-        </label>
+        {hasPassword ? (
+          <label className="block">
+            <span className="field-label">Current password</span>
+            <input className="field w-full" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
+          </label>
+        ) : (
+          <p className="text-xs text-content-muted sm:self-center">
+            You sign in by picking your profile. Set a password to lock it; others will need it to use your profile.
+          </p>
+        )}
         <NewPassword onChange={setPassword} />
         <div className="flex items-center gap-3 sm:col-span-3">
-          <button type="submit" className="btn-primary" disabled={busy || !current || !password}>
-            <KeyRound size={14} /> Change password
+          <button type="submit" className="btn-primary" disabled={busy || (hasPassword && !current) || !password}>
+            <KeyRound size={14} /> {hasPassword ? "Change password" : "Set a password"}
           </button>
           {msg && (msg.ok ? <span className="text-xs text-good">{msg.text}</span> : <ErrorNote>{msg.text}</ErrorNote>)}
         </div>

@@ -143,12 +143,6 @@ func unauthorized(w http.ResponseWriter, msg string) {
 func (s *Server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		if !s.cfg.Auth {
-			id, _ := s.resolveProfile(r)
-			u := user{ID: id, Admin: true, CanRecord: true}
-			next.ServeHTTP(w, r.WithContext(context.WithValue(db.WithProfile(ctx, id), userKey{}, u)))
-			return
-		}
 		u, err := s.tokenUser(r)
 		if err != nil {
 			unauthorized(w, "sign in to continue")
@@ -253,11 +247,12 @@ func (u user) mayManage(owner int64) bool { return u.Admin || (owner != 0 && own
 
 // --- sign-in --------------------------------------------------------------------
 
-// setupNeeded reports whether accounts are on with no admin yet, printing the
-// one-time setup code to the log the first time it's asked.
+// setupNeeded reports whether passwords are required with no admin who has
+// one yet, printing the one-time setup code to the log the first time it's
+// asked. With passwordless sign-in there's nothing to set up.
 func (s *Server) setupNeeded(ctx context.Context) (bool, error) {
-	if !s.cfg.Auth {
-		return false, nil
+	if on, _, err := s.passwordless(ctx); err != nil || on {
+		return false, err
 	}
 	ok, err := s.db.HasAdmin(ctx)
 	if err != nil || ok {
@@ -274,28 +269,38 @@ func (s *Server) setupNeeded(ctx context.Context) (bool, error) {
 }
 
 type authInfo struct {
-	Enabled         bool          `json:"enabled"`
-	SetupRequired   bool          `json:"setupRequired"`
+	Enabled            bool          `json:"enabled"` // always true (older clients read it)
+	Passwordless       bool          `json:"passwordless"`
+	PasswordlessLocked bool          `json:"passwordlessLocked"` // COUCHSIDE_AUTH=true requires passwords
+	Profiles           []profileStub `json:"profiles"`           // passwordless: every profile to pick from
+	SetupRequired      bool          `json:"setupRequired"`
 	User            *db.Profile   `json:"user"`
 	AccessExpiresAt int64         `json:"accessExpiresAt,omitempty"`
 	SignedIn        []profileStub `json:"signedIn"` // web: profiles this browser holds a session for
 }
 
 type profileStub struct {
-	ID    int64  `json:"id"`
-	Name  string `json:"name"`
-	Color string `json:"color"`
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Color       string `json:"color"`
+	HasPassword bool   `json:"hasPassword"`
 }
 
 // authStatus is open to everyone: it tells an app whether to show sign-in.
 func (s *Server) authStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	out := authInfo{Enabled: s.cfg.Auth, SignedIn: []profileStub{}}
-	if !s.cfg.Auth {
-		writeJSON(w, http.StatusOK, out)
+	out := authInfo{Enabled: true, SignedIn: []profileStub{}, Profiles: []profileStub{}}
+	var err error
+	if out.Passwordless, out.PasswordlessLocked, err = s.passwordless(ctx); err != nil {
+		writeErr(w, err)
 		return
 	}
-	var err error
+	if out.Passwordless {
+		if out.Profiles, err = s.pickable(ctx); err != nil {
+			writeErr(w, err)
+			return
+		}
+	}
 	if out.SetupRequired, err = s.setupNeeded(ctx); err != nil {
 		writeErr(w, err)
 		return
@@ -316,7 +321,7 @@ func (s *Server) authStatus(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if p, err := s.db.PeekRefresh(ctx, auth.HashToken(ck.Value), now); err == nil {
-			out.SignedIn = append(out.SignedIn, profileStub{p.ID, p.Name, p.Color})
+			out.SignedIn = append(out.SignedIn, profileStub{ID: p.ID, Name: p.Name, Color: p.Color, HasPassword: p.HasPassword})
 		}
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -340,10 +345,6 @@ type tokens struct {
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
-	if !s.cfg.Auth {
-		writeErr(w, badRequest("accounts are off on this server"))
-		return
-	}
 	var in loginInput
 	if err := decode(r, &in); err != nil {
 		writeErr(w, err)
@@ -428,7 +429,11 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, p db.Profi
 
 // issue sends a fresh access token with the session's (new) refresh token.
 func (s *Server) issue(w http.ResponseWriter, r *http.Request, p db.Profile, sess db.Session, refresh string) {
-	exp := time.Now().Add(auth.AccessTTL)
+	ttl := auth.AccessTTL
+	if sess.Client == "tv" {
+		ttl = auth.TVAccessTTL
+	}
+	exp := time.Now().Add(ttl)
 	access := s.auth.signer.Sign(auth.Claims{Session: sess.ID, Profile: p.ID, Expires: exp.Unix()})
 	out := tokens{User: p, AccessExpiresAt: exp.Unix(), SessionID: sess.ID}
 	if sess.Client == "tv" {
@@ -467,10 +472,6 @@ type refreshInput struct {
 // refresh trades a refresh token for new tokens. The web sends its cookie for
 // the active profile, or for profileId to switch profiles.
 func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
-	if !s.cfg.Auth {
-		writeErr(w, badRequest("accounts are off on this server"))
-		return
-	}
 	var in refreshInput
 	if r.ContentLength != 0 {
 		if err := decode(r, &in); err != nil {
@@ -599,7 +600,6 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 	s.auth.mu.Lock()
 	s.auth.setupCode = ""
 	s.auth.mu.Unlock()
-	_ = s.profiles.load(ctx, s.db)
 	slog.Info("first admin set up", "profile", p.Name, "ip", ip)
 	s.startSession(w, r, p, "web", "")
 }
@@ -611,10 +611,6 @@ type logoutInput struct {
 // logout ends this session (or all of this profile's sessions).
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	u := currentUser(r.Context())
-	if !s.cfg.Auth {
-		writeErr(w, badRequest("accounts are off on this server"))
-		return
-	}
 	var in logoutInput
 	if r.ContentLength != 0 {
 		if err := decode(r, &in); err != nil {
@@ -651,10 +647,6 @@ type passwordInput struct {
 func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := currentUser(ctx)
-	if !s.cfg.Auth {
-		writeErr(w, badRequest("accounts are off on this server"))
-		return
-	}
 	var in passwordInput
 	if err := decode(r, &in); err != nil {
 		writeErr(w, err)
@@ -675,7 +667,8 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	if ok, _ := auth.VerifyPassword(hash, in.Current); !ok {
+	// A profile without a password (passwordless sign-in) sets its first one.
+	if ok, _ := auth.VerifyPassword(hash, in.Current); hash != "" && !ok {
 		s.auth.byIP.Fail(ip)
 		s.auth.byName.Fail(nameKey)
 		slog.Warn("password change: wrong current password", "ip", ip, "name", nameKey)
@@ -686,7 +679,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, badRequest(err.Error()))
 		return
 	}
-	if in.Password == in.Current {
+	if hash != "" && in.Password == in.Current {
 		writeErr(w, badRequest("choose a different password"))
 		return
 	}
@@ -719,10 +712,6 @@ func (s *Server) mySessions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listSessions(w http.ResponseWriter, r *http.Request, profileID int64) {
-	if !s.cfg.Auth {
-		writeJSON(w, http.StatusOK, []sessionView{})
-		return
-	}
 	ss, err := s.db.Sessions(r.Context(), profileID, time.Now().Unix())
 	if err != nil {
 		writeErr(w, err)

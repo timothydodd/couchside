@@ -13,13 +13,12 @@ import { BREAK_MODES, SUBTITLE_LANGS } from "../lib/prefs";
 import { languageName } from "../lib/tracks";
 import type { LiveTvStatus } from "../lib/types";
 import { PageHeader, Segmented } from "../components/ui";
-import { useAuth, useIsAdmin } from "../stores/auth";
+import { useIsAdmin } from "../stores/auth";
 import { useProfile } from "../stores/profile";
 import { useStatus } from "../stores/status";
 
 export default function SettingsPage() {
   const status = useStatus((s) => s.status);
-  const accounts = useAuth((s) => s.enabled);
   const admin = useIsAdmin();
 
   // Users only get their own preferences and account; the rest is the server's.
@@ -40,8 +39,8 @@ export default function SettingsPage() {
       <div className="flex max-w-3xl flex-col gap-4 px-6 py-5">
         <ServerNow />
         <ProfileSettings />
-        {accounts && <AccountSettings />}
-        {accounts && <AccountManager />}
+        <AccountSettings />
+        <AccountManager />
 
         <MetadataSettings />
 
@@ -115,7 +114,6 @@ function ProfileSettings() {
   const profile = useProfile((s) => s.current);
   const setPrefs = useProfile((s) => s.setPrefs);
   const liveTv = useStatus((s) => s.status?.livetv?.configured);
-  const accounts = useAuth((s) => s.enabled);
   if (!profile) return null;
   const p = profile.prefs;
   return (
@@ -127,7 +125,7 @@ function ProfileSettings() {
           <div className="text-xs text-content-muted">Only for {profile.name}. Other profiles keep their own.</div>
         </div>
         <Link to="/profiles" className="btn-quiet !text-xs">
-          {accounts ? "Switch profile" : "Switch or manage profiles"}
+          Switch profile
         </Link>
       </div>
       <div className="grid grid-cols-[160px_1fr] items-center gap-x-4 gap-y-3 text-sm">

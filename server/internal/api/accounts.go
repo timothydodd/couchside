@@ -61,21 +61,28 @@ func (s *Server) createAccount(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	if err := auth.CheckPassword(in.Password); err != nil {
-		writeErr(w, badRequest(err.Error()))
-		return
-	}
-	hash, err := auth.HashPassword(in.Password)
+	// With passwordless sign-in a password is optional: none means "pick me".
+	hash := ""
+	on, _, err := s.passwordless(r.Context())
 	if err != nil {
 		writeErr(w, err)
 		return
+	}
+	if in.Password != "" || !on {
+		if err := auth.CheckPassword(in.Password); err != nil {
+			writeErr(w, badRequest(err.Error()))
+			return
+		}
+		if hash, err = auth.HashPassword(in.Password); err != nil {
+			writeErr(w, err)
+			return
+		}
 	}
 	p, err := s.db.CreateAccount(r.Context(), in.Name, in.Color, in.Role, in.CanRecord, hash)
 	if err != nil {
 		writeErr(w, accountErr(err))
 		return
 	}
-	_ = s.profiles.load(r.Context(), s.db)
 	slog.Info("account created", "profile", p.Name, "role", p.Role, "by", currentUser(r.Context()).ID)
 	writeJSON(w, http.StatusCreated, p)
 }
@@ -133,17 +140,31 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	if err := auth.CheckPassword(in.Password); err != nil {
-		writeErr(w, badRequest(err.Error()))
-		return
-	}
-	hash, err := auth.HashPassword(in.Password)
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
 	ctx := r.Context()
-	if err := s.db.SetPassword(ctx, id, hash, true); err != nil {
+	hash, mustChange := "", false
+	if in.Password == "" {
+		// Removing a password only makes sense when profiles can be picked without one.
+		on, _, err := s.passwordless(ctx)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		if !on {
+			writeErr(w, badRequest("passwordless sign-in is off, so every account needs a password"))
+			return
+		}
+	} else {
+		if err := auth.CheckPassword(in.Password); err != nil {
+			writeErr(w, badRequest(err.Error()))
+			return
+		}
+		if hash, err = auth.HashPassword(in.Password); err != nil {
+			writeErr(w, err)
+			return
+		}
+		mustChange = true
+	}
+	if err := s.db.SetPassword(ctx, id, hash, mustChange); err != nil {
 		writeErr(w, err)
 		return
 	}
@@ -170,7 +191,6 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, accountErr(err))
 		return
 	}
-	_ = s.profiles.load(r.Context(), s.db)
 	s.auth.sessions.forgetAll()
 	w.WriteHeader(http.StatusNoContent)
 }

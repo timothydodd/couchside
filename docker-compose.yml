@@ -22,8 +22,8 @@ services:
       COUCHSIDE_HWACCEL: ${COUCHSIDE_HWACCEL:-none}
       # Live TV + DVR: your HDHomeRun's IP. Leave empty to turn Live TV off.
       COUCHSIDE_HDHOMERUN: ${HDHOMERUN:-}
-      # Accounts: "true" makes every profile sign in with a password. The first
-      # start prints a setup code (docker compose logs) for creating the admin.
+      # "true" requires passwords (no passwordless sign-in): for a server on the
+      # internet. The first start then prints a setup code (docker compose logs).
       COUCHSIDE_AUTH: ${COUCHSIDE_AUTH:-false}
       # Guide times and recording file names use this time zone.
       TZ: ${TZ:-America/New_York}

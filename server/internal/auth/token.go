@@ -14,9 +14,15 @@ import (
 	"time"
 )
 
-// AccessTTL is how long an access token lasts. Short, because it can't be
-// taken back before it expires except through the live-session check.
-const AccessTTL = 15 * time.Minute
+// AccessTTL is how long a web access token lasts; the browser renews it in
+// the background. TVAccessTTL is longer because a TV's video player keeps the
+// headers it started with, and a film or a live channel plays for hours.
+// Either is refused at once when its session ends (every request checks the
+// session), so the lifetime only bounds a token copied out of a live session.
+const (
+	AccessTTL   = 15 * time.Minute
+	TVAccessTTL = 12 * time.Hour
+)
 
 var ErrBadToken = errors.New("invalid or expired token")
 

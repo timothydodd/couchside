@@ -33,8 +33,10 @@ type Config struct {
 	PadBefore     time.Duration // COUCHSIDE_DVR_PAD_BEFORE, default 10s (Settings overrides)
 	PadAfter      time.Duration // COUCHSIDE_DVR_PAD_AFTER, default 10s (Settings overrides)
 
-	// COUCHSIDE_AUTH: accounts. Off (the default), anyone who can reach the
-	// server picks a profile. On, every profile is a user with a password.
+	// COUCHSIDE_AUTH: require passwords. Accounts are always on; without this,
+	// admins can allow passwordless sign-in (pick a profile, no password) in
+	// Settings, which is the default on a server where nobody has a password.
+	// Set it for a server reachable from the internet.
 	Auth bool
 
 	Comskip    string // COUCHSIDE_COMSKIP: comskip binary; commercial detection is off when it isn't found
