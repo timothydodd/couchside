@@ -350,12 +350,14 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
     const report = (keepalive = false, stopped = false) => {
       if (!v.duration || !isFinite(v.duration) || v.currentTime < 1) return;
       const state = stopped ? "stopped" : v.paused ? "paused" : "playing";
-      void fetch(`/api/files/${fileId}/progress`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ position: v.currentTime, duration: v.duration, state, mode: modeRef.current }),
-        keepalive,
-      }).catch(() => {});
+      const body = { position: v.currentTime, duration: v.duration, state, mode: modeRef.current };
+      const url = `/api/files/${fileId}/progress`;
+      // While the page lives, api() renews an expired token and retries;
+      // a keepalive report on the way out can't wait for that.
+      const sent = keepalive
+        ? fetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), keepalive })
+        : api(url, { method: "PUT", json: body });
+      void sent.catch(() => {});
     };
     const t = setInterval(() => !v.paused && report(), REPORT_EVERY_MS);
     const onPause = () => report();
@@ -401,7 +403,9 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
 
   const onEnded = async () => {
     const v = videoRef.current;
-    if (v?.duration) await api(`/api/files/${fileId}/progress`, { method: "PUT", json: { position: v.duration, duration: v.duration, state: "stopped" } }).catch(() => {});
+    // Not awaited: moving on straight away means a Back pressed now can't be
+    // overtaken by a late jump to the next episode.
+    if (v?.duration) void api(`/api/files/${fileId}/progress`, { method: "PUT", json: { position: v.duration, duration: v.duration, state: "stopped" } }).catch(() => {});
     if (parts && parts.at + 1 < parts.list.length) {
       // The rest of the same movie: always carry on, from the start of the next part.
       partStart = { fileId: parts.list[parts.at + 1].fileId, at: 0 };
