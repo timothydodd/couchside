@@ -42,26 +42,43 @@ var (
 	reLeadYear = regexp.MustCompile(`^[ ._\-(\[]*(?:19|20)\d{2}[ ._\-)\]]*`)
 )
 
+// Lister lists the video files directly in a folder (relative to the
+// library root, like the paths given to MovieRoleIn).
+type Lister func(dir string) []string
+
 // inExtrasDir reports whether a file sits in an extras folder inside a movie
-// folder. At the library root, "Shorts" or "Other" is just a folder of movies.
-func inExtrasDir(path string) (string, bool) {
+// folder. At the library root, "Shorts" or "Other" is just a folder of movies,
+// and so it is under a folder that isn't a movie's ("Pixar/Shorts"): the
+// parent must be named like a film with a year, or (when list can tell)
+// hold a film file itself.
+func inExtrasDir(path string, list Lister) (string, bool) {
 	dir := filepath.Dir(path)
-	if up := filepath.Dir(dir); up == "." || up == "/" || up == dir {
+	up := filepath.Dir(dir)
+	if up == "." || up == "/" || up == dir {
 		return "", false
 	}
-	return ExtrasDir(filepath.Base(dir))
+	label, ok := ExtrasDir(filepath.Base(dir))
+	if !ok || list == nil || Name(filepath.Base(up)).Year > 0 {
+		return label, ok
+	}
+	return label, len(list(up)) > 0
 }
 
 // MovieRole guesses a movie file's role from its path, relative to the
 // library root. title is the movie's
 // parsed title: a marker that is part of the title ("Deathly Hallows Part 2",
-// "The Interview") doesn't count.
-func MovieRole(path, title string) Role {
+// "The Interview", "The-Big-Short") doesn't count.
+func MovieRole(path, title string) Role { return MovieRoleIn(path, title, nil) }
+
+// MovieRoleIn is MovieRole with a look at the folders around the file (list
+// may be nil): an extras folder needs a movie around it, and a part marker
+// counts only when another file in the folder has one too.
+func MovieRoleIn(path, title string, list Lister) Role {
 	name := stem(path)
-	if label, ok := inExtrasDir(path); ok {
+	if label, ok := inExtrasDir(path, list); ok {
 		return Role{Kind: "extra", Extra: extraName(name, title, label)}
 	}
-	if m := reExtraSuffix.FindStringSubmatchIndex(name); m != nil {
+	if m := reExtraSuffix.FindStringSubmatchIndex(name); m != nil && !reExtraSuffix.MatchString(title) {
 		label := suffixLabels[strings.ToLower(name[m[2]:m[3]])]
 		return Role{Kind: "extra", Extra: extraName(name[:m[0]], title, label)}
 	}
@@ -73,11 +90,22 @@ func MovieRole(path, title string) Role {
 		if err != nil {
 			n = partWords[strings.ToLower(m[1])]
 		}
-		if n > 0 {
+		if n > 0 && (list == nil || otherPart(path, list)) {
 			return Role{Kind: "part", Part: n}
 		}
 	}
 	return Role{Kind: "copy"}
+}
+
+// otherPart reports whether another video next to path has a part marker:
+// "Deathly.Hallows.Part.2.mkv" on its own is a film, not half of one.
+func otherPart(path string, list Lister) bool {
+	for _, f := range list(filepath.Dir(path)) {
+		if filepath.Base(f) != filepath.Base(path) && rePart.MatchString(stem(f)) {
+			return true
+		}
+	}
+	return false
 }
 
 // extraName turns an extra's file name into its title: "Inception (2010) -
