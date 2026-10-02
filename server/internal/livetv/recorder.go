@@ -251,7 +251,7 @@ func (s *Service) record(ctx, parent context.Context, r db.Recording, path strin
 	end := time.Unix(r.EndAt+r.PadAfter, 0)
 	slog.Info("dvr: recording", "title", r.Title, "channel", r.Channel, "until", end.Format(time.Kitchen), "path", path, "resumedParts", len(parts))
 	var lastErr string
-	for attempt := len(parts); time.Until(end) > 5*time.Second && ctx.Err() == nil; attempt++ {
+	for attempt := nextPart(path, parts); time.Until(end) > 5*time.Second && ctx.Err() == nil; attempt++ {
 		ch, err := s.db.Channel(parent, r.Channel)
 		if err != nil {
 			lastErr = "channel is no longer in the lineup"
@@ -301,6 +301,7 @@ func (s *Service) record(ctx, parent context.Context, r db.Recording, path strin
 		return
 	}
 	if err := joinParts(parent, s.cfg.FFmpeg, parts, path); err != nil {
+		slog.Error("dvr: couldn't join recording parts; they're still on disk", "title", r.Title, "parts", parts, "err", err)
 		_ = s.db.FinishRecording(parent, r.ID, "failed", parts[0], 0, "Couldn't finish the file: "+err.Error())
 		return
 	}
@@ -360,6 +361,7 @@ func (s *Service) recoverInterrupted(ctx context.Context) {
 			continue
 		}
 		if err := joinParts(ctx, s.cfg.FFmpeg, parts, r.Path); err != nil {
+			slog.Error("dvr: couldn't join recording parts; they're still on disk", "title", r.Title, "parts", parts, "err", err)
 			_ = s.db.FinishRecording(ctx, r.ID, "failed", "", 0, "Interrupted by a server restart")
 			continue
 		}
@@ -383,18 +385,54 @@ func existingParts(path string) []string {
 	if st, err := os.Stat(path); err == nil && st.Size() > 0 {
 		out = append(out, path)
 	}
-	base := strings.TrimSuffix(path, ".ts")
-	matches, _ := filepath.Glob(base + ".part*.ts")
-	sort.Slice(matches, func(i, j int) bool { return partIndex(matches[i], base) < partIndex(matches[j], base) })
-	return append(out, matches...)
+	return append(out, partFiles(path)...)
 }
 
-func partIndex(p, base string) int {
-	n, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(p, base+".part"), ".ts"))
+// partFiles lists the "<name>.partN.ts" pieces next to path, sorted by N. It
+// reads the folder instead of globbing, because titles can hold [ and ].
+func partFiles(path string) []string {
+	dir, base := filepath.Dir(path), strings.TrimSuffix(filepath.Base(path), ".ts")
+	entries, _ := os.ReadDir(dir)
+	var out []string
+	for _, e := range entries {
+		if !e.IsDir() && partIndex(e.Name(), base) >= 0 {
+			out = append(out, filepath.Join(dir, e.Name()))
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return partIndex(filepath.Base(out[i]), base) < partIndex(filepath.Base(out[j]), base)
+	})
+	return out
+}
+
+// partIndex is N when name is "<base>.partN.ts", otherwise -1.
+func partIndex(name, base string) int {
+	mid, ok := strings.CutPrefix(name, base+".part")
+	if !ok {
+		return -1
+	}
+	if mid, ok = strings.CutSuffix(mid, ".ts"); !ok || mid == "" || strings.Trim(mid, "0123456789") != "" {
+		return -1
+	}
+	n, err := strconv.Atoi(mid)
 	if err != nil {
-		return 1 << 30
+		return -1
 	}
 	return n
+}
+
+// nextPart numbers the next piece of a recording at path: one past the
+// highest part captured so far, so a resume never overwrites one (failed
+// attempts leave gaps).
+func nextPart(path string, parts []string) int {
+	base := strings.TrimSuffix(filepath.Base(path), ".ts")
+	next := 0
+	for _, p := range parts {
+		if n := partIndex(filepath.Base(p), base); n >= next {
+			next = n + 1
+		}
+	}
+	return next
 }
 
 var (

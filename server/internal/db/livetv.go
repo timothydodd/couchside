@@ -313,6 +313,14 @@ func (d *DB) RecordingsWithStatus(ctx context.Context, status string) ([]Recordi
 	return d.queryRecordings(ctx, `WHERE r.status = ?`, status)
 }
 
+// RecordingPathActive reports whether a scheduled or in-progress recording
+// writes to path.
+func (d *DB) RecordingPathActive(ctx context.Context, path string) (bool, error) {
+	var n int
+	err := d.sql.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM recordings WHERE path = ? AND status IN ('scheduled', 'recording'))`, path).Scan(&n)
+	return n > 0, err
+}
+
 // Overlapping counts active recordings whose padded windows overlap [from, to).
 func (d *DB) Overlapping(ctx context.Context, from, to int64, excludeID int64) (int, error) {
 	var n int
