@@ -81,7 +81,12 @@ type Session struct {
 	srcHeight int
 	enc       Encoder
 
+	// restartMu serialises stopping and starting ffmpeg, which releases mu
+	// while it waits for a killed run to exit. Take it before mu, never after.
+	restartMu sync.Mutex
+
 	mu         sync.Mutex
+	closed     bool // removed from the manager: never start ffmpeg again
 	cmd        *exec.Cmd
 	exited     chan struct{}
 	exitErr    error
@@ -125,7 +130,8 @@ func (m *Manager) Encoder() Encoder { return m.enc }
 func (m *Manager) Max() int         { return m.max }
 
 // Create decides copy-vs-encode for each stream and registers a session.
-// ffmpeg itself starts lazily, on the first segment request.
+// ffmpeg itself starts lazily, on the first segment request. Probing (up to
+// a minute on a slow share) happens before the manager lock is taken.
 func (m *Manager) Create(ctx context.Context, r Request) (*Session, error) {
 	if r.Duration <= 0 {
 		return nil, errors.New("file duration is unknown, so it can't be streamed; try rescanning")
@@ -134,12 +140,6 @@ func (m *Manager) Create(ctx context.Context, r Request) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	if err := m.makeRoom(); err != nil {
-		return nil, err
-	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	srcH := 0
 	if info.Height != nil {
@@ -182,28 +182,48 @@ func (m *Manager) Create(ctx context.Context, r Request) (*Session, error) {
 	if err := os.MkdirAll(s.dir, 0o755); err != nil {
 		return nil, err
 	}
-	m.sessions[s.ID] = s
+
+	// Check the limit and take the slot in one hold of the lock, so
+	// concurrent requests can't all pass the check.
+	m.mu.Lock()
+	victim, err := m.admitLocked(nil)
+	if err == nil {
+		m.sessions[s.ID] = s
+	}
+	m.mu.Unlock()
+	if err != nil {
+		_ = os.RemoveAll(s.dir)
+		return nil, err
+	}
+	if victim != nil {
+		m.shutdown(victim)
+	}
 	slog.Info("transcode session", "id", s.ID, "file", r.FileID, "mode", s.Mode, "height", s.Height,
 		"copyAudio", copyAudio, "hdr", s.HDR, "hw", m.enc.HW, "gpuDecode", s.HWDecode, "bitrateK", s.BitrateK, "src", info.VideoCodec+"/"+info.PixFmt+"/"+info.AudioCodec)
 	return s, nil
 }
 
-// makeRoom enforces the live-session limit. Rather than refuse a new stream
-// because of abandoned ones (closed tab, reload, switched quality in another
-// window), it evicts the least recently used session that has gone quiet.
-func (m *Manager) makeRoom() error {
-	m.mu.Lock()
+// admitLocked enforces the live-session limit for one more stream: a new
+// session (self nil) or self about to start ffmpeg again. A session is live
+// while its ffmpeg runs or it was asked for in the last idleKill. Rather than
+// refuse a stream because of abandoned ones (closed tab, reload, switched
+// quality in another window), it evicts the least recently used session that
+// has gone quiet, removing it from the map; the caller must shut it down.
+// Caller holds m.mu.
+func (m *Manager) admitLocked(self *Session) (*Session, error) {
 	var live []*Session
 	for _, s := range m.sessions {
+		if s == self {
+			continue
+		}
 		s.mu.Lock()
-		if time.Since(s.lastAccess) < idleKill {
+		if s.running() || time.Since(s.lastAccess) < idleKill {
 			live = append(live, s)
 		}
 		s.mu.Unlock()
 	}
-	m.mu.Unlock()
 	if len(live) < m.max {
-		return nil
+		return nil, nil
 	}
 	var victim *Session
 	var oldest time.Time
@@ -216,11 +236,11 @@ func (m *Manager) makeRoom() error {
 		}
 	}
 	if victim == nil {
-		return ErrBusy
+		return nil, ErrBusy
 	}
 	slog.Info("evicting idle transcode session to make room", "id", victim.ID, "title", victim.Title)
-	m.Close(victim.ID)
-	return nil
+	delete(m.sessions, victim.ID)
+	return victim, nil
 }
 
 func (s *Session) segCount() int { return int(math.Ceil(s.duration / SegDur)) }
@@ -261,12 +281,19 @@ func (m *Manager) Close(id string) {
 	s := m.sessions[id]
 	delete(m.sessions, id)
 	m.mu.Unlock()
-	if s == nil {
-		return
+	if s != nil {
+		m.shutdown(s)
 	}
+}
+
+// shutdown stops a session already removed from the map, for good.
+func (m *Manager) shutdown(s *Session) {
+	s.restartMu.Lock()
 	s.mu.Lock()
+	s.closed = true
 	s.stop()
 	s.mu.Unlock()
+	s.restartMu.Unlock()
 	_ = os.RemoveAll(s.dir)
 }
 
@@ -282,24 +309,15 @@ func (m *Manager) Segment(ctx context.Context, id string, n int) (string, error)
 		return "", ErrBadSegment
 	}
 	path := s.segPath(n)
-
-	s.mu.Lock()
-	s.lastAccess, s.lastReq = time.Now(), n
 	if exists(path) {
+		s.mu.Lock()
+		s.lastAccess, s.lastReq = time.Now(), n
 		s.mu.Unlock()
 		return path, nil
 	}
-	s.refreshHi()
-	if !s.running() || n < s.startSeg || n > s.hi+restartGap {
-		if err := s.start(n); err != nil {
-			s.mu.Unlock()
-			return "", err
-		}
-	} else if s.paused {
-		resume(s.cmd.Process)
-		s.paused = false
+	if err := m.ensureRun(s, n); err != nil {
+		return "", err
 	}
-	s.mu.Unlock()
 
 	deadline := time.NewTimer(segmentWait)
 	defer deadline.Stop()
@@ -343,14 +361,64 @@ func (m *Manager) Segment(ctx context.Context, id string, n int) (string, error)
 	}
 }
 
+// ensureRun makes sure an ffmpeg run will produce segment n: it resumes a
+// paused run, or (re)starts ffmpeg at n when there's none or the player has
+// jumped outside what the current run will produce soon. Restarts of one
+// session are serialised, and each re-checks after waiting its turn, since
+// the run another request just started may already cover n.
+func (m *Manager) ensureRun(s *Session, n int) error {
+	s.restartMu.Lock()
+	defer s.restartMu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for admitted := false; ; {
+		if s.closed {
+			return ErrNoSession
+		}
+		s.lastAccess, s.lastReq = time.Now(), n
+		if exists(s.segPath(n)) {
+			return nil
+		}
+		s.refreshHi()
+		if s.running() && n >= s.startSeg && n <= s.hi+restartGap {
+			if s.paused {
+				resume(s.cmd.Process)
+				s.paused = false
+			}
+			return nil
+		}
+		if s.running() || admitted {
+			return s.start(n)
+		}
+		// No ffmpeg running: starting one is a new stream as far as the limit
+		// goes (a player back from a long pause, or one reviving a session
+		// whose ffmpeg was reaped).
+		s.mu.Unlock()
+		m.mu.Lock()
+		victim, err := m.admitLocked(s)
+		m.mu.Unlock()
+		if victim != nil {
+			// Not here: we hold our own restartMu, and shutdown takes the victim's.
+			go m.shutdown(victim)
+		}
+		s.mu.Lock()
+		if err != nil {
+			return err
+		}
+		admitted = true
+	}
+}
+
 // gpuFallback handles a failed GPU-pipeline run: the GPU may not decode this
 // codec or profile, or the driver can't tone map it. The session switches to
 // CPU decoding (GPU encoding) for good and restarts at segment n. It returns
 // false when there's nothing to fall back to.
 func (s *Session) gpuFallback(n int, errMsg string) bool {
+	s.restartMu.Lock()
+	defer s.restartMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.HWDecode {
+	if !s.HWDecode || s.closed {
 		return false
 	}
 	slog.Warn("GPU decoding failed for this file; decoding on the CPU instead", "session", s.ID, "file", s.FileID, "ffmpeg", errMsg)
@@ -358,9 +426,12 @@ func (s *Session) gpuFallback(n int, errMsg string) bool {
 	return s.start(n) == nil
 }
 
-// start (re)launches ffmpeg at segment n. Caller holds s.mu.
+// start (re)launches ffmpeg at segment n. Caller holds s.restartMu and s.mu.
 func (s *Session) start(n int) error {
 	s.stop()
+	if s.closed {
+		return ErrNoSession
+	}
 	startSec := float64(n * SegDur)
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
 	var vIn, vCodec []string
@@ -423,6 +494,9 @@ func (s *Session) start(n int) error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start ffmpeg: %w", err)
 	}
+	if startHook != nil {
+		startHook(cmd.Process.Pid)
+	}
 	exited := make(chan struct{})
 	s.cmd, s.exited, s.stderr, s.exitErr = cmd, exited, stderr, nil
 	s.startSeg, s.hi, s.paused = n, n-1, false
@@ -438,20 +512,25 @@ func (s *Session) start(n int) error {
 	return nil
 }
 
-// stop kills the current ffmpeg, if any. Caller holds s.mu.
+// stop kills the current ffmpeg, if any. Caller holds s.restartMu and s.mu;
+// mu is released while the killed process exits.
 func (s *Session) stop() {
-	if s.cmd == nil || s.cmd.Process == nil {
+	cmd := s.cmd
+	if cmd == nil || cmd.Process == nil {
 		return
 	}
 	if s.running() {
 		if s.paused {
-			resume(s.cmd.Process)
+			resume(cmd.Process)
 		}
-		_ = s.cmd.Process.Kill()
+		_ = cmd.Process.Kill()
 		exited := s.exited
 		s.mu.Unlock()
 		<-exited
 		s.mu.Lock()
+	}
+	if s.cmd != cmd {
+		return // someone else replaced it meanwhile; that run is theirs
 	}
 	s.cmd, s.paused = nil, false
 	// Drop half-written temp segments from the killed run.
@@ -460,6 +539,9 @@ func (s *Session) stop() {
 		_ = os.Remove(t)
 	}
 }
+
+// startHook, when set (by tests), is told each ffmpeg's pid.
+var startHook func(pid int)
 
 func (s *Session) running() bool {
 	if s.cmd == nil || s.exited == nil {
@@ -509,6 +591,7 @@ func (m *Manager) Run(ctx context.Context) {
 		}
 		m.mu.Unlock()
 		for _, s := range all {
+			s.restartMu.Lock()
 			s.mu.Lock()
 			idle := time.Since(s.lastAccess)
 			expired := idle > idleExpire
@@ -526,6 +609,7 @@ func (m *Manager) Run(ctx context.Context) {
 				}
 			}
 			s.mu.Unlock()
+			s.restartMu.Unlock()
 			if expired {
 				m.Close(s.ID)
 			}
