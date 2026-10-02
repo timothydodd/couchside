@@ -4,6 +4,7 @@ import { EmptyState, ErrorNote, Meter, PageHeader, StatTile, StatusPill, type To
 import { api, useApi } from "../lib/api";
 import { fmtAgo, fmtClock } from "../lib/format";
 import type { Job, JobCounts, TranscodeSession } from "../lib/types";
+import { attempt } from "../lib/notices";
 
 const KINDS: Record<string, { label: string; Icon: LucideIcon }> = {
   scan: { label: "Scan", Icon: ScanSearch },
@@ -25,23 +26,24 @@ export default function ActivityPage() {
   const { data, error, reload } = useApi<{ jobs: Job[]; counts: JobCounts }>("/api/jobs", { pollMs: 2500 });
   const c = data?.counts;
 
-  const cancel = async (id: number) => {
+  const cancel = attempt("Couldn't cancel the job", async (id: number) => {
     await api(`/api/jobs/${id}/cancel`, { method: "POST" });
     await reload();
-  };
+  });
 
-  const retry = async (id: number) => {
+  const retry = attempt("Couldn't retry the job", async (id: number) => {
     await api(`/api/jobs/${id}/retry`, { method: "POST" });
     await reload();
-  };
-  const clear = async () => {
+  });
+  const clear = attempt("Couldn't clear finished jobs", async () => {
+    if (!confirm("Clear the finished jobs from the list?")) return;
     await api("/api/jobs/clear", { method: "POST" });
     await reload();
-  };
-  const scanAll = async () => {
+  });
+  const scanAll = attempt("Couldn't start the scans", async () => {
     await api("/api/libraries/scan", { method: "POST" });
     await reload();
-  };
+  });
 
   return (
     <div>

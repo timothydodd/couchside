@@ -69,12 +69,17 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
     [playable, idx, go],
   );
 
+  // Recovery attempts for this channel and quality; a re-tune keeps them.
+  const recovered = useRef({ key: "", media: 0, retune: 0 });
+
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
     let cancelled = false;
     let hls: HlsType | null = null;
     let sid: string | null = null;
+    const rk = `${channel}:${height}`;
+    if (recovered.current.key !== rk) recovered.current = { key: rk, media: 0, retune: 0 };
     setError(null);
     setTuning(true);
     setSession(null);
@@ -127,8 +132,16 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
       hlsRef.current = player;
       player.on(Hls.Events.ERROR, (_e, data) => {
         if (!data.fatal) return;
-        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) return player.recoverMediaError();
-        if (data.response?.code === 404) return setNonce((n) => n + 1);
+        const rec = recovered.current;
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && rec.media < 2) {
+          rec.media++;
+          return player.recoverMediaError();
+        }
+        // The session was reaped (a long pause): tune again, a few times at most.
+        if (data.response?.code === 404 && rec.retune < 3) {
+          rec.retune++;
+          return setNonce((n) => n + 1);
+        }
         setError(`The live stream stopped (${data.details}). The signal may have dropped.`);
       });
       player.on(Hls.Events.LEVEL_UPDATED, (_e, data) => {
