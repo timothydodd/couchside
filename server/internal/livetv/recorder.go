@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/timothydodd/couchside/internal/db"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 // WatchOpts is what a client asks for: a height for transcoding, and the
@@ -74,13 +75,13 @@ func (s *Service) Watch(ctx context.Context, channel string, o WatchOpts) (*Live
 		return nil, err
 	}
 	if ch.DRM {
-		return nil, errors.New("this channel is copy-protected (ATSC 3.0 DRM) and can only be watched in SiliconDust's own apps")
+		return nil, usererr.New("this channel is copy-protected (ATSC 3.0 DRM) and can only be watched in SiliconDust's own apps")
 	}
 	if ch.VirtualID != nil {
 		return s.watchVirtual(ctx, *ch.VirtualID, ch, o)
 	}
 	if s.hdhr == nil {
-		return nil, errors.New("no tuner is set up")
+		return nil, usererr.New("no tuner is set up")
 	}
 	return s.live.start(ctx, ch.Number, ch.Name, ch.URL, o.spec(ch.VideoCodec, ch.AudioCodec))
 }
@@ -92,11 +93,11 @@ func (s *Service) WatchRecording(ctx context.Context, id int64, o WatchOpts) (*L
 		return nil, err
 	}
 	if r.Status != "recording" {
-		return nil, errors.New("this recording isn't in progress; play it from the library")
+		return nil, usererr.New("this recording isn't in progress; play it from the library")
 	}
 	parts := existingParts(r.Path)
 	if len(parts) == 0 {
-		return nil, errors.New("nothing has been recorded yet; try again in a few seconds")
+		return nil, usererr.New("nothing has been recorded yet; try again in a few seconds")
 	}
 	// A recording holds the channel's broadcast as is, so the same codecs apply.
 	var vc, ac string
@@ -120,17 +121,17 @@ func (s *Service) Record(ctx context.Context, programID int64) (int64, int, erro
 		return 0, 0, err
 	}
 	if p.EndAt <= time.Now().Unix() {
-		return 0, 0, errors.New("that program has already ended")
+		return 0, 0, usererr.New("that program has already ended")
 	}
 	ch, err := s.db.Channel(ctx, p.Channel)
 	if err != nil {
 		return 0, 0, err
 	}
 	if ch.DRM {
-		return 0, 0, errors.New("this channel is copy-protected (ATSC 3.0 DRM) and can't be recorded")
+		return 0, 0, usererr.New("this channel is copy-protected (ATSC 3.0 DRM) and can't be recorded")
 	}
 	if ch.Virtual {
-		return 0, 0, errors.New("Couchside's own channels play from your library, so there's nothing to record")
+		return 0, 0, usererr.New("Couchside's own channels play from your library, so there's nothing to record")
 	}
 	r := db.Recording{Channel: p.Channel, ChannelName: ch.Name, Title: p.Title, EpisodeTitle: p.EpisodeTitle,
 		EpisodeNum: p.EpisodeNum, Synopsis: p.Synopsis, ImageURL: p.ImageURL, SeriesID: p.SeriesID,
@@ -165,7 +166,7 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		return err
 	}
 	if r.Status == "recording" || r.Status == "scheduled" {
-		return errors.New("cancel the recording first")
+		return usererr.New("cancel the recording first")
 	}
 	// Only ever delete files Couchside recorded: the row's own path, and only
 	// if it's a .ts file (recording folders may be shared with a TV library).

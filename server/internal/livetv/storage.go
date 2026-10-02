@@ -15,6 +15,7 @@ import (
 
 	"github.com/timothydodd/couchside/internal/metadata"
 	"github.com/timothydodd/couchside/internal/parse"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 const (
@@ -73,7 +74,7 @@ func CheckWritable(dir string) error {
 	f, err := os.CreateTemp(dir, ".couchside-write-test-*")
 	if err != nil {
 		if errors.Is(err, syscall.EROFS) {
-			return fmt.Errorf("%s is on a read-only mount; make the media share writable to record there", dir)
+			return usererr.Errorf("%s is on a read-only mount; make the media share writable to record there", dir)
 		}
 		return fmt.Errorf("can't write to %s: %w", dir, err)
 	}
@@ -86,14 +87,14 @@ func CheckWritable(dir string) error {
 func CheckWritableNoCreate(dir string) error {
 	st, err := os.Stat(dir)
 	if err != nil || !st.IsDir() {
-		return fmt.Errorf("folder not found")
+		return usererr.Errorf("folder not found")
 	}
 	f, err := os.CreateTemp(dir, ".couchside-write-test-*")
 	if err != nil {
 		if errors.Is(err, syscall.EROFS) {
-			return fmt.Errorf("read-only: the media share is mounted read-only")
+			return usererr.Errorf("read-only: the media share is mounted read-only")
 		}
-		return fmt.Errorf("not writable: %v", err)
+		return usererr.Errorf("not writable: %v", err)
 	}
 	name := f.Name()
 	f.Close()

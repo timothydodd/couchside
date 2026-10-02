@@ -61,8 +61,11 @@ func clientIP(r *http.Request) string {
 }
 
 func clientKey(r *http.Request) string {
-	return strconv.FormatInt(db.ProfileID(r.Context()), 10) + "|" + clientIP(r) + "|" + r.UserAgent()
+	return strconv.FormatInt(db.ProfileID(r.Context()), 10) + "|" + clientIP(r) + "|" + clip(r.UserAgent(), 300)
 }
+
+// presencePruneAt is the map size past which touch drops forgotten clients.
+const presencePruneAt = 500
 
 // track marks the requesting client as connected.
 func (p *presence) track(next http.Handler) http.Handler {
@@ -78,6 +81,13 @@ func (p *presence) touch(r *http.Request) *client {
 	defer p.mu.Unlock()
 	k := clientKey(r)
 	c := p.clients[k]
+	if c == nil && len(p.clients) >= presencePruneAt {
+		for key, old := range p.clients {
+			if now.Sub(old.seen) > forgetAfter {
+				delete(p.clients, key)
+			}
+		}
+	}
 	if c == nil || now.Sub(c.seen) > forgetAfter {
 		c = &client{profileID: db.ProfileID(r.Context()), ip: clientIP(r), device: deviceName(r.UserAgent()), first: now}
 		p.clients[k] = c

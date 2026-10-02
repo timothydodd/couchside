@@ -3,7 +3,6 @@ package livetv
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"regexp"
 	"sort"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/metadata"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 // RuleSummary explains what a rule evaluation did, for the UI.
@@ -79,7 +79,7 @@ func (s *Service) CreateRule(ctx context.Context, programID int64, mode, channel
 		return db.SeriesRule{}, RuleSummary{}, err
 	}
 	if p.SeriesID == "" {
-		return db.SeriesRule{}, RuleSummary{}, errors.New("the guide doesn't identify this as a series, so it can only be recorded once")
+		return db.SeriesRule{}, RuleSummary{}, usererr.New("the guide doesn't identify this as a series, so it can only be recorded once")
 	}
 	if err := validMode(mode); err != nil {
 		return db.SeriesRule{}, RuleSummary{}, err
@@ -140,7 +140,7 @@ func validMode(m string) error {
 	case "new", "missing", "all":
 		return nil
 	}
-	return errors.New("mode must be new, missing or all")
+	return usererr.New("mode must be new, missing or all")
 }
 
 // LibraryMatch is a library show a rule can be compared against.
