@@ -25,6 +25,7 @@ type Config struct {
 	PadBefore     time.Duration
 	PadAfter      time.Duration
 	Metadata      *metadata.Chain // identifies which same-titled series a recording is; may be nil
+	FFprobe       string          // reads commercial clip lengths for virtual channels
 }
 
 // Service owns the tuner, guide, live sessions and the DVR scheduler.
@@ -45,20 +46,39 @@ type Service struct {
 	libraryID int64
 	wakeSched chan struct{}
 	lookups   map[string]bool // guide series being identified in the background
+
+	virtualErr   map[int64]string // why a virtual channel has no schedule
+	wakeVirtual  chan struct{}
+	virtualCount int        // how many virtual channels there are
+	virtualMu    sync.Mutex // one schedule extension at a time (loop, saves and tune-ins race)
 }
+
+// HasTuner reports whether an HDHomeRun is configured. Without one, Live TV
+// is just Couchside's own virtual channels (if any).
+func (s *Service) HasTuner() bool { return s.hdhr != nil }
+
+// configured is whether Live TV has anything to show. Called with mu held.
+func (s *Service) configured() bool { return s.hdhr != nil || s.virtualCount > 0 }
 
 func New(cfg Config, d *db.DB, enc transcode.Encoder, work Enqueuer, cacheDir string) (*Service, error) {
 	lm, err := newLiveManager(enc, filepath.Join(cacheDir, "live"))
 	if err != nil {
 		return nil, err
 	}
-	return &Service{cfg: cfg, db: d, hdhr: NewHDHomeRun(cfg.Tuner), enc: enc, work: work, live: lm,
-		recCancel: map[int64]context.CancelFunc{}, wakeSched: make(chan struct{}, 1), lookups: map[string]bool{}}, nil
+	var hdhr *HDHomeRun
+	if cfg.Tuner != "" {
+		hdhr = NewHDHomeRun(cfg.Tuner)
+	}
+	return &Service{cfg: cfg, db: d, hdhr: hdhr, enc: enc, work: work, live: lm,
+		recCancel: map[int64]context.CancelFunc{}, wakeSched: make(chan struct{}, 1), lookups: map[string]bool{},
+		virtualErr: map[int64]string{}, wakeVirtual: make(chan struct{}, 1)}, nil
 }
 
 // Status is the Live TV summary for the UI.
 type Status struct {
 	Configured    bool     `json:"configured"`
+	Tuner         bool     `json:"tuner"`           // an HDHomeRun is set up
+	Virtual       int      `json:"virtualChannels"` // Couchside's own channels
 	Device        *Device  `json:"device"`
 	Error         string   `json:"error"`
 	GuideError    string   `json:"guideError"`
@@ -74,7 +94,7 @@ type Status struct {
 
 func (s *Service) Status(ctx context.Context) Status {
 	s.mu.Lock()
-	st := Status{Configured: true, LibraryID: s.libraryID}
+	st := Status{Configured: s.configured(), Tuner: s.hdhr != nil, Virtual: s.virtualCount, LibraryID: s.libraryID}
 	if s.device != nil {
 		d := *s.device
 		d.DeviceAuth = "" // never leaves the server
@@ -94,6 +114,9 @@ func (s *Service) Status(ctx context.Context) Status {
 	st.RecordingsDir = s.RecordingsDir(ctx)
 	st.GuideThrough, _ = s.db.GuideCoverage(ctx)
 	st.LiveSessions = s.live.count()
+	if s.hdhr == nil {
+		return st
+	}
 	sctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	if tuners, err := s.hdhr.Status(sctx); err == nil {
@@ -111,24 +134,27 @@ func (s *Service) Status(ctx context.Context) Status {
 func (s *Service) Summary() map[string]any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return map[string]any{"configured": true, "recording": len(s.recCancel), "liveSessions": s.live.count(),
-		"online": s.device != nil && s.deviceErr == nil}
+	return map[string]any{"configured": s.configured(), "tuner": s.hdhr != nil, "recording": len(s.recCancel),
+		"liveSessions": s.live.count(), "online": s.device != nil && s.deviceErr == nil}
 }
 
 // Run refreshes the lineup and guide, runs the DVR scheduler and reaps idle
 // live streams until ctx ends.
 func (s *Service) Run(ctx context.Context) {
-	if err := CheckWritable(s.RecordingsDir(ctx)); err != nil {
-		slog.Error("recordings folder is not writable; recording will fail", "err", err)
-	}
-	s.ensureLibrary(ctx)
-	s.recoverInterrupted(ctx)
-
 	var wg sync.WaitGroup
-	wg.Add(3)
-	go func() { defer wg.Done(); s.refreshLoop(ctx) }()
-	go func() { defer wg.Done(); s.scheduler(ctx) }()
+	if s.hdhr != nil {
+		if err := CheckWritable(s.RecordingsDir(ctx)); err != nil {
+			slog.Error("recordings folder is not writable; recording will fail", "err", err)
+		}
+		s.ensureLibrary(ctx)
+		s.recoverInterrupted(ctx)
+		wg.Add(2)
+		go func() { defer wg.Done(); s.refreshLoop(ctx) }()
+		go func() { defer wg.Done(); s.scheduler(ctx) }()
+	}
+	wg.Add(2)
 	go func() { defer wg.Done(); s.live.run(ctx) }()
+	go func() { defer wg.Done(); s.virtualLoop(ctx) }()
 	wg.Wait()
 }
 
@@ -264,6 +290,10 @@ func (s *Service) setGuideErr(err error) {
 
 // RefreshNow re-reads lineup and guide on demand (Settings → Refresh).
 func (s *Service) RefreshNow(ctx context.Context) error {
+	if s.hdhr == nil {
+		s.RebuildVirtual()
+		return nil
+	}
 	if err := s.refreshLineup(ctx); err != nil {
 		return err
 	}

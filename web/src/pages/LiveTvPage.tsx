@@ -21,16 +21,20 @@ export default function LiveTvPage({ tab }: { tab: "guide" | "channels" | "recor
   if (st && !st.configured)
     return (
       <EmptyState icon={<RadioTower size={36} strokeWidth={1.5} />} title="Live TV isn't set up">
-        Set <span className="mono">COUCHSIDE_HDHOMERUN</span> to your HDHomeRun's IP address and restart Couchside.
+        Make your own channels from your library in <Link to="/settings" className="text-accent hover:underline">Settings</Link>, or set{" "}
+        <span className="mono">COUCHSIDE_HDHOMERUN</span> to your HDHomeRun's IP address and restart Couchside for broadcast TV.
       </EmptyState>
     );
 
   const tuners = st?.device?.TunerCount;
-  const subtitle = st?.error
-    ? `Can't reach the tuner: ${st.error}`
-    : st?.device
-      ? `${st.device.FriendlyName} · ${st.tunersInUse ?? 0} of ${tuners} tuners in use`
-      : "Connecting to the tuner…";
+  const subtitle =
+    st && !st.tuner
+      ? "Your own channels, playing from the library"
+      : st?.error
+        ? `Can't reach the tuner: ${st.error}`
+        : st?.device
+          ? `${st.device.FriendlyName} · ${st.tunersInUse ?? 0} of ${tuners} tuners in use`
+          : "Connecting to the tuner…";
 
   return (
     <div className="flex h-full flex-col">

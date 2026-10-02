@@ -10,19 +10,22 @@ import (
 // --- channels ------------------------------------------------------------------
 
 type Channel struct {
-	Number     string `json:"number"`
-	Name       string `json:"name"`
-	Affiliate  string `json:"affiliate"`
+	Number     string   `json:"number"`
+	Name       string   `json:"name"`
+	Affiliate  string   `json:"affiliate"`
 	LogoURL    ImageURL `json:"logoUrl"`
-	URL        string `json:"-"`
-	HD         bool   `json:"hd"`
-	DRM        bool   `json:"drm"`
-	VideoCodec string `json:"videoCodec"`
-	AudioCodec string `json:"audioCodec"`
+	URL        string   `json:"-"`
+	HD         bool     `json:"hd"`
+	DRM        bool     `json:"drm"`
+	VideoCodec string   `json:"videoCodec"`
+	AudioCodec string   `json:"audioCodec"`
 
 	Pinned         bool `json:"pinned"`
 	SignalStrength *int `json:"signalStrength"`
 	SignalQuality  *int `json:"signalQuality"`
+	// Virtual channels are Couchside's own (livetv/virtual.go), not the tuner's.
+	Virtual   bool   `json:"virtual"`
+	VirtualID *int64 `json:"-"`
 }
 
 // ReplaceChannels swaps in a fresh lineup. Guide logos/affiliates set by
@@ -41,7 +44,8 @@ func (d *DB) ReplaceChannels(ctx context.Context, chans []Channel, sortKey func(
 			ON CONFLICT (number) DO UPDATE SET name = excluded.name, url = excluded.url, hd = excluded.hd, drm = excluded.drm,
 			  video_codec = excluded.video_codec, audio_codec = excluded.audio_codec, sort_key = excluded.sort_key,
 			  signal_strength = excluded.signal_strength, signal_quality = excluded.signal_quality,
-			  updated_at = excluded.updated_at`,
+			  updated_at = excluded.updated_at
+			WHERE channels.virtual_id IS NULL`, // a virtual channel keeps its number
 			c.Number, c.Name, c.URL, c.HD, c.DRM, c.VideoCodec, c.AudioCodec, sortKey(c.Number),
 			c.SignalStrength, c.SignalQuality); err != nil {
 			return err
@@ -49,7 +53,7 @@ func (d *DB) ReplaceChannels(ctx context.Context, chans []Channel, sortKey func(
 		keep = append(keep, c.Number)
 	}
 	if len(keep) > 0 {
-		q := `DELETE FROM channels WHERE number NOT IN (?` + strings.Repeat(",?", len(keep)-1) + `)`
+		q := `DELETE FROM channels WHERE virtual_id IS NULL AND number NOT IN (?` + strings.Repeat(",?", len(keep)-1) + `)`
 		if _, err := tx.ExecContext(ctx, q, keep...); err != nil {
 			return err
 		}
@@ -61,12 +65,12 @@ func (d *DB) ReplaceChannels(ctx context.Context, chans []Channel, sortKey func(
 func channelCols(ctx context.Context) string {
 	return fmt.Sprintf(`number, name, affiliate, logo_url, url, hd, drm, video_codec, audio_codec,
 	EXISTS (SELECT 1 FROM profile_channels pc WHERE pc.profile_id = %d AND pc.number = channels.number) AS pinned,
-	signal_strength, signal_quality`, ProfileID(ctx))
+	signal_strength, signal_quality, virtual_id`, ProfileID(ctx))
 }
 
 func channelDest(c *Channel) []any {
 	return []any{&c.Number, &c.Name, &c.Affiliate, &c.LogoURL, &c.URL, &c.HD, &c.DRM, &c.VideoCodec, &c.AudioCodec,
-		&c.Pinned, &c.SignalStrength, &c.SignalQuality}
+		&c.Pinned, &c.SignalStrength, &c.SignalQuality, &c.VirtualID}
 }
 
 // SetChannelPinned makes a channel one of the ctx profile's favourites,
@@ -105,6 +109,7 @@ func (d *DB) Channels(ctx context.Context) ([]Channel, error) {
 		if err := rows.Scan(channelDest(&c)...); err != nil {
 			return nil, err
 		}
+		c.Virtual = c.VirtualID != nil
 		out = append(out, c)
 	}
 	return out, rows.Err()
@@ -113,6 +118,7 @@ func (d *DB) Channels(ctx context.Context) ([]Channel, error) {
 func (d *DB) Channel(ctx context.Context, number string) (Channel, error) {
 	var c Channel
 	err := d.sql.QueryRowContext(ctx, `SELECT `+channelCols(ctx)+` FROM channels WHERE number = ?`, number).Scan(channelDest(&c)...)
+	c.Virtual = c.VirtualID != nil
 	return c, notFound(err)
 }
 

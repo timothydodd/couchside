@@ -202,6 +202,13 @@ func (s *Server) adminRoutes(r chi.Router) {
 	r.Delete("/accounts/{id}", s.deleteAccount)
 	r.Get("/accounts/{id}/sessions", s.accountSessions)
 
+	r.Get("/livetv/virtual", s.listVirtual)
+	r.Get("/livetv/virtual/options", s.virtualOptions)
+	r.Post("/livetv/virtual/preview", s.previewVirtual)
+	r.Post("/livetv/virtual", s.createVirtual)
+	r.Put("/livetv/virtual/{id}", s.updateVirtual)
+	r.Delete("/livetv/virtual/{id}", s.deleteVirtual)
+
 	r.Get("/libraries", s.listLibraries)
 	r.Post("/libraries", s.createLibrary)
 	r.Put("/libraries/{id}", s.updateLibrary)

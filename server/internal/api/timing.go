@@ -23,7 +23,7 @@ const (
 	settingMergeGap = "commercials.merge_gap" // seconds of "show" between breaks that still counts as one break
 	defaultMergeGap = 60.0
 	maxMergeGap     = 300.0
-	maxPadding            = 30 * 60
+	maxPadding      = 30 * 60
 )
 
 func (s *Server) floatSetting(ctx context.Context, key string, def float64) float64 {
@@ -72,7 +72,7 @@ type timing struct {
 	SkipBeforeEnd  float64 `json:"skipBeforeEnd"`
 	// MergeGap is a pointer so a client that doesn't know it leaves it alone.
 	MergeGap *float64 `json:"mergeGap,omitempty"`
-	DVR            bool    `json:"dvr"` // padding only matters with a tuner
+	DVR      bool     `json:"dvr"` // padding only matters with a tuner
 }
 
 func (s *Server) getTiming(w http.ResponseWriter, r *http.Request) {
@@ -85,9 +85,9 @@ func (s *Server) currentTiming(ctx context.Context) timing {
 		SkipAfterStart: s.floatSetting(ctx, settingSkipAfterStart, defaultSkipTrim),
 		SkipBeforeEnd:  s.floatSetting(ctx, settingSkipBeforeEnd, defaultSkipTrim),
 		MergeGap:       &gap,
-		DVR:            s.tv != nil,
+		DVR:            s.tv.HasTuner(),
 	}
-	if s.tv != nil {
+	if s.tv.HasTuner() {
 		t.PadBefore, t.PadAfter = s.tv.Padding(ctx)
 	} else {
 		t.PadBefore, t.PadAfter = int64(s.cfg.PadBefore.Seconds()), int64(s.cfg.PadAfter.Seconds())
@@ -124,7 +124,7 @@ func (s *Server) saveTiming(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if s.tv != nil {
+	if s.tv.HasTuner() {
 		if err := s.tv.SetPadding(ctx, in.PadBefore, in.PadAfter); err != nil {
 			writeErr(w, err)
 			return

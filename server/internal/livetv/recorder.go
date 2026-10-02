@@ -76,6 +76,12 @@ func (s *Service) Watch(ctx context.Context, channel string, o WatchOpts) (*Live
 	if ch.DRM {
 		return nil, errors.New("this channel is copy-protected (ATSC 3.0 DRM) and can only be watched in SiliconDust's own apps")
 	}
+	if ch.VirtualID != nil {
+		return s.watchVirtual(ctx, *ch.VirtualID, ch, o)
+	}
+	if s.hdhr == nil {
+		return nil, errors.New("no tuner is set up")
+	}
 	return s.live.start(ctx, ch.Number, ch.Name, ch.URL, o.spec(ch.VideoCodec, ch.AudioCodec))
 }
 
@@ -122,6 +128,9 @@ func (s *Service) Record(ctx context.Context, programID int64) (int64, int, erro
 	}
 	if ch.DRM {
 		return 0, 0, errors.New("this channel is copy-protected (ATSC 3.0 DRM) and can't be recorded")
+	}
+	if ch.Virtual {
+		return 0, 0, errors.New("Couchside's own channels play from your library, so there's nothing to record")
 	}
 	r := db.Recording{Channel: p.Channel, ChannelName: ch.Name, Title: p.Title, EpisodeTitle: p.EpisodeTitle,
 		EpisodeNum: p.EpisodeNum, Synopsis: p.Synopsis, ImageURL: p.ImageURL, SeriesID: p.SeriesID,

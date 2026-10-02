@@ -8,7 +8,7 @@ import (
 )
 
 func (s *Server) rulesList(w http.ResponseWriter, r *http.Request) {
-	if s.tv == nil {
+	if !s.tv.HasTuner() {
 		writeErr(w, errNoTuner)
 		return
 	}
@@ -23,7 +23,7 @@ func (s *Server) rulesList(w http.ResponseWriter, r *http.Request) {
 // ruleOptions returns what the "Record series" form needs for a program:
 // the existing rule (if any) and library shows to compare against.
 func (s *Server) ruleOptions(w http.ResponseWriter, r *http.Request) {
-	if s.tv == nil {
+	if !s.tv.HasTuner() {
 		writeErr(w, errNoTuner)
 		return
 	}
@@ -52,7 +52,7 @@ type ruleInput struct {
 }
 
 func (s *Server) ruleCreate(w http.ResponseWriter, r *http.Request) {
-	if s.tv == nil {
+	if !s.tv.HasTuner() {
 		writeErr(w, errNoTuner)
 		return
 	}
@@ -93,7 +93,7 @@ func (s *Server) ruleCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) ruleUpdate(w http.ResponseWriter, r *http.Request) {
-	if s.tv == nil {
+	if !s.tv.HasTuner() {
 		writeErr(w, errNoTuner)
 		return
 	}
@@ -134,7 +134,7 @@ func (s *Server) ruleUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) ruleDelete(w http.ResponseWriter, r *http.Request) {
-	if s.tv == nil {
+	if !s.tv.HasTuner() {
 		writeErr(w, errNoTuner)
 		return
 	}

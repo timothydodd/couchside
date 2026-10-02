@@ -132,6 +132,8 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
         setError(`The live stream stopped (${data.details}). The signal may have dropped.`);
       });
       player.on(Hls.Events.LEVEL_UPDATED, (_e, data) => {
+        // Couchside's own channels pause briefly between clips, which this would read as slow encoding.
+        if (s.virtual) return;
         const sp = speed.current;
         const now = performance.now() / 1000;
         sp.samples = [...sp.samples.filter(([t]) => now - t < 30), [now, data.details.totalduration]];
@@ -227,7 +229,7 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
               <SkipBack size={15} /> Start over
             </TopButton>
           )}
-          {canRecord && now && now.recordingStatus !== "completed" && (
+          {canRecord && !current?.virtual && now && now.recordingStatus !== "completed" && (
             <TopButton label={recording ? "Stop recording" : "Record this program"} onClick={() => void toggleRecord()} danger={recording} disabled={recBusy || now.recordingStatus === "scheduled"}>
               {recording ? <Square size={12} className="fill-current" /> : <CircleDot size={15} className="text-critical" />}
               {recording ? "Stop" : "Record"}

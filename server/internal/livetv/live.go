@@ -39,10 +39,12 @@ type LiveSession struct {
 	CopyVideo bool `json:"copyVideo"`
 	CopyAudio bool `json:"copyAudio"`
 	HWDecode  bool `json:"hwDecode"` // VAAPI decodes and deinterlaces too
+	Virtual   bool `json:"virtual"`  // one of Couchside's own channels
 
-	key        string // what's being streamed: "ch:2.1" or "rec:42"
+	key        string // what's being streamed: "ch:2.1", "rec:42" or "vc:900"
 	dir        string
-	cmd        *exec.Cmd
+	cmd        *exec.Cmd          // tuner and recording streams: one ffmpeg
+	cancel     context.CancelFunc // virtual channels: stops their run loop
 	exited     chan struct{}
 	stderr     *syncBuffer
 	mu         sync.Mutex
@@ -275,7 +277,11 @@ func (m *liveManager) stop(s *LiveSession) {
 	delete(m.sessions, s.ID)
 	m.mu.Unlock()
 	if s.running() {
-		_ = s.cmd.Process.Kill()
+		if s.cancel != nil {
+			s.cancel()
+		} else {
+			_ = s.cmd.Process.Kill()
+		}
 		<-s.exited
 	}
 	_ = os.RemoveAll(s.dir)
@@ -348,4 +354,13 @@ func lastLine(s string) string {
 		s = s[:300]
 	}
 	return s
+}
+
+// stopKey ends every session streaming key (a channel whose settings changed).
+func (m *liveManager) stopKey(key string) {
+	for _, s := range m.sessionsList() {
+		if s.key == key {
+			m.stop(s)
+		}
+	}
 }

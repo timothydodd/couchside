@@ -7,6 +7,7 @@ import AccountManager from "../components/settings/AccountManager";
 import AccountSettings from "../components/settings/AccountSettings";
 import ServerNow from "../components/settings/ServerNow";
 import TimingSettings from "../components/settings/TimingSettings";
+import VirtualChannels from "../components/settings/VirtualChannels";
 import { api, useApi } from "../lib/api";
 import { fmtAgo, fmtDay, fmtTime } from "../lib/format";
 import { BREAK_MODES, SUBTITLE_LANGS } from "../lib/prefs";
@@ -46,6 +47,7 @@ export default function SettingsPage() {
         <MetadataSettings />
 
         <LiveTvSettings />
+        <VirtualChannels />
 
         <section className="card p-4">
           <div className="card-title mb-3">Transcoding</div>
@@ -249,16 +251,16 @@ function LiveTvSettings() {
     <section className="card p-4">
       <div className="mb-3 flex items-center justify-between">
         <div className="card-title">Live TV &amp; DVR</div>
-        {st.configured && (
+        {st.tuner && (
           <button className="btn-quiet !text-xs" disabled={busy} onClick={() => void refresh()}>
             <RefreshCw size={13} className={busy ? "animate-spin" : ""} /> Refresh channels &amp; guide
           </button>
         )}
       </div>
-      {!st.configured ? (
+      {!st.tuner ? (
         <p className="text-xs text-content-muted">
-          Set <span className="mono">COUCHSIDE_HDHOMERUN</span> to your HDHomeRun's IP address and a writable{" "}
-          <span className="mono">COUCHSIDE_RECORDINGS_DIR</span>, then restart.
+          For broadcast channels and recording, set <span className="mono">COUCHSIDE_HDHOMERUN</span> to your HDHomeRun's IP address and a writable{" "}
+          <span className="mono">COUCHSIDE_RECORDINGS_DIR</span>, then restart. Your own channels below work without one.
         </p>
       ) : (
         <dl className="kv-grid text-sm">
@@ -277,7 +279,7 @@ function LiveTvSettings() {
           </dd>
         </dl>
       )}
-      {st.configured && <RecordingsFolder onSaved={() => void reload()} />}
+      {st.tuner && <RecordingsFolder onSaved={() => void reload()} />}
       {err && <div className="mt-2 text-xs text-critical">{err}</div>}
     </section>
   );

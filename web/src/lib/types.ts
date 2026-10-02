@@ -360,6 +360,8 @@ export interface TvChannel {
   pinned: boolean;
   signalStrength: number | null;
   signalQuality: number | null;
+  /** One of Couchside's own channels, played from the library (no tuner, can't be recorded). */
+  virtual: boolean;
 }
 
 export interface Program {
@@ -395,6 +397,9 @@ export interface GuideResponse {
 
 export interface LiveTvStatus {
   configured: boolean;
+  /** An HDHomeRun is set up (without one, Live TV is only Couchside's own channels). */
+  tuner: boolean;
+  virtualChannels: number;
   device?: { FriendlyName: string; ModelNumber: string; DeviceID: string; FirmwareVersion: string; TunerCount: number };
   error?: string;
   guideError?: string;
@@ -418,6 +423,8 @@ export interface LiveSessionInfo {
   hwDecode?: boolean;
   copyVideo?: boolean;
   copyAudio?: boolean;
+  /** One of Couchside's own channels. */
+  virtual?: boolean;
   now: Program | null;
 }
 
@@ -603,4 +610,36 @@ export interface DeviceSession {
   lastUsedAt: number;
   expiresAt: number;
   current: boolean;
+}
+
+/** What one of Couchside's own channels plays (server: livetv.VirtualConfig). */
+export interface VirtualConfig {
+  libraries: number[];
+  kinds: ("movie" | "series")[];
+  genres: string[];
+  excludeGenres: string[];
+  yearFrom: number;
+  yearTo: number;
+  minRating: number;
+  items: number[];
+  order: "shuffle" | "sequential";
+  filler: { folder: string; align: number; breakEvery: number; breakLength: number };
+}
+
+export interface VirtualChannel {
+  id: number;
+  number: string;
+  name: string;
+  config: VirtualConfig;
+  /** Why it has no schedule, e.g. nothing matches its filters. */
+  error?: string;
+}
+
+export interface VirtualOptions {
+  genres: string[];
+  titles: { id: number; title: string; year: number; kind: "movie" | "series"; libraryId: number }[];
+  minYear: number;
+  maxYear: number;
+  nextNumber: string;
+  mediaRoot: string;
 }

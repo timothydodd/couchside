@@ -20,7 +20,7 @@ type folderOption struct {
 // dvrSettings lists where recordings can go: Couchside's own storage and each
 // TV library folder, with whether each is writable right now.
 func (s *Server) dvrSettings(w http.ResponseWriter, r *http.Request) {
-	if s.tv == nil {
+	if !s.tv.HasTuner() {
 		writeErr(w, errNoTuner)
 		return
 	}
@@ -70,7 +70,7 @@ func (s *Server) dvrSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) dvrSaveSettings(w http.ResponseWriter, r *http.Request) {
-	if s.tv == nil {
+	if !s.tv.HasTuner() {
 		writeErr(w, errNoTuner)
 		return
 	}

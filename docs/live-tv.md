@@ -1,7 +1,8 @@
 # Live TV and DVR
 
-Live TV needs an [HDHomeRun](https://www.silicondust.com) tuner: set
+Broadcast TV needs an [HDHomeRun](https://www.silicondust.com) tuner: set
 `COUCHSIDE_HDHOMERUN` to its IP address. The channel lineup refreshes hourly.
+[Your own channels](#your-own-channels), made from your library, need no tuner.
 
 ## Guide
 
@@ -96,6 +97,33 @@ used instead.
   Activity page.
 - Zip installs: put `comskip` on the PATH or set `COUCHSIDE_COMSKIP`;
   `COUCHSIDE_COMSKIP_INI` points at a tuned `comskip.ini` (keep `output_edl=1`).
+
+## Your own channels
+
+Admins can make channels from the library in **Settings → Your channels →
+New channel**. They play around the clock like broadcast TV and sit in the
+guide and channel list next to tuner channels (numbered from 900 by default),
+on the web and the Roku. No tuner is needed.
+
+- **What plays:** movies, shows or both, from some or all libraries, filtered
+  by genre (and genres to leave out), years and rating, or a hand-picked list
+  of titles. Presets (Movie night, Sitcom marathon, A decade, One show,
+  Classic TV) fill these in; the editor previews the next few hours.
+- **Order:** shuffle (everything once before anything repeats), or in order
+  (shows take turns, each continuing from its last episode; movies oldest
+  first). Split movies play all their parts; extras never play.
+- **Commercials (optional):** point a channel at a folder of clips (old ads,
+  trailers, bumpers). It needn't be a library. Programs can start on the hour,
+  half hour or quarter hour, padded with clips (never more than 10 minutes),
+  and have breaks every 8, 12 or 20 minutes. A guide entry covers its program's
+  commercials, as on real TV. `scripts/fetch-demo-media.py` downloads
+  public-domain 1950s and 60s commercials to try it with.
+- **How it works:** the schedule is built 36 hours ahead and topped up every 10
+  minutes, so nothing shifts when Couchside restarts or the library changes.
+  Nothing is encoded until someone tunes in: the stream starts part way into
+  whatever is on, at the quality the player asks for, and is shared by everyone
+  watching. It stops 20 seconds after the last viewer leaves.
+- They can't be recorded: everything on them is already in your library.
 
 ## Limits
 

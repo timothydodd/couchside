@@ -229,7 +229,7 @@ func (s *Server) underRoot(p string) bool {
 	}
 	within := func(r string) bool { return p == r || strings.HasPrefix(p, strings.TrimSuffix(r, "/")+"/") }
 	// The DVR's own folder is allowed too: it lives outside the read-only media mount.
-	return within(root) || (s.tv != nil && within(s.tv.DefaultRecordingsDir()))
+	return within(root) || (s.tv.HasTuner() && within(s.tv.DefaultRecordingsDir()))
 }
 
 func (s *Server) deleteLibrary(w http.ResponseWriter, r *http.Request) {

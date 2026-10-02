@@ -159,7 +159,7 @@ func (s *Server) tvWatch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"sessionId": sess.ID, "playlist": "/api/live/" + sess.ID + "/index.m3u8",
 		"channel": sess.Channel, "name": sess.Name, "height": sess.Height, "hw": sess.HW, "now": prog,
-		"copyVideo": sess.CopyVideo, "copyAudio": sess.CopyAudio, "hwDecode": sess.HWDecode,
+		"copyVideo": sess.CopyVideo, "copyAudio": sess.CopyAudio, "hwDecode": sess.HWDecode, "virtual": sess.Virtual,
 	})
 }
 

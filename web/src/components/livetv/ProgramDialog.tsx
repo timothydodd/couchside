@@ -26,7 +26,8 @@ export default function ProgramDialog({
   const airing = program.startAt <= now && program.endAt > now;
   const ended = program.endAt <= now;
   const drm = channel?.drm;
-  const canRecord = useCanRecord();
+  // Couchside's own channels play from the library: nothing to record.
+  const canRecord = useCanRecord() && !channel?.virtual;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
