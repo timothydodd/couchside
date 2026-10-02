@@ -56,6 +56,24 @@ rules and server settings are shared. Switch profiles from the sidebar.
 
 ## For TV apps
 
+**Finding the server.** Send an SSDP search to `239.255.255.250:1900`:
+
+```
+M-SEARCH * HTTP/1.1
+HOST: 239.255.255.250:1900
+MAN: "ssdp:discover"
+MX: 1
+ST: urn:couchside-app:device:server:1
+```
+
+Each Couchside on the LAN answers (unicast, within a second) with
+`LOCATION: <base>/api/discovery`, `USN: uuid:<server id>::…` and
+`X-COUCHSIDE-NAME`, `X-COUCHSIDE-VERSION`, `X-COUCHSIDE-URL` (the base URL)
+and `X-COUCHSIDE-SIGNIN` (`passwordless` or `password`). `GET /api/discovery`
+returns the same as JSON without signing in. The server id survives restarts,
+so a TV can remember which server it picked. Discovery only works on the same
+network segment; typing the address stays the fallback.
+
 Read `GET /api/auth`, sign in with `POST /api/auth/pick`
 (`{"profileId", "client": "tv"}`, passwordless) or `POST /api/auth/login`
 (`"client": "tv"`), send `Authorization: Bearer <accessToken>`, and renew with
