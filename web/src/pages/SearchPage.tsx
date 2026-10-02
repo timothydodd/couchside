@@ -103,7 +103,13 @@ export default function SearchPage({ q }: { q: string }) {
         </>
       )}
       {open && (
-        <ProgramDialog program={open.p} channel={open.c ?? undefined} onClose={() => setOpen(null)} onChange={() => void reload()} />
+        <ProgramDialog
+          // The fresh copy after a reload (Record, Don't record), not the one clicked.
+          program={data?.programs.find((r) => r.program.id === open.p.id)?.program ?? open.p}
+          channel={open.c ?? undefined}
+          onClose={() => setOpen(null)}
+          onChange={() => void reload()}
+        />
       )}
     </div>
   );

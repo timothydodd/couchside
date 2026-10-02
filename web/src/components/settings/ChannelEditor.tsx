@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Clapperboard, FolderOpen, Search, Tv, X } from "lucide-react";
 import FolderPicker from "../FolderPicker";
 import { Choices } from "../FilterMenu";
@@ -6,6 +6,7 @@ import { ErrorNote, Segmented, Spinner } from "../ui";
 import { api, useApi } from "../../lib/api";
 import { fmtTime } from "../../lib/format";
 import type { Library, Program, VirtualChannel, VirtualConfig, VirtualOptions } from "../../lib/types";
+import { useDialog } from "../../lib/dialog";
 
 const BLANK: VirtualConfig = {
   libraries: [],
@@ -60,11 +61,8 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
   useEffect(() => {
     if (!channel && opts && !number) setNumber(opts.nextNumber);
   }, [opts, channel, number]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  const dialog = useRef<HTMLElement>(null);
+  useDialog(dialog, onClose);
 
   const set = (patch: Partial<VirtualConfig>) => setCfg((c) => ({ ...c, ...patch }));
   const setFiller = (patch: Partial<VirtualConfig["filler"]>) => setCfg((c) => ({ ...c, filler: { ...c.filler, ...patch } }));
@@ -101,7 +99,7 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
   return (
     <>
       <div className="fixed inset-0 z-30 bg-black/30" onClick={onClose} />
-      <aside className="side-panel max-w-xl" role="dialog" aria-label={channel ? `Edit ${channel.name}` : "New channel"}>
+      <aside className="side-panel max-w-xl" role="dialog" aria-modal="true" ref={dialog} aria-label={channel ? `Edit ${channel.name}` : "New channel"}>
         <div className="flex items-center gap-3 px-4 py-4">
           <div className="min-w-0 flex-1">
             <div className="text-base font-semibold text-content">{channel ? `Edit ${channel.name}` : "New channel"}</div>

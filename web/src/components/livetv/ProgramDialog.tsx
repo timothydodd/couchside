@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { AlertTriangle, CircleDot, Play, Repeat, Square, X } from "lucide-react";
 import SeriesForm from "./SeriesForm";
 import { useCanRecord } from "../../stores/auth";
@@ -6,6 +6,7 @@ import Link from "../Link";
 import { ApiError, api } from "../../lib/api";
 import { fmtSlot } from "../../lib/format";
 import type { Program, TvChannel } from "../../lib/types";
+import { useDialog } from "../../lib/dialog";
 
 /** Program details with Watch and Record actions. */
 export default function ProgramDialog({
@@ -29,11 +30,8 @@ export default function ProgramDialog({
   // Couchside's own channels play from the library: nothing to record.
   const canRecord = useCanRecord() && !channel?.virtual;
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  const dialog = useRef<HTMLDivElement>(null);
+  useDialog(dialog, onClose);
 
   const record = async () => {
     setBusy(true);
@@ -58,10 +56,14 @@ export default function ProgramDialog({
 
   const cancel = async () => {
     if (!program.recordingId) return;
+    if (program.recordingStatus === "recording" && !confirm(`Stop recording "${program.title}"? What's been recorded so far is kept.`)) return;
     setBusy(true);
+    setMsg(null);
     try {
       await api(`/api/dvr/recordings/${program.recordingId}/cancel`, { method: "POST" });
       onChange();
+    } catch (e) {
+      setMsg({ tone: "critical", text: e instanceof ApiError ? e.message : String(e) });
     } finally {
       setBusy(false);
     }
@@ -69,7 +71,7 @@ export default function ProgramDialog({
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4" onClick={onClose}>
-      <div className="card relative max-h-[92vh] w-full max-w-lg overflow-y-auto shadow-[var(--shadow-md)]" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={program.title}>
+      <div className="card relative max-h-[92vh] w-full max-w-lg overflow-y-auto shadow-[var(--shadow-md)]" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={program.title} ref={dialog}>
         {program.imageUrl && (
           <div className="relative aspect-video bg-raised">
             <img src={program.imageUrl} alt="" className="h-full w-full object-cover" />
