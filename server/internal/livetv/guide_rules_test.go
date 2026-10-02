@@ -58,8 +58,8 @@ func TestNewModeSkipsRecordedEpisodes(t *testing.T) {
 	s, d, _ := newTestService(t)
 	ctx := context.Background()
 	past := time.Now().Add(-48 * time.Hour).Unix()
-	id, err := d.ScheduleRecording(ctx, db.Recording{Channel: "5.1", Title: "Two and a Half Men", EpisodeNum: "S12E01",
-		EpisodeTitle: "Finale", SeriesID: "SH123", StartAt: past, EndAt: past + 1800})
+	id, _, err := d.ScheduleRecording(ctx, db.Recording{Channel: "5.1", Title: "Two and a Half Men", EpisodeNum: "S12E01",
+		EpisodeTitle: "Finale", SeriesID: "SH123", StartAt: past, EndAt: past + 1800}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestMarkRecordingRespectsCancel(t *testing.T) {
 	_, d, _ := newTestService(t)
 	ctx := context.Background()
 	at := time.Now().Add(time.Hour).Unix()
-	id, err := d.ScheduleRecording(ctx, db.Recording{Channel: "2.1", Title: "X", StartAt: at, EndAt: at + 1800})
+	id, _, err := d.ScheduleRecording(ctx, db.Recording{Channel: "2.1", Title: "X", StartAt: at, EndAt: at + 1800}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

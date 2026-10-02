@@ -305,13 +305,7 @@ func affected(res sql.Result, err error) error {
 	return nil
 }
 
-// --- ownership of recordings and rules -------------------------------------------
-
-// SetRecordingOwner records who scheduled a recording.
-func (d *DB) SetRecordingOwner(ctx context.Context, id, profileID int64) error {
-	_, err := d.sql.ExecContext(ctx, `UPDATE recordings SET profile_id = ? WHERE id = ? AND profile_id IS NULL`, profileID, id)
-	return err
-}
+// --- ownership of rules -------------------------------------------
 
 // SetRuleOwner records who made a series rule (the first one to, if it existed).
 func (d *DB) SetRuleOwner(ctx context.Context, id, profileID int64) error {

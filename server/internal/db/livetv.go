@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -363,21 +364,56 @@ func (d *DB) Overlapping(ctx context.Context, from, to int64, excludeID int64) (
 	return n, err
 }
 
-// ScheduleRecording creates (or revives a cancelled/failed) recording for a program.
-func (d *DB) ScheduleRecording(ctx context.Context, r Recording) (int64, error) {
+// What ScheduleRecording did with an airing.
+type ScheduleOutcome int
+
+const (
+	ScheduleCreated  ScheduleOutcome = iota // a new row
+	ScheduleRevived                         // a cancelled or failed row, scheduled again
+	ScheduleExisting                        // already scheduled, recording or recorded; left as it was
+)
+
+// ScheduleRecording schedules an airing for owner (a profile id; 0 for
+// none). A new or revived row belongs to owner and to no rule; a row that's
+// already scheduled, recording or completed is returned unchanged, so
+// pressing Record never takes over someone else's recording.
+func (d *DB) ScheduleRecording(ctx context.Context, r Recording, owner int64) (int64, ScheduleOutcome, error) {
+	var ownerArg any
+	if owner > 0 {
+		ownerArg = owner
+	}
+	tx, err := d.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer tx.Rollback()
 	var id int64
-	err := d.sql.QueryRowContext(ctx, `INSERT INTO recordings (channel, channel_name, title, episode_title, episode_num,
-		synopsis, image_url, series_id, categories, start_at, end_at, pad_before, pad_after)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT (channel, start_at) DO UPDATE SET status = CASE WHEN recordings.status IN ('cancelled', 'failed')
-		    THEN 'scheduled' ELSE recordings.status END,
-		  title = excluded.title, episode_title = excluded.episode_title, episode_num = excluded.episode_num,
-		  synopsis = excluded.synopsis, image_url = excluded.image_url, end_at = excluded.end_at,
-		  pad_before = excluded.pad_before, pad_after = excluded.pad_after, error = ''
-		RETURNING id`,
-		r.Channel, r.ChannelName, r.Title, r.EpisodeTitle, r.EpisodeNum, r.Synopsis, r.ImageURL, r.SeriesID,
-		strings.Join(r.Categories, ","), r.StartAt, r.EndAt, r.PadBefore, r.PadAfter).Scan(&id)
-	return id, err
+	var status string
+	err = tx.QueryRowContext(ctx, `SELECT id, status FROM recordings WHERE channel = ? AND start_at = ?`, r.Channel, r.StartAt).Scan(&id, &status)
+	outcome := ScheduleCreated
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		err = tx.QueryRowContext(ctx, `INSERT INTO recordings (channel, channel_name, title, episode_title, episode_num,
+			synopsis, image_url, series_id, categories, start_at, end_at, pad_before, pad_after, profile_id)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			RETURNING id`,
+			r.Channel, r.ChannelName, r.Title, r.EpisodeTitle, r.EpisodeNum, r.Synopsis, r.ImageURL, r.SeriesID,
+			strings.Join(r.Categories, ","), r.StartAt, r.EndAt, r.PadBefore, r.PadAfter, ownerArg).Scan(&id)
+	case err != nil:
+	case status == "cancelled" || status == "failed":
+		outcome = ScheduleRevived
+		_, err = tx.ExecContext(ctx, `UPDATE recordings SET status = 'scheduled', channel_name = ?,
+			title = ?, episode_title = ?, episode_num = ?, synopsis = ?, image_url = ?, end_at = ?,
+			pad_before = ?, pad_after = ?, error = '', profile_id = ?, rule_id = NULL WHERE id = ?`,
+			r.ChannelName, r.Title, r.EpisodeTitle, r.EpisodeNum, r.Synopsis, r.ImageURL, r.EndAt,
+			r.PadBefore, r.PadAfter, ownerArg, id)
+	default:
+		outcome = ScheduleExisting
+	}
+	if err != nil {
+		return 0, 0, err
+	}
+	return id, outcome, tx.Commit()
 }
 
 // MarkRecording moves a scheduled recording to recording. It reports false
