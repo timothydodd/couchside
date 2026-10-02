@@ -340,6 +340,8 @@ export interface Job {
   startedAt: number | null;
   finishedAt: number | null;
   progress: number | null;
+  /** What a finished job did: a scan's counts, and the files it skipped and why. */
+  result: string;
 }
 
 export interface Browse {

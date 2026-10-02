@@ -13,7 +13,7 @@ Libraries page; Couchside scans it, matches every title, and fetches artwork.
   (`COUCHSIDE_SCAN_INTERVAL`). Unchanged files are re-parsed each time, so
   parser fixes reach existing libraries without a re-index. A scan that
   couldn't read a folder, or found an empty library folder (an unmounted
-  share), removes nothing and shows as failed in Activity.
+  share), removes nothing and shows as failed in Activity. Each scan's line in Activity says what it added, changed and removed, and which files it skipped and why (a TV file with no season and episode in its name, a sample clip).
 - **Stream info** from ffprobe: duration, codecs, resolution and track counts.
   Files that can't be read (corrupt, or DRM-protected iTunes purchases) are
   flagged and the UI explains why they won't play.
