@@ -26,6 +26,7 @@ type Config struct {
 	PadAfter      time.Duration
 	Metadata      *metadata.Chain // identifies which same-titled series a recording is; may be nil
 	FFprobe       string          // reads commercial clip lengths for virtual channels
+	MaxEncodes    int             // live streams converting video at once
 }
 
 // Service owns the tuner, guide, live sessions and the DVR scheduler.
@@ -61,7 +62,7 @@ func (s *Service) HasTuner() bool { return s.hdhr != nil }
 func (s *Service) configured() bool { return s.hdhr != nil || s.virtualCount > 0 }
 
 func New(cfg Config, d *db.DB, enc transcode.Encoder, work Enqueuer, cacheDir string) (*Service, error) {
-	lm, err := newLiveManager(enc, filepath.Join(cacheDir, "live"))
+	lm, err := newLiveManager(enc, filepath.Join(cacheDir, "live"), cfg.MaxEncodes)
 	if err != nil {
 		return nil, err
 	}

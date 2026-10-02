@@ -73,19 +73,124 @@ func (l *LiveSession) running() bool {
 }
 
 type liveManager struct {
-	enc  transcode.Encoder
-	root string
+	enc        transcode.Encoder
+	root       string
+	maxEncodes int // live streams that encode video at once (COUCHSIDE_MAX_TRANSCODES)
 
 	mu       sync.Mutex
 	sessions map[string]*LiveSession
+	starting map[string]*liveStart // streams being started, by startKey
 }
 
-func newLiveManager(enc transcode.Encoder, root string) (*liveManager, error) {
+// liveStart is a stream being started; others asking for the same one wait
+// for it rather than take a second tuner.
+type liveStart struct {
+	done   chan struct{}
+	s      *LiveSession
+	err    error
+	encode bool
+}
+
+// ErrBusyEncoding means the live encode limit is reached.
+var ErrBusyEncoding = errors.New("too many streams are being converted right now; try again shortly, or a lower quality on another stream")
+
+func newLiveManager(enc transcode.Encoder, root string, maxEncodes int) (*liveManager, error) {
 	_ = os.RemoveAll(root)
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return nil, err
 	}
-	return &liveManager{enc: enc, root: root, sessions: map[string]*LiveSession{}}, nil
+	if maxEncodes <= 0 {
+		maxEncodes = 2
+	}
+	return &liveManager{enc: enc, root: root, maxEncodes: maxEncodes, sessions: map[string]*LiveSession{},
+		starting: map[string]*liveStart{}}, nil
+}
+
+// LiveHeights are the heights a live stream can be converted to (the player's
+// presets). Anything else snaps to the nearest one below, so heights can't be
+// used to start an encode each, or to upscale.
+var LiveHeights = []int{360, 480, 720, 1080}
+
+func snapHeight(h int) int {
+	if h <= 0 {
+		return 720
+	}
+	out := LiveHeights[0]
+	for _, p := range LiveHeights {
+		if p <= h {
+			out = p
+		}
+	}
+	return out
+}
+
+// claim joins a running or starting stream for k, or registers k as starting
+// and returns a nil session with its liveStart, which the caller must finish.
+// It refuses a new video encode past the limit. Caller holds m.mu.
+func (m *liveManager) claimLocked(ctx context.Context, k string, match func(*LiveSession) bool, encode bool) (*LiveSession, *liveStart, error) {
+	for {
+		for _, s := range m.sessions {
+			if match(s) && s.running() {
+				s.touch()
+				return s, nil, nil
+			}
+		}
+		f := m.starting[k]
+		if f == nil {
+			break
+		}
+		m.mu.Unlock()
+		select {
+		case <-f.done:
+		case <-ctx.Done():
+			m.mu.Lock()
+			return nil, nil, ctx.Err()
+		}
+		m.mu.Lock()
+		// The first caller gave up (its viewer left): try again ourselves.
+		if errors.Is(f.err, context.Canceled) {
+			continue
+		}
+		if f.err != nil {
+			return nil, nil, f.err
+		}
+		f.s.touch()
+		return f.s, nil, nil
+	}
+	if encode && m.encodesLocked() >= m.maxEncodes {
+		return nil, nil, ErrBusyEncoding
+	}
+	f := &liveStart{done: make(chan struct{}), encode: encode}
+	m.starting[k] = f
+	return nil, f, nil
+}
+
+// encodesLocked counts streams converting video, running or starting.
+func (m *liveManager) encodesLocked() int {
+	n := 0
+	for _, s := range m.sessions {
+		if !s.CopyVideo && s.running() {
+			n++
+		}
+	}
+	for _, f := range m.starting {
+		if f.encode {
+			n++
+		}
+	}
+	return n
+}
+
+// finish records how a start went and wakes anyone waiting on it.
+func (m *liveManager) finish(k string, f *liveStart, s *LiveSession, err error) {
+	m.mu.Lock()
+	if err == nil {
+		m.sessions[s.ID] = s
+	}
+	delete(m.starting, k)
+	f.s, f.err = s, err
+	m.mu.Unlock()
+	close(f.done)
 }
 
 func (m *liveManager) count() int {
@@ -100,12 +205,20 @@ type Spec struct {
 	CopyVideo  bool   // repackage the broadcast's video as is (height is then the source's)
 	CopyAudio  bool   // repackage the broadcast's audio as is (e.g. AC-3 for a Roku)
 	VideoCodec string // the broadcast's video codec, normalized ("mpeg2", "h264", "hevc"); "" if unknown
+
+	window int // segments kept in the playlist; 0 keeps all (a recording watched from its start)
 }
+
+// liveWindow keeps 3 hours of a tuner stream (the rewind the live player
+// offers); older segments are deleted, so a TV left on overnight doesn't
+// fill the disk.
+const liveWindow = 3 * 3600 / liveSegDur
 
 // start tunes a channel, or joins a running stream of it at the same quality.
 // It returns once the first playlist exists, or with an error if the tuner
 // refused (all tuners busy) or ffmpeg failed.
 func (m *liveManager) start(ctx context.Context, channel, name, streamURL string, spec Spec) (*LiveSession, error) {
+	spec.window = liveWindow
 	return m.startInput(ctx, "ch:"+channel, channel, name, []string{
 		"-rw_timeout", "15000000", // 15s without data from the tuner → give up
 		"-fflags", "+genpts+discardcorrupt", "-err_detect", "ignore_err", "-i", streamURL,
@@ -127,16 +240,30 @@ var gpuCodecs = map[string]string{"mpeg2": "mpeg2video", "h264": "h264", "hevc":
 func (m *liveManager) startInput(ctx context.Context, key, channel, name string, input []string, spec Spec) (*LiveSession, error) {
 	if spec.CopyVideo {
 		spec.Height = 0 // the broadcast's own size
+	} else {
+		spec.Height = snapHeight(spec.Height)
 	}
+	k := fmt.Sprintf("%s|%d|%t|%t", key, spec.Height, spec.CopyVideo, spec.CopyAudio)
 	m.mu.Lock()
-	for _, s := range m.sessions {
-		if s.key == key && s.Height == spec.Height && s.CopyVideo == spec.CopyVideo && s.CopyAudio == spec.CopyAudio && s.running() {
-			m.mu.Unlock()
-			s.touch()
-			return s, nil
-		}
-	}
+	joined, f, err := m.claimLocked(ctx, k, func(s *LiveSession) bool {
+		return s.key == key && s.Height == spec.Height && s.CopyVideo == spec.CopyVideo && s.CopyAudio == spec.CopyAudio
+	}, !spec.CopyVideo)
 	m.mu.Unlock()
+	if err != nil || joined != nil {
+		return joined, err
+	}
+	s, err := m.launchInput(ctx, key, channel, name, input, spec)
+	m.finish(k, f, s, err)
+	if err != nil {
+		return nil, err
+	}
+	slog.Info("live tv", "channel", channel, "name", name, "height", spec.Height, "hw", s.HW, "gpuDecode", s.HWDecode,
+		"copyVideo", spec.CopyVideo, "copyAudio", spec.CopyAudio, "session", s.ID)
+	return s, nil
+}
+
+// launchInput starts ffmpeg for a new stream, falling back to CPU decoding.
+func (m *liveManager) launchInput(ctx context.Context, key, channel, name string, input []string, spec Spec) (*LiveSession, error) {
 
 	// Decode on the GPU when it passed the start-up test and knows the codec;
 	// if that run fails (not a busy tuner), tune again with the CPU decoding.
@@ -146,15 +273,7 @@ func (m *liveManager) startInput(ctx context.Context, key, channel, name string,
 		slog.Warn("live tv: GPU decoding failed, decoding on the CPU instead", "channel", channel, "err", err)
 		s, err = m.launch(ctx, key, channel, name, input, spec, false)
 	}
-	if err != nil {
-		return nil, err
-	}
-	m.mu.Lock()
-	m.sessions[s.ID] = s
-	m.mu.Unlock()
-	slog.Info("live tv", "channel", channel, "name", name, "height", spec.Height, "hw", s.HW, "gpuDecode", s.HWDecode,
-		"copyVideo", spec.CopyVideo, "copyAudio", spec.CopyAudio, "session", s.ID)
-	return s, nil
+	return s, err
 }
 
 // liveArgs builds the ffmpeg command for one live stream.
@@ -180,9 +299,14 @@ func (m *liveManager) liveArgs(input []string, spec Spec, hwDecode bool, dir str
 	} else {
 		args = append(args, transcode.AudioArgs()...)
 	}
-	return append(args, "-f", "hls", "-hls_time", strconv.Itoa(liveSegDur), "-hls_list_size", "0",
-		"-hls_playlist_type", "event", "-hls_flags", "temp_file+independent_segments",
-		"-hls_segment_filename", filepath.Join(dir, "seg%d.ts"), filepath.Join(dir, "index.m3u8"))
+	args = append(args, "-f", "hls", "-hls_time", strconv.Itoa(liveSegDur))
+	if spec.window > 0 {
+		args = append(args, "-hls_list_size", strconv.Itoa(spec.window), "-hls_delete_threshold", "1",
+			"-hls_flags", "temp_file+independent_segments+delete_segments")
+	} else {
+		args = append(args, "-hls_list_size", "0", "-hls_playlist_type", "event", "-hls_flags", "temp_file+independent_segments")
+	}
+	return append(args, "-hls_segment_filename", filepath.Join(dir, "seg%d.ts"), filepath.Join(dir, "index.m3u8"))
 }
 
 // launch starts ffmpeg and waits for its first playlist.
