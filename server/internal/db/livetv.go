@@ -159,9 +159,31 @@ func (d *DB) UpsertPrograms(ctx context.Context, ps []Program) error {
 		return err
 	}
 	defer stmt.Close()
+	type span struct {
+		from, to int64
+		starts   []any
+	}
+	spans := map[string]*span{}
 	for _, p := range ps {
 		if _, err := stmt.ExecContext(ctx, p.Channel, p.StartAt, p.EndAt, p.Title, p.EpisodeTitle, p.EpisodeNum, p.Synopsis,
 			p.ImageURL, p.SeriesID, p.OriginalAirdate, p.IsNew, strings.Join(p.Categories, ",")); err != nil {
+			return err
+		}
+		sp := spans[p.Channel]
+		if sp == nil {
+			sp = &span{from: p.StartAt, to: p.EndAt}
+			spans[p.Channel] = sp
+		}
+		sp.from, sp.to = min(sp.from, p.StartAt), max(sp.to, p.EndAt)
+		sp.starts = append(sp.starts, p.StartAt)
+	}
+	// The page is the whole truth for the time it covers: a program it no
+	// longer lists there moved (8:00 became 8:15) or was dropped, and its old
+	// row would overlap the new one.
+	for ch, sp := range spans {
+		args := append([]any{ch, sp.from, sp.to}, sp.starts...)
+		if _, err := tx.ExecContext(ctx, `DELETE FROM programs WHERE channel = ? AND start_at >= ? AND start_at < ?
+			AND start_at NOT IN (?`+strings.Repeat(",?", len(sp.starts)-1)+`)`, args...); err != nil {
 			return err
 		}
 	}
@@ -313,6 +335,26 @@ func (d *DB) RecordingsWithStatus(ctx context.Context, status string) ([]Recordi
 	return d.queryRecordings(ctx, `WHERE r.status = ?`, status)
 }
 
+// ActiveWindows lists the padded [start, end) windows of scheduled and
+// in-progress recordings that overlap [from, to).
+func (d *DB) ActiveWindows(ctx context.Context, from, to int64) ([][2]int64, error) {
+	rows, err := d.sql.QueryContext(ctx, `SELECT start_at - pad_before, end_at + pad_after FROM recordings
+		WHERE status IN ('scheduled', 'recording') AND start_at - pad_before < ? AND end_at + pad_after > ?`, to, from)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out [][2]int64
+	for rows.Next() {
+		var w [2]int64
+		if err := rows.Scan(&w[0], &w[1]); err != nil {
+			return nil, err
+		}
+		out = append(out, w)
+	}
+	return out, rows.Err()
+}
+
 // Overlapping counts active recordings whose padded windows overlap [from, to).
 func (d *DB) Overlapping(ctx context.Context, from, to int64, excludeID int64) (int, error) {
 	var n int
@@ -338,10 +380,16 @@ func (d *DB) ScheduleRecording(ctx context.Context, r Recording) (int64, error) 
 	return id, err
 }
 
-func (d *DB) MarkRecording(ctx context.Context, id int64, path string) error {
-	_, err := d.sql.ExecContext(ctx, `UPDATE recordings SET status = 'recording', path = ?, started_at = unixepoch(), error = ''
-		WHERE id = ?`, path, id)
-	return err
+// MarkRecording moves a scheduled recording to recording. It reports false
+// when the row is no longer scheduled (cancelled while it was starting).
+func (d *DB) MarkRecording(ctx context.Context, id int64, path string) (bool, error) {
+	res, err := d.sql.ExecContext(ctx, `UPDATE recordings SET status = 'recording', path = ?, started_at = unixepoch(), error = ''
+		WHERE id = ? AND status = 'scheduled'`, path, id)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }
 
 func (d *DB) FinishRecording(ctx context.Context, id int64, status, path string, size int64, errMsg string) error {

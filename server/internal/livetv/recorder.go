@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/timothydodd/couchside/internal/db"
 )
@@ -204,7 +205,23 @@ func (s *Service) scheduler(ctx context.Context) {
 				_ = s.db.FinishRecording(ctx, r.ID, "failed", "", 0, "Missed: the server wasn't running when this aired")
 				continue
 			}
-			s.startRecording(ctx, r, "", nil)
+			// Each on its own: picking the file may wait on a metadata
+			// lookup, which mustn't make the next recording start late.
+			s.mu.Lock()
+			busy := s.starting[r.ID]
+			s.starting[r.ID] = true
+			s.mu.Unlock()
+			if busy {
+				continue
+			}
+			go func(r db.Recording) {
+				defer func() {
+					s.mu.Lock()
+					delete(s.starting, r.ID)
+					s.mu.Unlock()
+				}()
+				s.startRecording(ctx, r, "", nil)
+			}(r)
 		}
 		select {
 		case <-ctx.Done():
@@ -219,13 +236,22 @@ func (s *Service) scheduler(ctx context.Context) {
 // path and the parts captured so far are given.
 func (s *Service) startRecording(parent context.Context, r db.Recording, path string, parts []string) {
 	if path == "" {
-		path = s.recordingPath(parent, r)
+		year := s.showYear(parent, r, true) // may wait on the network; outside pathMu
+		s.pathMu.Lock()
+		path = s.pathInDir(s.RecordingsDir(parent), recordingName(r, year))
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			s.pathMu.Unlock()
 			_ = s.db.FinishRecording(parent, r.ID, "failed", "", 0, "Recordings folder isn't writable: "+err.Error())
 			return
 		}
-		if err := s.db.MarkRecording(parent, r.ID, path); err != nil {
+		ok, err := s.db.MarkRecording(parent, r.ID, path)
+		s.pathMu.Unlock()
+		if err != nil {
 			slog.Error("dvr: mark recording", "err", err)
+			return
+		}
+		if !ok {
+			slog.Info("dvr: not starting a recording that was cancelled meanwhile", "title", r.Title)
 			return
 		}
 	}
@@ -422,7 +448,11 @@ func recordingName(r db.Recording, year int) recName {
 	start := time.Unix(r.StartAt, 0).Local()
 	var season, file string
 	if m := reEpisode.FindStringSubmatch(r.EpisodeNum); m != nil {
-		season = "Season " + strings.TrimLeft(m[1], "0")
+		n := strings.TrimLeft(m[1], "0")
+		if n == "" {
+			n = "0" // specials: "S00E05" goes in "Season 0"
+		}
+		season = "Season " + n
 		file = fmt.Sprintf("%s - %s", show, r.EpisodeNum)
 	} else {
 		season = fmt.Sprintf("Season %d", start.Year())
@@ -431,16 +461,19 @@ func recordingName(r db.Recording, year int) recName {
 	if r.EpisodeTitle != "" {
 		file += " - " + safeName(r.EpisodeTitle)
 	}
-	if len(file) > 180 {
-		file = file[:180]
-	}
+	file = truncateUTF8(file, 180)
 	return recName{show: show, season: season, file: file, title: title, year: year}
 }
 
-// recordingPath is where a new recording goes: the current recordings folder,
-// inside an existing matching show/season folder when there is one.
-func (s *Service) recordingPath(ctx context.Context, r db.Recording) string {
-	return s.pathInDir(s.RecordingsDir(ctx), recordingName(r, s.showYear(ctx, r, true)))
+// truncateUTF8 cuts s to at most n bytes without splitting a character.
+func truncateUTF8(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return strings.TrimRight(s[:n], " .")
 }
 
 func safeName(s string) string {
