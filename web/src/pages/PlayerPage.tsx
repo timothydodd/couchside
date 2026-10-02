@@ -9,6 +9,7 @@ import { audioLabel, subtitleDetail, subtitleLabel, type AudioTrack, type Subtit
 import { parseVtt } from "../lib/vtt";
 import { PROBLEM_TEXT, type BreakMode, type Commercials, type HlsSession, type PlayInfo } from "../lib/types";
 import { BREAK_MODES, sameLanguage } from "../lib/prefs";
+import { useIsAdmin } from "../stores/auth";
 import { usePrefs, useProfile } from "../stores/profile";
 import { useRouter } from "../stores/router";
 
@@ -35,13 +36,15 @@ let partStart: { fileId: number; at: number } | null = null;
  * picture subtitles switches to a server stream that includes them.
  */
 export default function PlayerPage({ fileId }: { fileId: number }) {
-  const { data: loaded, error: infoError } = useApi<PlayInfo>(`/api/files/${fileId}`);
+  // Fresh, never cached: the resume point is read once from this.
+  const { data: loaded, error: infoError } = useApi<PlayInfo>(`/api/files/${fileId}`, { fresh: true });
   // useApi hands back the previous file's info for a render after fileId changes.
   const info = loaded?.fileId === fileId ? loaded : undefined;
   const { data: streams } = useApi<{ audio: AudioTrack[]; subtitles: SubtitleTrack[] }>(`/api/files/${fileId}/streams`);
   const [breakPoll, setBreakPoll] = useState(false);
   const { data: comm, reload: reloadComm } = useApi<Commercials>(`/api/files/${fileId}/commercials`, { pollMs: breakPoll ? 5000 : undefined });
   const prefs = usePrefs();
+  const isAdmin = useIsAdmin();
   const breakMode = prefs.commercials ?? "auto";
   const { go, back } = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -347,10 +350,18 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
+    // The last real position. By the time this effect's cleanup sends the
+    // final report, the source effect has already reset the element.
+    let last = { position: 0, duration: 0 };
+    const remember = () => {
+      if (v.duration && isFinite(v.duration)) last = { position: v.currentTime, duration: v.duration };
+    };
     const report = (keepalive = false, stopped = false) => {
-      if (!v.duration || !isFinite(v.duration) || v.currentTime < 1) return;
+      remember();
+      const { position, duration } = last;
+      if (!duration || position < 1) return;
       const state = stopped ? "stopped" : v.paused ? "paused" : "playing";
-      const body = { position: v.currentTime, duration: v.duration, state, mode: modeRef.current };
+      const body = { position, duration, state, mode: modeRef.current };
       const url = `/api/files/${fileId}/progress`;
       // While the page lives, api() renews an expired token and retries;
       // a keepalive report on the way out can't wait for that.
@@ -360,6 +371,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
       void sent.catch(() => {});
     };
     const t = setInterval(() => !v.paused && report(), REPORT_EVERY_MS);
+    v.addEventListener("timeupdate", remember);
     const onPause = () => report();
     const onHide = () => document.visibilityState === "hidden" && report(true);
     const onPageHide = () => report(true, true);
@@ -369,6 +381,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
     return () => {
       clearInterval(t);
       report(true, true);
+      v.removeEventListener("timeupdate", remember);
       v.removeEventListener("pause", onPause);
       document.removeEventListener("visibilitychange", onHide);
       window.removeEventListener("pagehide", onPageHide);
@@ -489,7 +502,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
         switchTo(() => setSub({ kind: "burn", track: t }));
       },
     },
-    commercialsSection(comm, breakMode, !!info && BROADCAST.has(info.container), chooseBreakMode, findCommercials),
+    commercialsSection(comm, breakMode, !!info && BROADCAST.has(info.container), chooseBreakMode, findCommercials, isAdmin),
     {
       id: "speed",
       label: "Playback speed",
@@ -541,6 +554,7 @@ function commercialsSection(
   broadcast: boolean,
   onMode: (m: BreakMode) => void,
   onFind: () => void,
+  canRedo: boolean, // running detection again is for admins
 ): SettingSection {
   const hidden = !comm || (comm.status === "none" && !(broadcast && comm.available));
   if (comm?.status === "done") {
@@ -552,7 +566,7 @@ function commercialsSection(
       value: n === 0 ? "None found" : `${n} break${n === 1 ? "" : "s"} · ${BREAK_MODES.find((m) => m.id === mode)!.short}`,
       options: [
         ...BREAK_MODES.map((m) => ({ id: m.id, label: m.label, detail: m.detail, active: m.id === mode })),
-        ...(comm.available ? [{ id: "again", label: "Look again", detail: "Re-run detection on this file" }] : []),
+        ...(comm.available && canRedo ? [{ id: "again", label: "Look again", detail: "Re-run detection on this file" }] : []),
       ],
       onSelect: (id) => (id === "again" ? onFind() : onMode(id as BreakMode)),
     };

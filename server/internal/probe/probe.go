@@ -55,12 +55,20 @@ type ffprobeOut struct {
 	} `json:"streams"`
 }
 
+// Timeout bounds one ffprobe run. Tests shorten it.
+var Timeout = 60 * time.Second
+
 func Probe(ctx context.Context, bin, path string) (*Info, error) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, Timeout)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, bin, "-v", "error", "-print_format", "json",
 		"-show_format", "-show_streams", path).Output()
 	if err != nil {
+		// Timed out (a slow share) or cancelled: say so, so callers can tell
+		// that from a file ffprobe couldn't read.
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("ffprobe: %w", ctx.Err())
+		}
 		if ee, ok := err.(*exec.ExitError); ok {
 			return nil, fmt.Errorf("ffprobe: %s", strings.TrimSpace(string(ee.Stderr)))
 		}

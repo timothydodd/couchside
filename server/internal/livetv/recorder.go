@@ -116,36 +116,41 @@ func (s *Service) LiveSessions() []*LiveSession             { return s.live.sess
 
 // Record schedules a guide program. Returns the recording id and how many
 // other recordings overlap it (more than the tuner count means a conflict).
-func (s *Service) Record(ctx context.Context, programID int64) (int64, int, error) {
+// Record schedules a guide program for owner (see db.ScheduleRecording).
+// existing is true when the airing was already set to record, in which case
+// nothing changed.
+func (s *Service) Record(ctx context.Context, programID, owner int64) (id int64, overlap int, existing bool, err error) {
 	p, err := s.db.Program(ctx, programID)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, false, err
 	}
 	if p.EndAt <= time.Now().Unix() {
-		return 0, 0, usererr.New("that program has already ended")
+		return 0, 0, false, usererr.New("that program has already ended")
 	}
 	ch, err := s.db.Channel(ctx, p.Channel)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, false, err
 	}
 	if ch.DRM {
-		return 0, 0, usererr.New("this channel is copy-protected (ATSC 3.0 DRM) and can't be recorded")
+		return 0, 0, false, usererr.New("this channel is copy-protected (ATSC 3.0 DRM) and can't be recorded")
 	}
 	if ch.Virtual {
-		return 0, 0, usererr.New("Couchside's own channels play from your library, so there's nothing to record")
+		return 0, 0, false, usererr.New("Couchside's own channels play from your library, so there's nothing to record")
 	}
 	r := db.Recording{Channel: p.Channel, ChannelName: ch.Name, Title: p.Title, EpisodeTitle: p.EpisodeTitle,
 		EpisodeNum: p.EpisodeNum, Synopsis: p.Synopsis, ImageURL: p.ImageURL, SeriesID: p.SeriesID,
 		Categories: p.Categories, StartAt: p.StartAt, EndAt: p.EndAt}
 	r.PadBefore, r.PadAfter = s.Padding(ctx)
-	id, err := s.db.ScheduleRecording(ctx, r)
+	id, outcome, err := s.db.ScheduleRecording(ctx, r, owner)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, false, err
 	}
-	s.prefetchShow(r)
-	overlap, _ := s.db.Overlapping(ctx, r.StartAt-r.PadBefore, r.EndAt+r.PadAfter, id)
-	s.wake()
-	return id, overlap, nil
+	if outcome != db.ScheduleExisting {
+		s.prefetchShow(r)
+		s.wake()
+	}
+	overlap, _ = s.db.Overlapping(ctx, r.StartAt-r.PadBefore, r.EndAt+r.PadAfter, id)
+	return id, overlap, outcome == db.ScheduleExisting, nil
 }
 
 // Cancel stops a running recording (keeping what was recorded) or drops a scheduled one.
@@ -278,7 +283,7 @@ func (s *Service) record(ctx, parent context.Context, r db.Recording, path strin
 	end := time.Unix(r.EndAt+r.PadAfter, 0)
 	slog.Info("dvr: recording", "title", r.Title, "channel", r.Channel, "until", end.Format(time.Kitchen), "path", path, "resumedParts", len(parts))
 	var lastErr string
-	for attempt := len(parts); time.Until(end) > 5*time.Second && ctx.Err() == nil; attempt++ {
+	for attempt := nextPart(path, parts); time.Until(end) > 5*time.Second && ctx.Err() == nil; attempt++ {
 		ch, err := s.db.Channel(parent, r.Channel)
 		if err != nil {
 			lastErr = "channel is no longer in the lineup"
@@ -328,6 +333,7 @@ func (s *Service) record(ctx, parent context.Context, r db.Recording, path strin
 		return
 	}
 	if err := joinParts(parent, s.cfg.FFmpeg, parts, path); err != nil {
+		slog.Error("dvr: couldn't join recording parts; they're still on disk", "title", r.Title, "parts", parts, "err", err)
 		_ = s.db.FinishRecording(parent, r.ID, "failed", parts[0], 0, "Couldn't finish the file: "+err.Error())
 		return
 	}
@@ -387,6 +393,7 @@ func (s *Service) recoverInterrupted(ctx context.Context) {
 			continue
 		}
 		if err := joinParts(ctx, s.cfg.FFmpeg, parts, r.Path); err != nil {
+			slog.Error("dvr: couldn't join recording parts; they're still on disk", "title", r.Title, "parts", parts, "err", err)
 			_ = s.db.FinishRecording(ctx, r.ID, "failed", "", 0, "Interrupted by a server restart")
 			continue
 		}
@@ -410,18 +417,54 @@ func existingParts(path string) []string {
 	if st, err := os.Stat(path); err == nil && st.Size() > 0 {
 		out = append(out, path)
 	}
-	base := strings.TrimSuffix(path, ".ts")
-	matches, _ := filepath.Glob(base + ".part*.ts")
-	sort.Slice(matches, func(i, j int) bool { return partIndex(matches[i], base) < partIndex(matches[j], base) })
-	return append(out, matches...)
+	return append(out, partFiles(path)...)
 }
 
-func partIndex(p, base string) int {
-	n, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(p, base+".part"), ".ts"))
+// partFiles lists the "<name>.partN.ts" pieces next to path, sorted by N. It
+// reads the folder instead of globbing, because titles can hold [ and ].
+func partFiles(path string) []string {
+	dir, base := filepath.Dir(path), strings.TrimSuffix(filepath.Base(path), ".ts")
+	entries, _ := os.ReadDir(dir)
+	var out []string
+	for _, e := range entries {
+		if !e.IsDir() && partIndex(e.Name(), base) >= 0 {
+			out = append(out, filepath.Join(dir, e.Name()))
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return partIndex(filepath.Base(out[i]), base) < partIndex(filepath.Base(out[j]), base)
+	})
+	return out
+}
+
+// partIndex is N when name is "<base>.partN.ts", otherwise -1.
+func partIndex(name, base string) int {
+	mid, ok := strings.CutPrefix(name, base+".part")
+	if !ok {
+		return -1
+	}
+	if mid, ok = strings.CutSuffix(mid, ".ts"); !ok || mid == "" || strings.Trim(mid, "0123456789") != "" {
+		return -1
+	}
+	n, err := strconv.Atoi(mid)
 	if err != nil {
-		return 1 << 30
+		return -1
 	}
 	return n
+}
+
+// nextPart numbers the next piece of a recording at path: one past the
+// highest part captured so far, so a resume never overwrites one (failed
+// attempts leave gaps).
+func nextPart(path string, parts []string) int {
+	base := strings.TrimSuffix(filepath.Base(path), ".ts")
+	next := 0
+	for _, p := range parts {
+		if n := partIndex(filepath.Base(p), base); n >= next {
+			next = n + 1
+		}
+	}
+	return next
 }
 
 var (

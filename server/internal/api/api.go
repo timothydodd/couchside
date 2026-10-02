@@ -73,6 +73,7 @@ func (s *Server) Run(ctx context.Context) {
 		defer t.Stop()
 		for {
 			s.pruneRemote()
+			s.pruneSubs()
 			s.pruneTables(ctx)
 			select {
 			case <-ctx.Done():

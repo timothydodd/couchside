@@ -187,12 +187,27 @@ func (s *Service) pathInDir(dir string, n recName) string {
 	})
 	base := filepath.Join(dir, showDir, seasonDir)
 	p := filepath.Join(base, file+".ts")
-	for i := 2; ; i++ {
-		if _, err := os.Stat(p); errors.Is(err, os.ErrNotExist) {
-			return p
-		}
+	for i := 2; s.pathTaken(p); i++ {
 		p = filepath.Join(base, fmt.Sprintf("%s (%d).ts", file, i))
 	}
+	return p
+}
+
+// pathTaken reports whether a new recording can't use p: the file exists,
+// or another recording is still writing its parts there (the final file
+// only appears when it finishes).
+func (s *Service) pathTaken(p string) bool {
+	if _, err := os.Stat(p); !errors.Is(err, os.ErrNotExist) {
+		return true
+	}
+	if len(partFiles(p)) > 0 {
+		return true
+	}
+	taken, err := s.db.RecordingPathActive(context.Background(), p)
+	if err != nil {
+		slog.Warn("dvr: check recording path", "path", p, "err", err)
+	}
+	return taken
 }
 
 // matchDir returns the name of an existing subfolder of parent that matches,

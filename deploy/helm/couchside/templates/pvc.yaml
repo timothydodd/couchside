@@ -1,14 +1,14 @@
-{{- range $name, $p := dict "data" .Values.persistence.data "cache" .Values.persistence.cache }}
-{{- if not $p.existingClaim }}
+{{- range $name, $p := dict "data" .Values.persistence.data "cache" .Values.persistence.cache "recordings" .Values.persistence.recordings }}
+{{- if and (not $p.existingClaim) (or (ne $name "recordings") $p.enabled) }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: {{ include "couchside.fullname" $ }}-{{ $name }}
   labels: {{- include "couchside.labels" $ | nindent 4 }}
-  {{- if eq $name "data" }}
+  {{- if ne $name "cache" }}
   annotations:
-    helm.sh/resource-policy: keep   # don't lose the library DB on uninstall
+    helm.sh/resource-policy: keep   # don't lose the library DB or recordings on uninstall
   {{- end }}
 spec:
   accessModes: [ReadWriteOnce]
