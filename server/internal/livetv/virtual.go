@@ -16,6 +16,7 @@ import (
 
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/probe"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 // Virtual channels are Couchside's own channels: shows and movies from the
@@ -65,22 +66,22 @@ func (c *VirtualConfig) Validate() error {
 		c.Order = "shuffle"
 	}
 	if c.Order != "shuffle" && c.Order != "sequential" {
-		return errors.New("order must be shuffle or sequential")
+		return usererr.New("order must be shuffle or sequential")
 	}
 	for _, k := range c.Kinds {
 		if k != "movie" && k != "series" {
-			return errors.New("kinds are movie and series")
+			return usererr.New("kinds are movie and series")
 		}
 	}
 	if c.YearFrom != 0 && c.YearTo != 0 && c.YearFrom > c.YearTo {
-		return errors.New("the year range is backwards")
+		return usererr.New("the year range is backwards")
 	}
 	f := &c.Filler
 	if !slices.Contains([]int{0, 15, 30, 60}, f.Align) {
-		return errors.New("align to 15, 30 or 60 minutes, or 0")
+		return usererr.New("align to 15, 30 or 60 minutes, or 0")
 	}
 	if f.BreakEvery < 0 || f.BreakEvery > 120 || f.BreakLength < 0 || f.BreakLength > 600 {
-		return errors.New("breaks are every 0 to 120 minutes and up to 10 minutes long")
+		return usererr.New("breaks are every 0 to 120 minutes and up to 10 minutes long")
 	}
 	if f.BreakEvery > 0 && f.BreakLength == 0 {
 		f.BreakLength = 120
@@ -361,7 +362,7 @@ func (f *fillerPool) take(ms int64, exact bool) []db.FillerClip {
 // --- building the schedule -----------------------------------------------------
 
 // ErrNothingToPlay means no file in the library matches a channel's filters.
-var ErrNothingToPlay = errors.New("nothing in the library matches this channel")
+var ErrNothingToPlay = usererr.New("nothing in the library matches this channel")
 
 // extendVirtual builds a channel's schedule ahead when it's running low.
 func (s *Service) extendVirtual(ctx context.Context, vc db.VirtualChannel, now time.Time) error {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Cpu, ExternalLink, MoreHorizontal, RotateCcw, Scissors, Trash2, X } from "lucide-react";
 import Link from "../Link";
 import { PosterArt } from "../PosterCard";
@@ -10,6 +10,7 @@ import { api, useApi } from "../../lib/api";
 import { fmtBytes, relPath } from "../../lib/format";
 import type { DeleteResult, Library, ManageFile, ManageRow } from "../../lib/types";
 import { useStatus } from "../../stores/status";
+import { useDialog } from "../../lib/dialog";
 
 /** A message at the top of the panel: what a delete or a queued job did. */
 type Note = { text: string; error?: boolean };
@@ -19,11 +20,8 @@ export default function ItemPanel({ row, library, onClose, onChanged }: { row: M
   const { data: files, reload: reloadFiles } = useApi<ManageFile[]>(`/api/items/${row.id}/files`);
   const [note, setNote] = useState<Note | null>(null);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  const dialog = useRef<HTMLElement>(null);
+  useDialog(dialog, onClose);
   useEffect(() => setNote(null), [row.id]);
 
   const changed = () => {
@@ -45,7 +43,7 @@ export default function ItemPanel({ row, library, onClose, onChanged }: { row: M
   return (
     <>
       <div className="fixed inset-0 z-30 bg-black/30" onClick={onClose} />
-      <aside className="side-panel" role="dialog" aria-label={`Manage ${row.title}`}>
+      <aside className="side-panel" role="dialog" aria-modal="true" aria-label={`Manage ${row.title}`} ref={dialog}>
         <div className="flex items-start gap-3 px-4 py-4">
           <div className="poster relative w-16 shrink-0">
             <PosterArt item={row} bare />

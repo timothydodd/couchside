@@ -47,20 +47,30 @@ export function useLiveCushion(videoRef: RefObject<HTMLVideoElement | null>, key
         v.pause(); // autoplay or hls.js started it early
       }
     };
+    // A press on the player since this stream started. (userActivation
+    // won't do: it's still active for seconds after the click that opened
+    // the channel, so autoplay looked like the viewer's own press.)
+    let pressedAt = 0;
+    const onPress = () => {
+      pressedAt = performance.now();
+    };
     const onPlay = () => {
-      // The viewer pressed play during a hold (a click or key just happened,
-      // unlike autoplay): respect it.
-      if (ours.current && navigator.userActivation?.isActive) {
+      // The viewer pressed play during a hold: respect it.
+      if (ours.current && pressedAt > since.current && performance.now() - pressedAt < 1000) {
         ours.current = false;
         setHolding(false);
       }
     };
     const t = setInterval(check, 500);
+    window.addEventListener("pointerdown", onPress, true);
+    window.addEventListener("keydown", onPress, true);
     v.addEventListener("waiting", hold);
     v.addEventListener("progress", check);
     v.addEventListener("play", onPlay);
     return () => {
       clearInterval(t);
+      window.removeEventListener("pointerdown", onPress, true);
+      window.removeEventListener("keydown", onPress, true);
       v.removeEventListener("waiting", hold);
       v.removeEventListener("progress", check);
       v.removeEventListener("play", onPlay);

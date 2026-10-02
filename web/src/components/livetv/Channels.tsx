@@ -86,7 +86,15 @@ export default function Channels({ filters, setFilters }: { filters: TvFilters; 
           );
         })}
       </div>
-      {open && <ProgramDialog program={open.p} channel={open.c} onClose={() => setOpen(null)} onChange={() => void reload()} />}
+      {open && (
+        <ProgramDialog
+          // The fresh copy after a reload (Record, Don't record), not the one clicked.
+          program={[data?.find((c) => c.number === open.c.number)?.now, data?.find((c) => c.number === open.c.number)?.next].find((p) => p?.id === open.p.id) ?? open.p}
+          channel={open.c}
+          onClose={() => setOpen(null)}
+          onChange={() => void reload()}
+        />
+      )}
     </div>
   );
 }

@@ -39,6 +39,13 @@ type Config struct {
 	// Set it for a server reachable from the internet.
 	Auth bool
 
+	// LAN discovery (SSDP), so TV apps find the server without typing its address.
+	Discovery          bool   // COUCHSIDE_DISCOVERY: answer SSDP searches (default on; "false" turns it off)
+	DiscoveryURL       string // COUCHSIDE_DISCOVERY_URL: base URL to advertise, when the port others reach differs (Docker -p 8095:8080)
+	DiscoveryInterface string // COUCHSIDE_DISCOVERY_INTERFACE: network interface to listen on; empty = the default one
+	ServerName         string // COUCHSIDE_SERVER_NAME: shown in TV apps' server lists; default the host name
+	ServerID           string // stable id for this server, kept in $DATA/server.id (set at start-up, not from the environment)
+
 	Comskip    string // COUCHSIDE_COMSKIP: comskip binary; commercial detection is off when it isn't found
 	ComskipINI string // COUCHSIDE_COMSKIP_INI: your own comskip.ini; empty uses Couchside's defaults
 }
@@ -70,6 +77,11 @@ func Load() Config {
 		PadAfter:      envDur("COUCHSIDE_DVR_PAD_AFTER", 10*time.Second),
 
 		Auth: envBool("COUCHSIDE_AUTH"),
+
+		Discovery:          !envFalse("COUCHSIDE_DISCOVERY"),
+		DiscoveryURL:       os.Getenv("COUCHSIDE_DISCOVERY_URL"),
+		DiscoveryInterface: os.Getenv("COUCHSIDE_DISCOVERY_INTERFACE"),
+		ServerName:         serverName(),
 
 		Comskip:    env("COUCHSIDE_COMSKIP", "comskip"),
 		ComskipINI: os.Getenv("COUCHSIDE_COMSKIP_INI"),
@@ -145,4 +157,25 @@ func envBool(key string) bool {
 		return true
 	}
 	return false
+}
+
+func envFalse(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "0", "false", "no", "off":
+		return true
+	}
+	return false
+}
+
+// serverName is COUCHSIDE_SERVER_NAME, else the host name, unless that's a
+// container's random id (12 hex characters), which says nothing to a person.
+func serverName() string {
+	if v := strings.TrimSpace(os.Getenv("COUCHSIDE_SERVER_NAME")); v != "" {
+		return v
+	}
+	h, _ := os.Hostname()
+	if h == "" || (len(h) == 12 && strings.Trim(h, "0123456789abcdef") == "") {
+		return "Couchside"
+	}
+	return h
 }

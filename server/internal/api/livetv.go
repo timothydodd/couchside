@@ -20,7 +20,25 @@ func (s *Server) tvStatus(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"configured": false})
 		return
 	}
-	writeJSON(w, http.StatusOK, s.tv.Status(r.Context()))
+	st := s.tv.Status(r.Context())
+	if currentUser(r.Context()).Admin {
+		writeJSON(w, http.StatusOK, st)
+		return
+	}
+	// Others see what the Live TV page needs, not the recordings folder,
+	// other clients' addresses or the tuner's own address in errors.
+	out := map[string]any{"configured": st.Configured, "tuner": st.Tuner, "virtualChannels": st.Virtual,
+		"tunersInUse": st.TunersInUse, "recording": st.Recording}
+	if st.Device != nil {
+		out["device"] = map[string]any{"FriendlyName": st.Device.FriendlyName, "TunerCount": st.Device.TunerCount}
+	}
+	if st.Error != "" {
+		out["error"] = "the tuner isn't answering"
+	}
+	if st.GuideError != "" {
+		out["guideError"] = "the guide couldn't be updated"
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) tvRefresh(w http.ResponseWriter, r *http.Request) {
@@ -145,6 +163,9 @@ func (s *Server) tvWatch(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, livetv.ErrNoTuner):
 		writeErr(w, httpError{http.StatusServiceUnavailable, "All tuners are busy (recordings, other viewers or Plex). Try again when one frees up."})
+		return
+	case errors.Is(err, livetv.ErrBusyEncoding):
+		writeErr(w, httpError{http.StatusTooManyRequests, err.Error()})
 		return
 	case err != nil:
 		writeErr(w, err)
@@ -318,6 +339,10 @@ func (s *Server) dvrWatch(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			writeErr(w, err)
+			return
+		}
+		if errors.Is(err, livetv.ErrBusyEncoding) {
+			writeErr(w, httpError{http.StatusTooManyRequests, err.Error()})
 			return
 		}
 		writeErr(w, badRequest(err.Error()))

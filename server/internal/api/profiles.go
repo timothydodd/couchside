@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -29,6 +30,9 @@ func (s *Server) listProfiles(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"profiles": []db.Profile{p}, "current": p.ID, "chosen": true})
 }
 
+// maxProfileName is the longest profile (account) name, in characters.
+const maxProfileName = 30
+
 type profileInput struct {
 	Name  string `json:"name"`
 	Color string `json:"color"`
@@ -36,8 +40,8 @@ type profileInput struct {
 
 func (in *profileInput) validate() error {
 	in.Name = strings.Join(strings.Fields(in.Name), " ")
-	if in.Name == "" || utf8.RuneCountInString(in.Name) > 30 {
-		return badRequest("a profile name needs 1 to 30 characters")
+	if in.Name == "" || utf8.RuneCountInString(in.Name) > maxProfileName {
+		return badRequest(fmt.Sprintf("a profile name needs 1 to %d characters", maxProfileName))
 	}
 	if in.Color == "" {
 		in.Color = "accent"
