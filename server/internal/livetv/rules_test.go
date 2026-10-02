@@ -210,3 +210,63 @@ func TestRecordingJoinsExistingShowFolder(t *testing.T) {
 		t.Errorf("new show path: %s", got)
 	}
 }
+
+func TestExistingPartsGapsAndBrackets(t *testing.T) {
+	dir := t.TempDir()
+	final := filepath.Join(dir, "Show [HD] - S01E01.ts")
+	base := final[:len(final)-3]
+	for _, n := range []string{base + ".part0.ts", base + ".part2.ts", base + ".partx.ts", base + ".part+3.ts", base + ".joining.ts"} {
+		if err := os.WriteFile(n, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := existingParts(final)
+	if len(got) != 2 || got[0] != base+".part0.ts" || got[1] != base+".part2.ts" {
+		t.Fatalf("existingParts = %v", got)
+	}
+	if n := nextPart(final, got); n != 3 {
+		t.Errorf("nextPart after part0, part2 = %d, want 3", n)
+	}
+	if n := nextPart(final, []string{base + ".part3.ts"}); n != 4 {
+		t.Errorf("nextPart after part3 = %d, want 4", n)
+	}
+	// A finished file from an older build isn't a numbered part.
+	if n := nextPart(final, []string{final}); n != 0 {
+		t.Errorf("nextPart after the final file only = %d, want 0", n)
+	}
+}
+
+func TestRecordingPathSkipsOneInProgress(t *testing.T) {
+	s, d, _ := newTestService(t)
+	ctx := context.Background()
+	dir := t.TempDir()
+	start := time.Date(2026, 9, 30, 20, 0, 0, 0, time.Local).Unix()
+	name := recordingName(db.Recording{Title: "Ghosts", EpisodeNum: "S02E05", StartAt: start}, 0)
+	first := s.pathInDir(dir, name)
+
+	// The first recording is still writing parts; the final file doesn't exist yet.
+	if err := os.MkdirAll(filepath.Dir(first), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	part := first[:len(first)-3] + ".part0.ts"
+	if err := os.WriteFile(part, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	second := s.pathInDir(dir, name)
+	if second == first {
+		t.Fatalf("second recording got the path whose part file exists: %s", second)
+	}
+
+	// Before its first part appears, the row's path alone holds it.
+	os.Remove(part)
+	id, err := d.ScheduleRecording(ctx, db.Recording{Channel: "2.1", Title: "Ghosts", StartAt: start, EndAt: start + 1800})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.MarkRecording(ctx, id, first); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.pathInDir(dir, name); got == first {
+		t.Fatalf("path of an in-progress recording was reused: %s", got)
+	}
+}

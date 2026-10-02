@@ -24,6 +24,9 @@ var skipDirs = map[string]bool{"@eadir": true, "#recycle": true, "$recycle.bin":
 // A word inside a title ("S02E05 - Free Sample") isn't one.
 var reSample = regexp.MustCompile(`(?i)(^|[-._])sample$`)
 
+// rePartFile matches the pieces a DVR recording writes before joining them.
+var rePartFile = regexp.MustCompile(`\.(part\d+|joining)\.ts$`)
+
 func (w *Worker) scan(ctx context.Context, libID int64) error {
 	lib, err := w.db.Library(ctx, libID)
 	if err != nil {
@@ -70,6 +73,13 @@ func (w *Worker) scan(ctx context.Context, libID int64) error {
 		}
 		if !parse.IsVideo(name) || strings.HasPrefix(name, ".") {
 			return nil
+		}
+		// A recording in progress isn't an episode yet; its parts are joined
+		// into the final file, which the scan after it finishes picks up.
+		if m := rePartFile.FindStringIndex(path); m != nil {
+			if active, err := w.db.RecordingPathActive(ctx, path[:m[0]]+".ts"); err != nil || active {
+				return err
+			}
 		}
 		videos++
 		info, err := d.Info()
