@@ -34,14 +34,23 @@ func (w *Worker) scan(ctx context.Context, libID int64) error {
 	}
 	// Every file visited gets last_seen = start; anything older is gone.
 	start := time.Now().Unix()
-	var added, changed, skipped int
+	var added, changed, skipped, videos int
+	// unreadable is the first path the walk couldn't read. Files under it
+	// weren't seen, so nothing may be pruned.
+	var unreadable string
+	missed := func(path string, err error) {
+		slog.Warn("scan: skipping unreadable path", "path", path, "err", err)
+		if unreadable == "" {
+			unreadable = path
+		}
+	}
 
 	walkErr := filepath.WalkDir(lib.Path, func(path string, d fs.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		if err != nil {
-			slog.Warn("scan: skipping unreadable path", "path", path, "err", err)
+			missed(path, err)
 			if d != nil && d.IsDir() {
 				return fs.SkipDir
 			}
@@ -62,8 +71,10 @@ func (w *Worker) scan(ctx context.Context, libID int64) error {
 		if !parse.IsVideo(name) || strings.HasPrefix(name, ".") {
 			return nil
 		}
+		videos++
 		info, err := d.Info()
 		if err != nil {
+			missed(path, err)
 			return nil
 		}
 		if isSample(path) && info.Size() < 300<<20 {
@@ -98,6 +109,16 @@ func (w *Worker) scan(ctx context.Context, libID int64) error {
 	if walkErr != nil {
 		// Don't prune after a partial walk: missing files may just be unvisited.
 		return walkErr
+	}
+	if unreadable != "" {
+		slog.Warn("scan incomplete, nothing removed", "library", lib.Name, "unreadable", unreadable, "added", added, "changed", changed)
+		return fmt.Errorf("couldn't read %s, so nothing was removed", unreadable)
+	}
+	// An unmounted share is usually an empty folder. Someone who really
+	// emptied a library removes it in Libraries.
+	if videos == 0 && lib.FileCount > 0 {
+		slog.Warn("scan found no files, nothing removed", "library", lib.Name, "path", lib.Path)
+		return fmt.Errorf("library folder %s is empty; is the share mounted? Nothing was removed", lib.Path)
 	}
 	removed, err := w.db.PruneLibrary(ctx, lib.ID, start)
 	if err != nil {
