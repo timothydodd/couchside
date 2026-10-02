@@ -31,7 +31,7 @@ RUN --mount=type=secret,id=tmdb_key \
 # argtable2 (only in edge) is built static so the runtime needs no extra package;
 # its 2005 config.guess/config.sub don't know aarch64, so automake's replace them.
 # Runs on the target platform: it links the same ffmpeg libraries as the runtime.
-FROM alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8 AS comskip
+FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS comskip
 ARG COMSKIP_REF=V0.83
 # The tag's commit: the build stops if the tag is ever moved.
 ARG COMSKIP_COMMIT=55b0bcd018ddb9dacfad79addc48df55c1411073
@@ -61,7 +61,7 @@ RUN git clone --depth 1 --branch ${COMSKIP_REF} https://github.com/erikkaashoek/
  && make -j"$(nproc)" && strip comskip
 
 # --- runtime: Alpine for ffmpeg ------------------------------------------------
-FROM alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
+FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 # Intel VAAPI drivers (iHD for Broadwell and newer, i965 for older chips) so
 # COUCHSIDE_HWACCEL=vaapi can use /dev/dri. x86 only.
 RUN apk add --no-cache ffmpeg ca-certificates tzdata \
