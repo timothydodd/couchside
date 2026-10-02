@@ -32,6 +32,14 @@ func (d *DB) SetPassword(ctx context.Context, id int64, hash string, mustChange 
 	return affected(res, err)
 }
 
+// SetPasswordLocked sets whether a profile may change its own password.
+// Locking also drops "must change password": the account couldn't.
+func (d *DB) SetPasswordLocked(ctx context.Context, id int64, locked bool) error {
+	res, err := d.sql.ExecContext(ctx, `UPDATE profiles SET password_locked = ?,
+		must_change_password = CASE WHEN ? THEN 0 ELSE must_change_password END WHERE id = ?`, locked, locked, id)
+	return affected(res, err)
+}
+
 // SetAccess changes what a profile may do. The last enabled admin can't be
 // demoted or disabled.
 func (d *DB) SetAccess(ctx context.Context, id int64, role string, canRecord, disabled bool) (Profile, error) {

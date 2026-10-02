@@ -10,6 +10,8 @@ import { authError, useAuth } from "../../stores/auth";
 export default function AccountSettings() {
   const { user, changePassword, logout } = useAuth();
   const hasPassword = !!user?.hasPassword;
+  // A shared profile: only an admin manages its password.
+  const locked = !!user?.passwordLocked && user.role !== "admin";
   const [current, setCurrent] = useState("");
   const [password, setPassword] = useState<string | null>(null);
   const [formKey, setFormKey] = useState(0);
@@ -59,32 +61,36 @@ export default function AccountSettings() {
         </button>
       </div>
 
-      <form
-        key={formKey}
-        className="grid gap-3 sm:grid-cols-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void save();
-        }}
-      >
-        {hasPassword ? (
-          <label className="block">
-            <span className="field-label">Current password</span>
-            <input className="field w-full" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
-          </label>
-        ) : (
-          <p className="text-xs text-content-muted sm:self-center">
-            You sign in by picking your profile. Set a password to lock it; others will need it to use your profile.
-          </p>
-        )}
-        <NewPassword onChange={setPassword} />
-        <div className="flex items-center gap-3 sm:col-span-3">
-          <button type="submit" className="btn-primary" disabled={busy || (hasPassword && !current) || !password}>
-            <KeyRound size={14} /> {hasPassword ? "Change password" : "Set a password"}
-          </button>
-          {msg && (msg.ok ? <span className="text-xs text-good">{msg.text}</span> : <ErrorNote>{msg.text}</ErrorNote>)}
-        </div>
-      </form>
+      {locked ? (
+        <p className="text-xs text-content-muted">This is a shared profile: only an admin can set or change its password.</p>
+      ) : (
+        <form
+          key={formKey}
+          className="grid gap-3 sm:grid-cols-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save();
+          }}
+        >
+          {hasPassword ? (
+            <label className="block">
+              <span className="field-label">Current password</span>
+              <input className="field w-full" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
+            </label>
+          ) : (
+            <p className="text-xs text-content-muted sm:self-center">
+              You sign in by picking your profile. Set a password to lock it; others will need it to use your profile.
+            </p>
+          )}
+          <NewPassword onChange={setPassword} />
+          <div className="flex items-center gap-3 sm:col-span-3">
+            <button type="submit" className="btn-primary" disabled={busy || (hasPassword && !current) || !password}>
+              <KeyRound size={14} /> {hasPassword ? "Change password" : "Set a password"}
+            </button>
+            {msg && (msg.ok ? <span className="text-xs text-good">{msg.text}</span> : <ErrorNote>{msg.text}</ErrorNote>)}
+          </div>
+        </form>
+      )}
 
       <div className="mb-2 mt-6 flex items-center justify-between">
         <div className="field-label !mb-0">Signed-in devices</div>

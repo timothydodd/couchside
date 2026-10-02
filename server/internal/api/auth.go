@@ -657,6 +657,10 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	if p.PasswordLocked && p.Role != "admin" {
+		writeErr(w, httpError{http.StatusForbidden, "only an admin can change this account's password"})
+		return
+	}
 	ip := clientIP(r)
 	nameKey := strings.ToLower(p.Name)
 	if s.throttled(w, ip, nameKey) {

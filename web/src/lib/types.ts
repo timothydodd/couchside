@@ -177,6 +177,8 @@ export interface Profile {
   disabled: boolean;
   mustChangePassword: boolean;
   hasPassword: boolean;
+  /** Only an admin can set or change this account's password (a shared profile). */
+  passwordLocked: boolean;
 }
 
 /** Set by the scanner for files that can't be played at all. */

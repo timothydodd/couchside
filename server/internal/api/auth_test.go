@@ -2,7 +2,9 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -292,5 +294,68 @@ func TestPasswordless(t *testing.T) {
 	}
 	if code := newClient(t, ts.URL).do("POST", "/api/auth/login", map[string]string{"name": "Me", "password": "admin password"}, nil); code != 200 {
 		t.Fatalf("password login = %d", code)
+	}
+}
+
+func TestPasswordLocked(t *testing.T) {
+	dir := t.TempDir()
+	d, err := db.Open(filepath.Join(dir, "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	s, err := New(d, config.Config{DataDir: dir}, nil, nil, nil, nil, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+	admin := newClient(t, ts.URL)
+	if code := admin.do("POST", "/api/auth/pick", map[string]any{"profileId": 1}, nil); code != 200 {
+		t.Fatalf("admin pick = %d", code)
+	}
+
+	// A shared Guest profile that can't set its own password.
+	var guest db.Profile
+	if code := admin.do("POST", "/api/accounts", map[string]any{"name": "Guest", "passwordLocked": true}, &guest); code != 201 || !guest.PasswordLocked {
+		t.Fatalf("locked account = %d %+v", code, guest)
+	}
+	var tk tokens
+	g := newClient(t, ts.URL)
+	if code := g.do("POST", "/api/auth/pick", map[string]any{"profileId": guest.ID, "client": "tv"}, &tk); code != 200 {
+		t.Fatalf("guest pick = %d", code)
+	}
+	g.bearer = tk.AccessToken
+	if code := g.do("POST", "/api/auth/password", map[string]string{"current": "", "password": "mine now, ha"}, nil); code != 403 {
+		t.Fatalf("locked account set its own password: %d", code)
+	}
+
+	// An admin's password for a locked account isn't temporary: it can't be changed by the account.
+	if code := admin.do("POST", fmt.Sprintf("/api/accounts/%d/password", guest.ID), map[string]string{"password": "guest password"}, nil); code != 204 {
+		t.Fatalf("admin reset = %d", code)
+	}
+	if p, _ := d.Profile(context.Background(), guest.ID); p.MustChangePassword || !p.HasPassword {
+		t.Fatalf("locked account after reset = %+v", p)
+	}
+
+	// Unlocked, it can.
+	update := map[string]any{"name": "Guest", "role": "user", "passwordLocked": false}
+	if code := admin.do("PUT", fmt.Sprintf("/api/accounts/%d", guest.ID), update, nil); code != 200 {
+		t.Fatalf("unlock = %d", code)
+	}
+	g2 := newClient(t, ts.URL)
+	if code := g2.do("POST", "/api/auth/login", map[string]any{"name": "Guest", "password": "guest password", "client": "tv"}, &tk); code != 200 {
+		t.Fatalf("guest login = %d", code)
+	}
+	g2.bearer = tk.AccessToken
+	if code := g2.do("POST", "/api/auth/password", map[string]string{"current": "guest password", "password": "a better one"}, nil); code != 204 {
+		t.Fatalf("unlocked account changing its password = %d", code)
+	}
+
+	// Admins can't be locked out of their own password.
+	var me db.Profile
+	admin.do("PUT", "/api/accounts/1", map[string]any{"name": "Me", "role": "admin", "passwordLocked": true}, &me)
+	if me.PasswordLocked {
+		t.Fatal("an admin was locked")
 	}
 }

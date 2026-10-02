@@ -124,6 +124,7 @@ function AccountForm({ account, onDone, onChanged }: { account?: Profile; onDone
   const [role, setRole] = useState<Profile["role"]>(account?.role ?? "user");
   const [canRecord, setCanRecord] = useState(account?.canRecord ?? false);
   const [disabled, setDisabled] = useState(account?.disabled ?? false);
+  const [passwordLocked, setPasswordLocked] = useState(account?.passwordLocked ?? false);
   const [password, setPassword] = useState("");
   const [reset, setReset] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -149,8 +150,8 @@ function AccountForm({ account, onDone, onChanged }: { account?: Profile; onDone
   const save = () =>
     run(() =>
       account
-        ? api(`/api/accounts/${account.id}`, { method: "PUT", json: { name, color, role, canRecord, disabled } })
-        : api("/api/accounts", { method: "POST", json: { name, color, role, canRecord, password } }),
+        ? api(`/api/accounts/${account.id}`, { method: "PUT", json: { name, color, role, canRecord, disabled, passwordLocked } })
+        : api("/api/accounts", { method: "POST", json: { name, color, role, canRecord, password, passwordLocked } }),
     );
 
   return (
@@ -203,6 +204,11 @@ function AccountForm({ account, onDone, onChanged }: { account?: Profile; onDone
             <label className="flex items-center gap-2 text-content-secondary">
               <input type="checkbox" className="accent-brand" checked={canRecord} onChange={(e) => setCanRecord(e.target.checked)} />
               Can schedule recordings and series (and manage their own)
+            </label>
+            <span className="text-content-muted">Password</span>
+            <label className="flex items-center gap-2 text-content-secondary">
+              <input type="checkbox" className="accent-brand" checked={!passwordLocked} onChange={(e) => setPasswordLocked(!e.target.checked)} />
+              Can set and change their own password (turn off for a shared profile, like a guest)
             </label>
           </>
         )}

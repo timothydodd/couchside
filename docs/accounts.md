@@ -27,7 +27,10 @@ rules and server settings are shared. Switch profiles from the sidebar.
   Use an existing profile's name to keep its watch history.
 - **Roles.** Admins reach Settings, Libraries, file management, Activity and the
   account manager. Users watch and change their own preferences and password.
-  Recording is a per-account switch an admin turns on.
+  Recording is a per-account switch an admin turns on. So is "can set and
+  change their own password": turn it off for a shared profile (a Guest that
+  anyone picks), so nobody can lock it with a password. Only an admin can then
+  set or remove its password, and that password isn't temporary.
 - **Account manager** (Settings → Accounts): add accounts (with a temporary
   password changed at first sign-in, or none when passwordless), set role and
   recording, reset or remove passwords, disable or delete accounts, and sign
