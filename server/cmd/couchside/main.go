@@ -102,7 +102,7 @@ func run() error {
 	// Live TV runs even without a tuner: it also serves Couchside's own
 	// virtual channels, built from the library.
 	tv, err := livetv.New(livetv.Config{Tuner: cfg.HDHomeRun, RecordingsDir: cfg.RecordingsDir, FFmpeg: cfg.FFmpeg,
-		FFprobe: cfg.FFprobe, PadBefore: cfg.PadBefore, PadAfter: cfg.PadAfter, Metadata: providers}, database, enc, w, cfg.CacheDir)
+		FFprobe: cfg.FFprobe, MaxEncodes: cfg.MaxTranscodes, PadBefore: cfg.PadBefore, PadAfter: cfg.PadAfter, Metadata: providers}, database, enc, w, cfg.CacheDir)
 	if err != nil {
 		return err
 	}

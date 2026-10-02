@@ -39,17 +39,22 @@ type playoutSource func(ctx context.Context, ms int64) ([]db.PlayoutPiece, error
 // startVirtual starts (or joins) a virtual channel's stream.
 func (m *liveManager) startVirtual(ctx context.Context, channel, name string, spec Spec, src playoutSource) (*LiveSession, error) {
 	spec.CopyVideo, spec.CopyAudio = false, false
+	spec.Height = snapHeight(spec.Height)
 	key := "vc:" + channel
+	k := fmt.Sprintf("%s|%d", key, spec.Height)
 	m.mu.Lock()
-	for _, s := range m.sessions {
-		if s.key == key && s.Height == spec.Height && s.running() {
-			m.mu.Unlock()
-			s.touch()
-			return s, nil
-		}
-	}
+	joined, f, err := m.claimLocked(ctx, k, func(s *LiveSession) bool { return s.key == key && s.Height == spec.Height }, true)
 	m.mu.Unlock()
+	if err != nil || joined != nil {
+		return joined, err
+	}
+	s, err := m.launchVirtual(ctx, key, channel, name, spec, src)
+	m.finish(k, f, s, err)
+	return s, err
+}
 
+// launchVirtual starts a virtual channel's stream and waits for its first playlist.
+func (m *liveManager) launchVirtual(ctx context.Context, key, channel, name string, spec Spec, src playoutSource) (*LiveSession, error) {
 	id := randomID()
 	dir := filepath.Join(m.root, id)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -91,9 +96,6 @@ func (m *liveManager) startVirtual(ctx context.Context, channel, name string, sp
 		case <-time.After(150 * time.Millisecond):
 		}
 	}
-	m.mu.Lock()
-	m.sessions[s.ID] = s
-	m.mu.Unlock()
 	slog.Info("virtual channel playing", "channel", channel, "name", name, "height", spec.Height, "hw", s.HW, "session", s.ID)
 	return s, nil
 }
