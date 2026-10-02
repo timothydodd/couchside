@@ -44,12 +44,16 @@ RUN for u in http://deb.debian.org/debian/pool/main/a/argtable2/argtable2_13.ori
       wget -qO /tmp/argtable2.tgz "$u" && echo "${ARGTABLE_SHA256}  /tmp/argtable2.tgz" | sha256sum -c - && break; \
       rm -f /tmp/argtable2.tgz; \
     done \
+ && mkdir -p /src && cp /tmp/argtable2.tgz /src/argtable2-13.tar.gz \
  && tar xzf /tmp/argtable2.tgz -C /tmp \
  && cd /tmp/argtable2-13 \
  && cp /usr/share/automake-*/config.guess /usr/share/automake-*/config.sub . \
  && ./configure --prefix=/usr/local --disable-shared --enable-static \
  && make -j"$(nproc)" && make install
+# Both are GPL/LGPL and comskip is shipped as a binary, so their exact source
+# goes into the image too (/usr/share/src).
 RUN git clone --depth 1 --branch ${COMSKIP_REF} https://github.com/erikkaashoek/Comskip /comskip \
+ && git -C /comskip archive --format=tar.gz --prefix=comskip-${COMSKIP_REF}/ -o /src/comskip-${COMSKIP_REF}.tar.gz HEAD \
  && cd /comskip && ./autogen.sh && PKG_CONFIG_PATH=/usr/local/lib/pkgconfig ./configure \
  && make -j"$(nproc)" && strip comskip
 
@@ -63,6 +67,8 @@ RUN apk add --no-cache ffmpeg ca-certificates tzdata \
  && mkdir -p /data /cache /media /recordings \
  && chown couchside:couchside /data /cache /recordings
 COPY --from=comskip /comskip/comskip /usr/local/bin/comskip
+COPY --from=comskip /src/ /usr/share/src/
+COPY LICENSE THIRD_PARTY_NOTICES.txt /usr/share/licenses/couchside/
 COPY --from=server /out/couchside /usr/local/bin/couchside
 
 ENV COUCHSIDE_ADDR=:8080 \

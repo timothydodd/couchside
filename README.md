@@ -67,6 +67,15 @@ Zips for Linux, macOS and Windows are on the
 - [Profiles and accounts](docs/accounts.md)
 - [Development](docs/development.md): building, testing and releasing
 
+## License
+
+Couchside is released under the [MIT License](LICENSE). The software it
+includes keeps its own licenses: the full texts are in
+[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt), which ships in the release
+zips and the container image and is linked from Settings. Regenerate it with
+`python3 scripts/third-party-notices.py` after changing dependencies; CI
+checks that it's current.
+
 ## Attributions
 
 <a href="https://www.themoviedb.org"><img src="web/public/brand/tmdb.svg" alt="TMDB" height="20"></a>

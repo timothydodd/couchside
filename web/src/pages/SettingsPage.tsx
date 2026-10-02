@@ -29,6 +29,7 @@ export default function SettingsPage() {
         <div className="flex max-w-3xl flex-col gap-4 gutter py-5">
           <ProfileSettings />
           <AccountSettings />
+          <About />
         </div>
       </div>
     );
@@ -104,6 +105,7 @@ export default function SettingsPage() {
         </section>
 
         <TimingSettings />
+        <About />
       </div>
     </div>
   );
@@ -386,5 +388,22 @@ function RecordingsFolder({ onSaved }: { onSaved: () => void }) {
         {busy ? "Saving…" : "Save"}
       </button>
     </div>
+  );
+}
+
+/** Version, license and the third-party notices, at the bottom of Settings. */
+function About() {
+  const version = useStatus((s) => s.status?.version);
+  return (
+    <p className="px-1 text-xs text-content-muted">
+      Couchside {version && (/^\d/.test(version) ? `v${version}` : version)} &middot; free, open-source software under the{" "}
+      <a href="https://github.com/timothydodd/couchside/blob/main/LICENSE" target="_blank" rel="noreferrer" className="hover:text-accent hover:underline">
+        MIT License
+      </a>{" "}
+      &middot;{" "}
+      <a href="/third-party-notices.txt" target="_blank" rel="noreferrer" className="hover:text-accent hover:underline">
+        Open-source licenses
+      </a>
+    </p>
   );
 }
