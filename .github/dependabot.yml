@@ -1,0 +1,35 @@
+# Weekly dependency updates, grouped so each ecosystem is one pull request.
+# Major versions come separately: they're the ones that need a closer look.
+# THIRD_PARTY_NOTICES.txt is regenerated on main by notices.yml after a merge.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /server
+    schedule:
+      interval: weekly
+    groups:
+      go:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    groups:
+      web:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Base images in the Dockerfile (node, golang, alpine). CI doesn't build the
+  # image, so check a bump with a Docker build before releasing.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly

@@ -36,11 +36,3 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: type-check and build
         run: npm run build
-      # The notices list the Go modules in the binary too, so Go is needed here.
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: server/go.mod
-          cache-dependency-path: server/go.sum
-      - name: third-party notices are up to date
-        working-directory: .
-        run: python3 scripts/third-party-notices.py --check

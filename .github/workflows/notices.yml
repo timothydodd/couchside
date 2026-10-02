@@ -1,0 +1,47 @@
+# Keeps THIRD_PARTY_NOTICES.txt (and its copy in web/public) in step with the
+# dependencies: after a push to main that changes them (a merged Dependabot
+# update, say), regenerate and commit the notices.
+name: notices
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - server/go.mod
+      - server/go.sum
+      - web/package.json
+      - web/package-lock.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  notices:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      # Only the license files are read, so no install scripts need to run.
+      - run: npm ci --no-audit --no-fund --ignore-scripts
+        working-directory: web
+      - run: python3 scripts/third-party-notices.py
+      - name: commit if changed
+        run: |
+          git add THIRD_PARTY_NOTICES.txt web/public/third-party-notices.txt
+          if git diff --cached --quiet; then
+            echo "Notices are up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update third-party notices"
+          git push
