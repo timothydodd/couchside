@@ -20,7 +20,19 @@ env:
   VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
 
 jobs:
+  # The Helm chart installs .Chart.AppVersion by default, so it must name this release.
+  chart-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Chart appVersion matches the tag
+        if: github.event_name == 'push'
+        run: |
+          got=$(sed -n 's/^appVersion: *"\{0,1\}\([^" ]*\)"\{0,1\}.*/\1/p' deploy/helm/couchside/Chart.yaml)
+          [ "$got" = "${VERSION#v}" ] || { echo "::error file=deploy/helm/couchside/Chart.yaml::appVersion is $got; set it (and version) to ${VERSION#v} before tagging"; exit 1; }
+
   web:
+    needs: chart-version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -95,6 +107,7 @@ jobs:
           retention-days: 7
 
   container:
+    needs: chart-version
     runs-on: ubuntu-latest
     permissions:
       contents: read

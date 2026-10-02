@@ -31,6 +31,19 @@ omdb:
 auth:
   enabled: false
 
+# Time zone for guide times and recording file names (a tz database name).
+timezone: ""            # e.g. America/New_York; "" leaves the image's UTC
+
+# Live TV and DVR need an HDHomeRun on your network.
+livetv:
+  hdhomerun: ""         # tuner IP or host; "" turns Live TV's tuner off
+
+# Extra environment variables, e.g. COUCHSIDE_TRUSTED_PROXIES or
+# COUCHSIDE_DVR_PAD_AFTER (see docs/configuration.md).
+extraEnv: []
+#  - name: COUCHSIDE_DVR_PAD_AFTER
+#    value: 2m
+
 config:
   workers: 2            # concurrent scan/match/thumbnail jobs
   scanInterval: 6h      # "0" disables periodic rescans
@@ -52,11 +65,15 @@ hwaccel:
     # device plugin is installed; set false if you use Intel's device plugin.
     privileged: true
 
-# Where your media lives. Mounted read-only at /media; libraries are added in
-# the UI as folders under /media (e.g. /media/Movies).
+# Where your media lives, mounted at /media; libraries are added in the UI as
+# folders under /media (e.g. /media/Movies).
 media:
   type: nfs             # nfs | hostPath | pvc
   mountPath: /media
+  # Read-only keeps Couchside from changing your files. Set false to let the
+  # DVR record into a TV library folder, or to delete files from a library's
+  # Manage view; those fail on a read-only mount.
+  readOnly: true
   nfs:
     server: 192.168.1.10
     path: /volume1/media
@@ -71,9 +88,17 @@ persistence:
     size: 1Gi
     storageClass: ""    # "" = cluster default (local-path on k3s)
     existingClaim: ""
-  # Posters, backdrops and episode stills (and later, transcode segments).
+  # Artwork, stills, subtitles, optimized copies and live TV segments.
   cache:
     size: 20Gi
+    storageClass: ""
+    existingClaim: ""
+  # The DVR's default recordings folder (/recordings). Without it, recordings
+  # land in the container and are lost when the pod restarts, unless Settings
+  # points the DVR at a folder under a writable /media.
+  recordings:
+    enabled: false
+    size: 200Gi
     storageClass: ""
     existingClaim: ""
 
@@ -96,12 +121,18 @@ resources:
     cpu: 100m
     memory: 128Mi
   limits:
-    memory: 1Gi         # ffmpeg frame grabs spike briefly; transcoding will need more
+    # Covers the server and every ffmpeg and comskip it runs. A software 4K
+    # transcode alone can take 1-2 GB; at the limit the whole pod is
+    # OOM-killed, recordings in progress included.
+    memory: 4Gi
 
 podSecurityContext:
   runAsUser: 1000
   runAsGroup: 1000
   fsGroup: 1000
+# Without GPU access the container drops every capability and can't gain
+# privileges (the image runs as 1000:1000). With hwaccel.dri.privileged it
+# runs privileged instead.
 
 nodeSelector: {}
 tolerations: []
