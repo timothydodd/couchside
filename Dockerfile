@@ -3,7 +3,7 @@
 # build machine's native platform; Go cross-compiles for the target.
 
 # --- web: build the React UI once --------------------------------------------
-FROM --platform=$BUILDPLATFORM node:22-alpine AS web
+FROM --platform=$BUILDPLATFORM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
@@ -11,7 +11,7 @@ COPY web/ ./
 RUN npm run build
 
 # --- server: static Go binary with the UI embedded -----------------------------
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS server
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c AS server
 ARG TARGETOS TARGETARCH VERSION=dev
 WORKDIR /src
 COPY server/go.mod server/go.sum ./
@@ -31,8 +31,10 @@ RUN --mount=type=secret,id=tmdb_key \
 # argtable2 (only in edge) is built static so the runtime needs no extra package;
 # its 2005 config.guess/config.sub don't know aarch64, so automake's replace them.
 # Runs on the target platform: it links the same ffmpeg libraries as the runtime.
-FROM alpine:3.22 AS comskip
+FROM alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8 AS comskip
 ARG COMSKIP_REF=V0.83
+# The tag's commit: the build stops if the tag is ever moved.
+ARG COMSKIP_COMMIT=55b0bcd018ddb9dacfad79addc48df55c1411073
 RUN apk add --no-cache build-base autoconf automake libtool pkgconf git ffmpeg-dev
 # Older C in both projects; gcc 14 would otherwise stop on implicit declarations.
 ENV CFLAGS="-O2 -std=gnu17 -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion"
@@ -53,12 +55,13 @@ RUN for u in http://deb.debian.org/debian/pool/main/a/argtable2/argtable2_13.ori
 # Both are GPL/LGPL and comskip is shipped as a binary, so their exact source
 # goes into the image too (/usr/share/src).
 RUN git clone --depth 1 --branch ${COMSKIP_REF} https://github.com/erikkaashoek/Comskip /comskip \
+ && test "$(git -C /comskip rev-parse HEAD)" = "${COMSKIP_COMMIT}" \
  && git -C /comskip archive --format=tar.gz --prefix=comskip-${COMSKIP_REF}/ -o /src/comskip-${COMSKIP_REF}.tar.gz HEAD \
  && cd /comskip && ./autogen.sh && PKG_CONFIG_PATH=/usr/local/lib/pkgconfig ./configure \
  && make -j"$(nproc)" && strip comskip
 
 # --- runtime: Alpine for ffmpeg ------------------------------------------------
-FROM alpine:3.22
+FROM alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
 # Intel VAAPI drivers (iHD for Broadwell and newer, i965 for older chips) so
 # COUCHSIDE_HWACCEL=vaapi can use /dev/dri. x86 only.
 RUN apk add --no-cache ffmpeg ca-certificates tzdata \
