@@ -32,16 +32,86 @@ var reSample = regexp.MustCompile(`(?i)(^|[-._])sample$`)
 var rePartFile = regexp.MustCompile(`\.(part\d+|joining)\.ts$`)
 
 func (w *Worker) scan(ctx context.Context, libID int64) error {
+	_, err := w.scanLibrary(ctx, libID)
+	return err
+}
+
+// Why a scan passed over a file, as Activity says it.
+const (
+	skipNoEpisode = "no season and episode in the name"
+	skipSample    = "sample clips"
+	skipTimeout   = "ffprobe timed out (tried again next scan)"
+)
+
+// skipLog counts skipped files per reason, keeping a few names to show.
+type skipLog struct {
+	order []string
+	count map[string]int
+	names map[string][]string
+}
+
+func (s *skipLog) add(reason, name string) {
+	if s.count == nil {
+		s.count, s.names = map[string]int{}, map[string][]string{}
+	}
+	if s.count[reason] == 0 {
+		s.order = append(s.order, reason)
+	}
+	s.count[reason]++
+	if len(s.names[reason]) < 3 {
+		s.names[reason] = append(s.names[reason], name)
+	}
+}
+
+func (s *skipLog) total() int {
+	n := 0
+	for _, c := range s.count {
+		n += c
+	}
+	return n
+}
+
+// scanSummary is a scan's result line in Activity: "Added 2, removed 1.
+// Skipped 3: no season and episode in the name (a.mp4, b.mp4 and 1 more)."
+func scanSummary(added, changed, removed int, skips *skipLog) string {
+	var parts []string
+	for _, c := range []struct {
+		n    int
+		verb string
+	}{{added, "added"}, {changed, "changed"}, {removed, "removed"}} {
+		if c.n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", c.n, c.verb))
+		}
+	}
+	out := "No changes."
+	if len(parts) > 0 {
+		j := strings.Join(parts, ", ")
+		out = strings.ToUpper(j[:1]) + j[1:] + "."
+	}
+	for _, r := range skips.order {
+		n, names := skips.count[r], skips.names[r]
+		list := strings.Join(names, ", ")
+		if more := n - len(names); more > 0 {
+			list += fmt.Sprintf(" and %d more", more)
+		}
+		out += fmt.Sprintf(" Skipped %d: %s (%s).", n, r, list)
+	}
+	return out
+}
+
+// scanLibrary scans a library and returns its result line for Activity.
+func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 	lib, err := w.db.Library(ctx, libID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if st, err := os.Stat(lib.Path); err != nil || !st.IsDir() {
-		return fmt.Errorf("library path %s is not readable: %v", lib.Path, err)
+		return "", fmt.Errorf("library path %s is not readable: %v", lib.Path, err)
 	}
 	// Every file visited gets last_seen = start; anything older is gone.
 	start := time.Now().Unix()
-	var added, changed, skipped, videos int
+	var added, changed, videos int
+	var skips skipLog
 	// unreadable is the first path the walk couldn't read. Files under it
 	// weren't seen, so nothing may be pruned.
 	var unreadable string
@@ -93,7 +163,7 @@ func (w *Worker) scan(ctx context.Context, libID int64) error {
 		}
 		if isSample(path) && info.Size() < 300<<20 {
 			slog.Debug("scan: skipping a sample clip", "path", path)
-			skipped++
+			skips.add(skipSample, relPath(lib, path))
 			return nil
 		}
 		stamp, err := w.db.FileStamp(ctx, path)
@@ -113,7 +183,7 @@ func (w *Worker) scan(ctx context.Context, libID int64) error {
 			// Slow, not broken: leave it for the next scan. A file already
 			// indexed keeps its row (and isn't pruned) until then.
 			slog.Warn("scan: ffprobe timed out; will try again next scan", "path", path)
-			skipped++
+			skips.add(skipTimeout, relPath(lib, path))
 			if stamp != nil {
 				return w.db.TouchFile(ctx, stamp.ID, start)
 			}
@@ -124,7 +194,7 @@ func (w *Worker) scan(ctx context.Context, libID int64) error {
 		}
 		switch {
 		case !ok:
-			skipped++
+			skips.add(skipNoEpisode, relPath(lib, path))
 		case stamp == nil:
 			added++
 		default:
@@ -134,27 +204,28 @@ func (w *Worker) scan(ctx context.Context, libID int64) error {
 	})
 	if walkErr != nil {
 		// Don't prune after a partial walk: missing files may just be unvisited.
-		return walkErr
+		return "", walkErr
 	}
 	if unreadable != "" {
 		slog.Warn("scan incomplete, nothing removed", "library", lib.Name, "unreadable", unreadable, "added", added, "changed", changed)
-		return fmt.Errorf("couldn't read %s, so nothing was removed", unreadable)
+		return scanSummary(added, changed, 0, &skips), fmt.Errorf("couldn't read %s, so nothing was removed", unreadable)
 	}
 	// An unmounted share is usually an empty folder. Someone who really
 	// emptied a library removes it in Libraries.
 	if videos == 0 && lib.FileCount > 0 {
 		slog.Warn("scan found no files, nothing removed", "library", lib.Name, "path", lib.Path)
-		return fmt.Errorf("library folder %s is empty; is the share mounted? Nothing was removed", lib.Path)
+		return "", fmt.Errorf("library folder %s is empty; is the share mounted? Nothing was removed", lib.Path)
 	}
 	removed, err := w.db.PruneLibrary(ctx, lib.ID, start)
 	if err != nil {
-		return err
+		return "", err
 	}
-	slog.Info("scan complete", "library", lib.Name, "added", added, "changed", changed, "removed", removed, "skipped", skipped)
+	slog.Info("scan complete", "library", lib.Name, "added", added, "changed", changed, "removed", removed, "skipped", skips.total())
+	summary := scanSummary(added, changed, int(removed), &skips)
 	if err := w.retryMatches(ctx, lib); err != nil {
-		return err
+		return summary, err
 	}
-	return w.db.MarkLibraryScanned(ctx, lib.ID, time.Now().Unix())
+	return summary, w.db.MarkLibraryScanned(ctx, lib.ID, time.Now().Unix())
 }
 
 // retryMatches queues a match for items whose last one failed on the way to

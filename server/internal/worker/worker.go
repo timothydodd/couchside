@@ -165,7 +165,13 @@ func (w *Worker) loop(ctx context.Context, encode bool) {
 func (w *Worker) handle(ctx context.Context, j *db.Job) error {
 	switch j.Kind {
 	case KindScan:
-		return w.scan(ctx, j.RefID)
+		summary, err := w.scanLibrary(ctx, j.RefID)
+		if summary != "" {
+			if rerr := w.db.SetJobResult(context.WithoutCancel(ctx), j.ID, summary); rerr != nil {
+				slog.Warn("scan result", "err", rerr)
+			}
+		}
+		return err
 	case KindMatch:
 		return w.match(ctx, j.RefID)
 	case KindArtwork:

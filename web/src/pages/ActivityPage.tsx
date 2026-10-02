@@ -103,6 +103,11 @@ export default function ActivityPage() {
                             {j.error}
                           </div>
                         )}
+                        {j.result && (
+                          <div className={`line-clamp-2 whitespace-normal text-xs ${j.result.includes("Skipped") ? "text-warning" : "text-content-muted"}`} title={j.result}>
+                            {j.result}
+                          </div>
+                        )}
                       </td>
                       <td className="min-w-40">
                         <StatusPill label={s.label} tone={s.tone} pulse={j.status === "running"} />

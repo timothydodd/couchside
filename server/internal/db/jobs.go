@@ -17,13 +17,14 @@ type Job struct {
 	StartedAt  *int64   `json:"startedAt"`
 	FinishedAt *int64   `json:"finishedAt"`
 	Progress   *float64 `json:"progress"`
+	Result     string   `json:"result"` // what a finished job did (scans: counts and skipped files)
 }
 
-const jobCols = `id, kind, ref_id, label, status, attempts, error, created_at, started_at, finished_at, progress`
+const jobCols = `id, kind, ref_id, label, status, attempts, error, created_at, started_at, finished_at, progress, result`
 
 func scanJob(r interface{ Scan(...any) error }) (Job, error) {
 	var j Job
-	err := r.Scan(&j.ID, &j.Kind, &j.RefID, &j.Label, &j.Status, &j.Attempts, &j.Error, &j.CreatedAt, &j.StartedAt, &j.FinishedAt, &j.Progress)
+	err := r.Scan(&j.ID, &j.Kind, &j.RefID, &j.Label, &j.Status, &j.Attempts, &j.Error, &j.CreatedAt, &j.StartedAt, &j.FinishedAt, &j.Progress, &j.Result)
 	return j, err
 }
 
@@ -47,7 +48,7 @@ func (d *DB) ClaimJob(ctx context.Context, encode bool) (*Job, error) {
 		cond = "kind IN (" + encodeKinds + ")"
 	}
 	j, err := scanJob(d.sql.QueryRowContext(ctx, `UPDATE jobs SET status = 'running', attempts = attempts + 1,
-		started_at = unixepoch(), error = '', progress = NULL
+		started_at = unixepoch(), error = '', progress = NULL, result = ''
 		WHERE id = (SELECT id FROM jobs WHERE status = 'queued' AND `+cond+`
 		  ORDER BY CASE kind WHEN 'scan' THEN 0 WHEN 'match' THEN 1 WHEN 'artwork' THEN 2 WHEN 'commercials' THEN 3 ELSE 4 END, id LIMIT 1)
 		RETURNING `+jobCols))
@@ -66,6 +67,12 @@ func (d *DB) FinishJob(ctx context.Context, id int64, jobErr error) error {
 		status, msg = "failed", jobErr.Error()
 	}
 	_, err := d.sql.ExecContext(ctx, `UPDATE jobs SET status = ?, error = ?, finished_at = unixepoch() WHERE id = ?`, status, msg, id)
+	return err
+}
+
+// SetJobResult records what a job did, shown in Activity.
+func (d *DB) SetJobResult(ctx context.Context, id int64, result string) error {
+	_, err := d.sql.ExecContext(ctx, `UPDATE jobs SET result = ? WHERE id = ?`, result, id)
 	return err
 }
 
