@@ -26,12 +26,20 @@ import (
 const KindCommercials = "commercials" // ref: file id
 
 // defaultComskipINI is used unless COUCHSIDE_COMSKIP_INI names a tuned one.
-// Only the output settings matter to Couchside: it reads the .edl file.
+// Couchside reads the .edl file. Detection settings not listed keep comskip's
+// defaults; each change here says why.
 const defaultComskipINI = `; Written by Couchside. Set COUCHSIDE_COMSKIP_INI to use your own comskip.ini
 ; (keep output_edl=1, Couchside reads the .edl file).
 output_edl=1
 output_default=0
 verbose=0
+
+; A block counts as show (its commercial score is cut to 1%) when the channel
+; logo is on screen for more of it than this. comskip's default, 0.25, keeps
+; the network promos and station IDs at the end of a break, which show the
+; logo briefly, so skips ended early. Half the block is still easily met by
+; real show segments, where the logo is up throughout.
+logo_percentage_threshold=0.5
 `
 
 // detectComskip resolves the comskip binary, or returns "" when it isn't installed.

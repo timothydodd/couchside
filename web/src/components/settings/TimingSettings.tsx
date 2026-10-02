@@ -7,6 +7,7 @@ interface Timing {
   padAfter: number;
   skipAfterStart: number;
   skipBeforeEnd: number;
+  mergeGap: number;
   dvr: boolean;
 }
 
@@ -77,7 +78,11 @@ function TimingForm() {
           <div className="field-label">Commercial skipping</div>
           <Seconds label="Start skipping" suffix="into a break" value={draft.skipAfterStart} max={15} step={0.5} onChange={(v) => set("skipAfterStart", v)} />
           <Seconds label="Stop skipping" suffix="before it ends" value={draft.skipBeforeEnd} max={15} step={0.5} onChange={(v) => set("skipBeforeEnd", v)} />
-          <p className="mt-1 text-xs text-content-muted">Detection is often a second off; this keeps skips from cutting into the show.</p>
+          <Seconds label="Join breaks" suffix="apart or less" value={draft.mergeGap} max={300} step={5} onChange={(v) => set("mergeGap", v)} />
+          <p className="mt-1 text-xs text-content-muted">
+            Detection is often a second off; the first two keep skips from cutting into the show. Detection can also split one break in two around a
+            promo; breaks this close are skipped as one.
+          </p>
         </div>
       </div>
       <div className="mt-4 flex items-center gap-3">
