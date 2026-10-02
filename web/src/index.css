@@ -1,51 +1,52 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------
-   Design tokens: one dark theme, "seafoam on slate". Navy-tinted charcoals
-   (they sit well with the logo's navy tile), seafoam as the only interactive
-   colour, sky blue for state (watched, in progress), coral for warmth
-   (favourites, recording, errors), amber for warnings. Violet and pink are
-   avatar colours only. Every text pairing meets WCAG AA (4.5:1) and input
-   borders 3:1; see docs/style.md. There is no light theme.
+   Design tokens: one dark theme, "seafoam as the primary". Neutral dark
+   greys, bright seafoam as the only interactive colour, the logo's blue for
+   state (watched, done), a warm red for attention (recording, errors,
+   favourites), amber for warnings. The logo's sweep (cyan → blue → sky →
+   seafoam) is --brand-gradient. Violet and pink are avatar colours only.
+   Every text pairing meets WCAG AA (4.5:1) and input borders 3:1; see
+   docs/style.md. There is no light theme.
 --------------------------------------------------------------------------- */
 :root {
-  --bg-page: #0d1418;
-  --bg-surface: #151f24; /* sidebar, cards, panels */
-  --bg-raised: #1d292e; /* on a surface: guide cells, menus, chips */
-  --bg-muted: rgba(237, 244, 242, 0.05);
-  --bg-input: #0d1418;
+  --bg-page: #111315;
+  --bg-surface: #181b1f; /* sidebar, cards, panels */
+  --bg-raised: #22262b; /* on a surface: guide cells, menus, chips */
+  --bg-muted: rgba(255, 255, 255, 0.05);
+  --bg-input: #111315;
 
-  --text-primary: #edf4f2;
-  --text-secondary: #9daeaa;
-  --text-muted: #869894; /* captions, metadata */
-  --text-disabled: #667570; /* disabled controls only: below AA by design */
-  --text-on-accent: #0d1418;
+  --text-primary: #eceff3;
+  --text-secondary: #b3bac4;
+  --text-muted: #8c949f; /* captions, metadata */
+  --text-disabled: #666d77; /* disabled controls only: below AA by design */
+  --text-on-accent: #04261a; /* deep green: seafoam is too light for white */
 
-  --border: #55696f; /* inputs and outlined buttons: 3:1 */
-  --border-light: #304047; /* card edges, dividers */
+  --border: #626a75; /* inputs and outlined buttons: 3:1 */
+  --border-light: #262a30; /* card edges, dividers */
 
   /* Brand */
-  --accent: #63d6be; /* seafoam */
-  --accent-hover: #7de3ce;
-  --brand-seafoam: #63d6be;
-  --brand-sky: #62a9d1;
-  --brand-coral: #f08070;
+  --accent: #5af6b9; /* seafoam */
+  --accent-hover: #8cf9cf;
+  --brand-seafoam: #5af6b9;
+  --brand-sky: #5b93ff; /* the logo's blue */
+  --brand-coral: #ff5c74;
   --brand-cyan: #1feefe; /* avatar colour */
   --secondary: #a873ff; /* avatar colour only */
   --brand-pink: #ff4fe6; /* avatar colour only */
-  --brand-gradient: linear-gradient(90deg, #63d6be 0%, #62a9d1 100%);
+  --brand-gradient: linear-gradient(90deg, #1feefe 0%, #2f7dff 40%, #06b6f3 70%, #5af6b9 100%);
 
   /* Status — reserved for state, never reused as a series color. */
-  --critical: #f08070; /* coral */
-  --warning: #e8b65a;
-  --info: #a9d2ea;
-  --good: #62a9d1; /* sky: watched, done (no green, so nothing reads as seafoam) */
+  --critical: #ff5c74;
+  --warning: #ffb547;
+  --info: #38d6f5;
+  --good: #5b93ff; /* blue: watched, done (no green, so nothing reads as seafoam) */
 
-  --focus-ring: rgba(99, 214, 190, 0.45);
-  --shadow-md: 0 8px 28px rgba(0, 0, 0, 0.55);
+  --focus-ring: rgba(90, 246, 185, 0.3);
+  --shadow-md: 0 8px 28px rgba(0, 0, 0, 0.5);
 
   /* Media */
-  --shadow-poster: 0 10px 28px rgba(0, 0, 0, 0.6);
+  --shadow-poster: 0 10px 28px rgba(0, 0, 0, 0.55);
   --player-bg: #000000;
   color-scheme: dark;
 }

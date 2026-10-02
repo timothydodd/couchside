@@ -72,7 +72,7 @@ Couchside is a self-hosted media server for k3s. Go backend in `server/`, React 
 
 ## Styling
 
-- Colours: `docs/style.md` (tokens, contrast, rules). One dark theme, "seafoam on slate": navy-tinted charcoal surfaces, seafoam `--accent` as the only interactive colour, sky (`--good`, `--info`) for state, coral (`--critical`) for recording, errors and favourites, amber warnings. There is no light theme (no theme store or toggle). Bright fills take `text-on-accent` (dark navy), never `text-white`. Violet (`--secondary`), `--brand-pink` and `--brand-cyan` are avatar colours only.
+- Colours: `docs/style.md` (tokens, contrast, rules). One dark theme, "seafoam as the primary": neutral dark grey surfaces, bright seafoam `--accent` as the only interactive colour, the logo's blue (`--good`) and sky (`--info`) for state, red (`--critical`) for recording, errors and favourites, amber warnings. There is no light theme (no theme store or toggle). Bright fills take `text-on-accent` (deep green), never `text-white`. Violet (`--secondary`), `--brand-pink` and `--brand-cyan` are avatar colours only.
 - `web/src/index.css` starts from Portside Lite's component classes (`.card`, `.btn-*`, `.field`, `.navtab`, `.table`, `.tint-*`). Media additions follow the same naming: `.poster`, `.still`, `.row-title`, `.art-badge`, `.chip`, `.hero-fade`, `.poster-placeholder`.
 - Put new reusable styles in `index.css` under `@layer components`. Don't hard-code colours; use the tokens.
 

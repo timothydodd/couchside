@@ -1,9 +1,9 @@
 # Couchside style guide
 
-**Seafoam on slate.** One dark theme: navy-tinted charcoals that sit well with
-the logo's navy tile, seafoam (the tips of the C) as the colour you act on,
-sky blue for state, coral for warmth. There is no light theme. The tokens
-live in `web/src/index.css`; components use them through Tailwind utilities
+**Seafoam as the primary.** One dark theme: neutral dark greys, bright
+seafoam (the tips of the C) as the colour you act on, the logo's blue for
+state, a warm red for attention. There is no light theme. The tokens live in
+`web/src/index.css`; components use them through Tailwind utilities
 (`bg-surface`, `text-content`, `text-accent`…). Don't hard-code colours.
 
 ## Logo
@@ -11,55 +11,56 @@ live in `web/src/index.css`; components use them through Tailwind utilities
 `branding/logo-c-original.png` is the C on its navy tile (`#0D1A31`): a cyan
 rim around an electric-blue body that turns azure and then seafoam at the arm
 tips. The tile stays in the app icons and the Roku channel art; the UI around
-it is slate.
+it is grey.
 
 ## Tokens
 
 | Token              | Value     | Use                                                      |
 | ------------------ | --------- | -------------------------------------------------------- |
-| `--bg-page`        | `#0D1418` | the app background (near-black navy)                     |
-| `--bg-surface`     | `#151F24` | sidebar, cards, panels (dark charcoal)                   |
-| `--bg-raised`      | `#1D292E` | things on a surface: guide cells, menus, chips (slate)   |
+| `--bg-page`        | `#111315` | the app background                                       |
+| `--bg-surface`     | `#181B1F` | sidebar, cards, panels                                   |
+| `--bg-raised`      | `#22262B` | things on a surface: guide cells, menus, chips           |
 | `--bg-muted`       | white 5%  | hover rows, quiet fills                                  |
-| `--text-primary`   | `#EDF4F2` | titles, body (cool white)                                |
-| `--text-secondary` | `#9DAEAA` | supporting text (gray-green)                             |
-| `--text-muted`     | `#869894` | captions, metadata                                       |
-| `--text-disabled`  | `#667570` | disabled controls only (below AA on purpose)             |
-| `--border`         | `#55696F` | inputs, outlined buttons (3:1 against the field)         |
-| `--border-light`   | `#304047` | card edges, dividers (muted slate)                       |
-| `--accent`         | `#63D6BE` | seafoam: buttons, links, focus, progress, active nav     |
-| `--accent-hover`   | `#7DE3CE` | hover on accent fills                                    |
-| `--text-on-accent` | `#0D1418` | text on seafoam (and other bright) fills                 |
-| `--brand-sky`      | `#62A9D1` | sky blue: the second brand colour                        |
-| `--brand-coral`    | `#F08070` | coral: the warm accent                                   |
-| `--brand-gradient` | sweep     | seafoam → sky, via `.brand-text` only                    |
-| `--good`           | `#62A9D1` | watched, done, healthy (sky)                             |
-| `--info`           | `#A9D2EA` | in progress, neutral notices (light sky)                 |
-| `--warning`        | `#E8B65A` | unmatched, low quality, duplicates (amber)               |
-| `--critical`       | `#F08070` | errors, destructive actions, recording, favourites (coral) |
+| `--text-primary`   | `#ECEFF3` | titles, body                                             |
+| `--text-secondary` | `#B3BAC4` | supporting text                                          |
+| `--text-muted`     | `#8C949F` | captions, metadata                                       |
+| `--text-disabled`  | `#666D77` | disabled controls only (below AA on purpose)             |
+| `--border`         | `#626A75` | inputs, outlined buttons (3:1 against the field)         |
+| `--border-light`   | `#262A30` | card edges, dividers                                     |
+| `--accent`         | `#5AF6B9` | seafoam: buttons, links, focus, progress, active nav     |
+| `--accent-hover`   | `#8CF9CF` | hover on accent fills                                    |
+| `--text-on-accent` | `#04261A` | deep green text on seafoam (and other bright) fills      |
+| `--brand-sky`      | `#5B93FF` | the logo's blue: the second brand colour                 |
+| `--brand-coral`    | `#FF5C74` | warm red: the attention colour                           |
+| `--brand-gradient` | sweep     | cyan → blue → sky → seafoam, via `.brand-text` only      |
+| `--good`           | `#5B93FF` | watched, done, healthy (blue)                            |
+| `--info`           | `#38D6F5` | in progress, neutral notices (sky)                       |
+| `--warning`        | `#FFB547` | unmatched, low quality, duplicates (amber)               |
+| `--critical`       | `#FF5C74` | errors, destructive actions, recording, favourites (red) |
 | `--brand-cyan`, `--secondary` (violet), `--brand-pink` | | avatar colours only |
 
 ## Contrast
 
-| Pair                                  | Ratio      |
-| ------------------------------------- | ---------- |
-| Primary text on page / surface / raised | 16.7 / 15.0 / 13.4 |
-| Secondary text, worst case (raised)   | 6.4        |
-| Muted text, worst case (raised)       | 4.9        |
-| Seafoam on raised                     | 8.4        |
-| Sky / coral on raised                 | 5.8 / 5.7  |
-| Navy text on seafoam                  | 10.5       |
-| Input border against the field        | 3.2        |
+| Pair                                    | Ratio              |
+| --------------------------------------- | ------------------ |
+| Primary text on page / surface / raised | 16.1 / 15.0 / 13.2 |
+| Secondary text, worst case (raised)     | 7.8                |
+| Muted text, worst case (raised)         | 5.0                |
+| Seafoam on raised                       | 11.1               |
+| Blue / red on raised                    | 5.1 / 5.1          |
+| Deep green text on seafoam              | 11.8               |
+| Dark text on blue / red fills           | 5.4 / 5.4          |
+| Input border against the field          | 3.4                |
 
 ## Rules
 
-- **One accent.** Seafoam is the only interactive colour. Sky, coral and amber
+- **One accent.** Seafoam is the only interactive colour. Blue, red and amber
   mean something; they're never used for buttons or links.
 - **No green.** Seafoam is too close to a green to share the screen with one,
-  so "watched" and "done" are sky blue.
-- **Bright fills carry dark text.** Seafoam, sky, coral and amber fills take
-  `text-on-accent` (`#0D1418`), never white.
-- **Coral means attention:** recording, errors, deletes, and the favourite
+  so "watched" and "done" are the logo's blue.
+- **Bright fills carry dark text.** Seafoam, blue, red and amber fills take
+  `text-on-accent` (`#04261A`), never white.
+- **Red means attention:** recording, errors, deletes, and the favourite
   heart. Keep it rare so it stays noticeable.
 - **The gradient is a signature, not a background.** `.brand-text` for short
   brand labels only.
