@@ -35,7 +35,8 @@ let partStart: { fileId: number; at: number } | null = null;
  * picture subtitles switches to a server stream that includes them.
  */
 export default function PlayerPage({ fileId }: { fileId: number }) {
-  const { data: loaded, error: infoError } = useApi<PlayInfo>(`/api/files/${fileId}`);
+  // Fresh, never cached: the resume point is read once from this.
+  const { data: loaded, error: infoError } = useApi<PlayInfo>(`/api/files/${fileId}`, { fresh: true });
   // useApi hands back the previous file's info for a render after fileId changes.
   const info = loaded?.fileId === fileId ? loaded : undefined;
   const { data: streams } = useApi<{ audio: AudioTrack[]; subtitles: SubtitleTrack[] }>(`/api/files/${fileId}/streams`);
@@ -347,17 +348,26 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
+    // The last real position. By the time this effect's cleanup sends the
+    // final report, the source effect has already reset the element.
+    let last = { position: 0, duration: 0 };
+    const remember = () => {
+      if (v.duration && isFinite(v.duration)) last = { position: v.currentTime, duration: v.duration };
+    };
     const report = (keepalive = false, stopped = false) => {
-      if (!v.duration || !isFinite(v.duration) || v.currentTime < 1) return;
+      remember();
+      const { position, duration } = last;
+      if (!duration || position < 1) return;
       const state = stopped ? "stopped" : v.paused ? "paused" : "playing";
       void fetch(`/api/files/${fileId}/progress`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ position: v.currentTime, duration: v.duration, state, mode: modeRef.current }),
+        body: JSON.stringify({ position, duration, state, mode: modeRef.current }),
         keepalive,
       }).catch(() => {});
     };
     const t = setInterval(() => !v.paused && report(), REPORT_EVERY_MS);
+    v.addEventListener("timeupdate", remember);
     const onPause = () => report();
     const onHide = () => document.visibilityState === "hidden" && report(true);
     const onPageHide = () => report(true, true);
@@ -367,6 +377,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
     return () => {
       clearInterval(t);
       report(true, true);
+      v.removeEventListener("timeupdate", remember);
       v.removeEventListener("pause", onPause);
       document.removeEventListener("visibilitychange", onHide);
       window.removeEventListener("pagehide", onPageHide);
