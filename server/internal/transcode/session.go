@@ -36,6 +36,7 @@ const (
 	segmentWait = 90 * time.Second
 	evictAfter  = 20 * time.Second // at the limit, sessions idle this long give up their slot
 	stderrKeep  = 4096
+	seekPreroll = 10.0 // seconds decoded before a restart point and trimmed (see start)
 )
 
 var (
@@ -442,8 +443,26 @@ func (s *Session) start(n int) error {
 			HWDecode: s.HWDecode})
 	}
 	args = append(args, vIn...)
+	// Seeking lands near startSec, and video starts at the next keyframe after
+	// it; MPEG-TS has no index, so that can be seconds late, or (VAAPI on
+	// MPEG-2) after the whole first segment, which then holds audio only and
+	// hls.js stalls on it. So when encoding, seek a little early and trim
+	// back to startSec in the filters: every run's first frame is then on
+	// the grid. Copied streams can't be trimmed, so they seek as before.
+	preroll := 0.0
+	if startSec > 0 && !s.CopyVideo && !s.CopyAudio {
+		preroll = min(startSec, seekPreroll)
+	}
 	if startSec > 0 {
-		args = append(args, "-ss", strconv.FormatFloat(startSec, 'f', 3, 64))
+		args = append(args, "-ss", strconv.FormatFloat(startSec-preroll, 'f', 3, 64))
+	}
+	if preroll > 0 {
+		trim := "trim=start=" + strconv.FormatFloat(startSec, 'f', 3, 64)
+		if chain == "" {
+			chain = trim
+		} else {
+			chain = trim + "," + chain
+		}
 	}
 	// copyts + start_at_zero keeps timestamps absolute (position in the file),
 	// so segments from different ffmpeg runs line up on one timeline.
@@ -482,6 +501,9 @@ func (s *Session) start(n int) error {
 	if s.CopyAudio {
 		args = append(args, "-c:a", "copy")
 	} else {
+		if preroll > 0 {
+			args = append(args, "-af", "atrim=start="+strconv.FormatFloat(startSec, 'f', 3, 64))
+		}
 		args = append(args, AudioArgs()...)
 	}
 	args = append(args, "-max_muxing_queue_size", "4096", "-avoid_negative_ts", "disabled",
