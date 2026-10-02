@@ -15,7 +15,8 @@ A lightweight self-hosted media server for a home k3s cluster. It scans your mov
 - Library scanning with filename parsing, for example `The.Matrix.1999.1080p.mkv` or `Show/Season 1/Show S01E02.mkv`. Unchanged files are skipped and deleted files are pruned.
 - ffprobe stream info: duration, codecs, resolution, and track counts.
 - Metadata from [TMDB](https://www.themoviedb.org) with no setup (release builds carry Couchside's own key): title, year, plot, genres, rating, posters, backdrops and per-season episode titles. OMDb is an optional fallback (`OMDB_API_KEY`). Responses are cached (30 days, 3 for TV, which gains episodes), and "Fix match" pins an IMDb id, or a TMDB id for titles IMDb doesn't have.
-- Artwork: posters resized to WebP, backdrops grabbed from the video itself, and episode stills.
+- Artwork: posters and backdrops from TMDB resized to WebP (a frame from the video when there's no backdrop), and episode stills. Everything pulled from the internet (artwork, cast photos, channel logos, guide images) is cached on the server, so browsers and TVs only ever talk to Couchside.
+- Cast and crew on every title's page; click someone to see everything of theirs in your library. **Libraries → Re-match** refreshes a whole library's details, artwork and cast.
 - Profiles: each person gets their own watch progress, Continue Watching, favourite channels and settings (theme, autoplay of the next episode, preferred subtitle language, commercial skipping, live TV quality). With more than one profile, each browser asks "Who's watching?" once and remembers the answer; switch from the sidebar. With [accounts](#accounts) on, profiles sign in with passwords.
 - Browsing: Home with a hero and rows, virtualised Movies and TV grids with search, genre, watched filters and sort, plus detail pages with seasons.
 - Direct play with byte-range streaming, resume position, watched state, continue-watching, and next-episode autoplay.

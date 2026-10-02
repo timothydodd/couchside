@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Clapperboard, Cpu, Folder, FolderPlus, Pencil, ScanSearch, SlidersHorizontal, Trash2, Tv } from "lucide-react";
+import { Check, Clapperboard, Cpu, Folder, FolderPlus, Pencil, RefreshCw, ScanSearch, SlidersHorizontal, Trash2, Tv } from "lucide-react";
 import Link from "../components/Link";
 import FolderPicker from "../components/FolderPicker";
 import { EmptyState, ErrorNote, PageHeader, Spinner } from "../components/ui";
@@ -21,6 +21,12 @@ export default function LibrariesPage() {
     if (!confirm(`Encode browser-friendly copies of everything in "${l.name}" that can't play directly?\n\nThis runs in the background, one file at a time, and the copies take disk space in the cache volume (roughly 1-4 GB per movie at 1080p).`)) return;
     const r = await api<{ queued: number }>(`/api/libraries/${l.id}/optimize`, { method: "POST" });
     alert(r.queued ? `Queued ${r.queued} encodes. Follow them on the Activity page.` : "Nothing to do: everything already plays directly or has an optimized copy.");
+    void useStatus.getState().refresh();
+  };
+  const rematch = async (l: Library) => {
+    if (!confirm(`Look up every title in "${l.name}" again?\n\nThis refreshes details, posters, backdrops and cast from the metadata providers. Matches you fixed by hand stay as they are.`)) return;
+    const r = await api<{ queued: number }>(`/api/libraries/${l.id}/rematch`, { method: "POST" });
+    alert(`Queued ${r.queued} lookups. Follow them on the Activity page.`);
     void useStatus.getState().refresh();
   };
   const remove = async (l: Library) => {
@@ -94,6 +100,9 @@ export default function LibrariesPage() {
                 </Link>
                 <button className="btn-ghost" onClick={() => void scan(l.id)}>
                   <ScanSearch size={15} /> Scan
+                </button>
+                <button className="btn-ghost" onClick={() => void rematch(l)} title="Look up details, artwork and cast again for every title">
+                  <RefreshCw size={15} /> Re-match
                 </button>
                 <button className="btn-ghost" onClick={() => void optimize(l)} title="Encode browser-friendly copies of files that need transcoding">
                   <Cpu size={15} /> Optimize

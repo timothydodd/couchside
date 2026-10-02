@@ -65,6 +65,18 @@ func New(d *db.DB, cfg config.Config, w *worker.Worker, providers *metadata.Chai
 
 // Run does the server's background upkeep until ctx ends.
 func (s *Server) Run(ctx context.Context) {
+	go func() {
+		t := time.NewTicker(24 * time.Hour)
+		defer t.Stop()
+		for {
+			s.pruneRemote()
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+		}
+	}()
 	if !s.cfg.Auth {
 		return
 	}
@@ -115,6 +127,8 @@ func (s *Server) Handler() http.Handler {
 	// with accounts on, so TV apps' image nodes needn't send a token.
 	r.Get("/api/artwork/items/{id}/{kind}", s.itemArtwork)
 	r.Get("/api/artwork/files/{id}/still", s.fileStill)
+	r.Get("/api/artwork/people/{id}", s.personPhoto)
+	r.Get("/api/artwork/remote", s.remoteImage)
 	r.Group(func(r chi.Router) {
 		r.Use(s.authenticate, s.passwordCurrent)
 		r.Get("/api/files/{id}/stream", s.stream)
@@ -145,6 +159,7 @@ func (s *Server) userRoutes(r chi.Router) {
 
 	r.Get("/items", s.listItems)
 	r.Get("/items/{id}", s.getItem)
+	r.Get("/people/{id}", s.person)
 	r.Post("/items/{id}/watched", s.itemWatched)
 
 	r.Get("/files/{id}", s.playInfo)
@@ -201,6 +216,7 @@ func (s *Server) adminRoutes(r chi.Router) {
 	r.Post("/libraries/{id}/scan", s.scanLibrary)
 	r.Post("/libraries/scan", s.scanAll)
 	r.Post("/libraries/{id}/optimize", s.optimizeLibrary)
+	r.Post("/libraries/{id}/rematch", s.rematchLibrary)
 	r.Get("/libraries/{id}/manage", s.manageItems)
 	r.Get("/fs", s.browse)
 

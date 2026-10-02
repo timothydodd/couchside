@@ -20,7 +20,18 @@ type Details struct {
 	ImdbID       string // the IMDb id, or the provider's id when it knows none ("tmdb:tv:<n>")
 	TotalSeasons *int
 	PosterURL    string
-	BackdropURL  string // empty when the provider has none (OMDb never does)
+	BackdropURL  string   // empty when the provider has none (OMDb never does)
+	Credits      []Credit // cast (in billing order) and key crew; TMDB only
+}
+
+// Credit is one person's part in a title. PersonID is TMDB's person id.
+type Credit struct {
+	PersonID    int64
+	Name        string
+	ProfilePath string // TMDB image path ("/abc.jpg"), "" when there's no photo
+	Kind        string // cast | crew
+	Role        string // the character for cast, the job for crew ("Director")
+	Order       int
 }
 
 type Episode struct {

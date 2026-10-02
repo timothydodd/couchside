@@ -78,6 +78,28 @@ export interface ItemDetail {
   item: Item;
   files: MediaFile[];
   seasons?: { season: number; episodes: EpisodeRow[] }[];
+  cast: CreditRow[];
+  crew: CreditRow[];
+}
+
+/** One person in a title's credits. role is the character, or the job(s) for crew. */
+export interface CreditRow {
+  personId: number;
+  name: string;
+  role: string;
+  hasPhoto: boolean;
+}
+
+export interface Person {
+  id: number;
+  name: string;
+  hasPhoto: boolean;
+}
+
+/** A person's page: who they are and the library's titles they're in. */
+export interface PersonDetail {
+  person: Person;
+  items: (ItemSummary & { roles: string[] })[];
 }
 
 export interface PlayInfo {

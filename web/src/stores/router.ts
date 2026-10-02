@@ -15,6 +15,7 @@ export type Route =
   | { name: "settings" }
   | { name: "profiles" }
   | { name: "search"; q: string }
+  | { name: "person"; id: number }
   | { name: "notfound" };
 
 /** Parses a path, with its query string if it has one. */
@@ -34,6 +35,8 @@ export function parseRoute(path: string): Route {
   if (p === "/profiles") return { name: "profiles" };
   let m = p.match(/^\/item\/(\d+)$/);
   if (m) return { name: "item", id: Number(m[1]) };
+  m = p.match(/^\/person\/(\d+)$/);
+  if (m) return { name: "person", id: Number(m[1]) };
   m = p.match(/^\/libraries\/(\d+)$/);
   if (m) return { name: "manage", id: Number(m[1]) };
   m = p.match(/^\/recording\/(\d+)$/);

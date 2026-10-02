@@ -225,7 +225,7 @@ func (s *Service) refreshGuide(ctx context.Context) error {
 			}
 			for _, g := range c.Guide {
 				p := db.Program{Channel: c.GuideNumber, StartAt: g.StartTime, EndAt: g.EndTime, Title: g.Title,
-					EpisodeTitle: g.EpisodeTitle, EpisodeNum: g.EpisodeNumber, Synopsis: g.Synopsis, ImageURL: g.ImageURL,
+					EpisodeTitle: g.EpisodeTitle, EpisodeNum: g.EpisodeNumber, Synopsis: g.Synopsis, ImageURL: db.ImageURL(g.ImageURL),
 					SeriesID: g.SeriesID, IsNew: g.First == 1, Categories: g.Filter}
 				if g.OriginalAirdate > 0 {
 					oa := g.OriginalAirdate

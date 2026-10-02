@@ -206,7 +206,7 @@ function MetadataSettings() {
       {tmdb && (
         <div className="mt-4 flex items-center gap-3 border-t border-border-light pt-3 text-xs text-content-muted">
           <a href="https://www.themoviedb.org" target="_blank" rel="noreferrer" className="shrink-0" aria-label="The Movie Database">
-            <img src="/brand/tmdb.svg" alt="TMDB" className="h-3" />
+            <img src="/brand/tmdb.svg" alt="TMDB" className="h-7" />
           </a>
           <span>This product uses the TMDB API but is not endorsed or certified by TMDB.</span>
         </div>

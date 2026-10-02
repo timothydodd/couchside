@@ -107,4 +107,5 @@ export const posterUrl = (i: { id: number; updatedAt: number }, size: "thumb" | 
   `/api/artwork/items/${i.id}/${size === "thumb" ? "poster-thumb" : "poster"}?v=${i.updatedAt}`;
 export const backdropUrl = (i: { id: number; updatedAt: number }) => `/api/artwork/items/${i.id}/backdrop?v=${i.updatedAt}`;
 export const stillUrl = (fileId: number) => `/api/artwork/files/${fileId}/still`;
+export const personPhotoUrl = (personId: number) => `/api/artwork/people/${personId}`;
 export const streamUrl = (fileId: number) => `/api/files/${fileId}/stream`;

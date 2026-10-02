@@ -36,7 +36,7 @@ export default function Sidebar() {
   // Detail pages highlight the section they belong to.
   const liveTv = useStatus((s) => s.status?.livetv);
   const current: NavName =
-    route.name === "item" || route.name === "play"
+    route.name === "item" || route.name === "play" || route.name === "person"
       ? "home"
       : route.name === "watch" || route.name === "recording"
         ? "livetv"

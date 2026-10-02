@@ -343,7 +343,12 @@ func (s *Server) getItem(w http.ResponseWriter, r *http.Request) {
 	for i := range files {
 		files[i].Path = filepath.Base(files[i].Path) // don't leak server paths to the UI
 	}
-	out := map[string]any{"item": item, "files": files}
+	cast, crew, err := s.db.ItemCredits(ctx, id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	out := map[string]any{"item": item, "files": files, "cast": cast, "crew": crew}
 	if item.Kind == "series" {
 		eps, err := s.db.SeriesEpisodes(ctx, id)
 		if err != nil {

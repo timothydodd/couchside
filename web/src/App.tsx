@@ -13,6 +13,7 @@ import ProfilesPage from "./pages/ProfilesPage";
 import LiveTvPage from "./pages/LiveTvPage";
 import LivePlayerPage from "./pages/LivePlayerPage";
 import RecordingPlayerPage from "./pages/RecordingPlayerPage";
+import PersonPage from "./pages/PersonPage";
 import SearchPage from "./pages/SearchPage";
 import SettingsPage from "./pages/SettingsPage";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
@@ -86,6 +87,7 @@ function Signed() {
           {route.name === "manage" && admin && <LibraryManagePage id={route.id} />}
           {route.name === "settings" && <SettingsPage />}
           {route.name === "search" && <SearchPage q={route.q} />}
+          {route.name === "person" && <PersonPage id={route.id} />}
           {route.name === "notfound" && <EmptyState title="Nothing here">That page doesn't exist.</EmptyState>}
         </main>
       </div>

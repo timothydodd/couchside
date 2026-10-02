@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, Check, Cpu, Eye, EyeOff, Play, RotateCcw, Star, Trash2, Wand2 } from "lucide-react";
+import { CastRow, CrewLine } from "../components/Credits";
 import Link from "../components/Link";
 import { PosterArt } from "../components/PosterCard";
 import { EmptyState, ErrorNote, Meter, Spinner } from "../components/ui";
@@ -126,10 +127,15 @@ export default function ItemPage({ id }: { id: number }) {
             )
           )}
 
+          <CrewLine crew={data.crew ?? []} />
+
           {admin && <MatchPanel id={item.id} status={item.matchStatus} imdbId={item.imdbId} parsed={`${item.parsedTitle}${item.parsedYear ? ` (${item.parsedYear})` : ""}`} onDone={reload} />}
         </div>
       </div>
 
+      <div className="mt-6">
+        <CastRow cast={data.cast ?? []} />
+      </div>
       {isSeries && seasons && <Seasons seasons={seasons} />}
       {extras.length > 0 && <Extras title={item.title} files={extras} />}
       {!isSeries && files.length > extras.length && <FilesCard files={files.filter((f) => f.role !== "extra")} onChange={reload} />}

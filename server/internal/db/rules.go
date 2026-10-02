@@ -10,7 +10,7 @@ type SeriesRule struct {
 	ID          int64   `json:"id"`
 	SeriesID    string  `json:"seriesId"`
 	Title       string  `json:"title"`
-	ImageURL    string  `json:"imageUrl"`
+	ImageURL    ImageURL `json:"imageUrl"`
 	Mode        string  `json:"mode"`
 	Channel     string  `json:"channel"`
 	MediaItemID *int64  `json:"mediaItemId"`

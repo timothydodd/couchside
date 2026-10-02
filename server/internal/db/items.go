@@ -171,6 +171,9 @@ func (d *DB) ClearMatch(ctx context.Context, id int64) error {
 	if err := d.sql.QueryRowContext(ctx, `SELECT parsed_title FROM media_items WHERE id = ?`, id).Scan(&parsed); err != nil {
 		return notFound(err)
 	}
+	if _, err := d.sql.ExecContext(ctx, `DELETE FROM item_credits WHERE item_id = ?`, id); err != nil {
+		return err
+	}
 	_, err := d.sql.ExecContext(ctx, `UPDATE media_items SET match_status = 'unmatched', title = parsed_title,
 		sort_title = ?, year = NULLIF(parsed_year, 0), plot = '', genres = '', rated = '', rating = NULL,
 		runtime_min = NULL, total_seasons = NULL, poster_url = '', backdrop_url = '', has_poster = custom_poster, match_provider = '',

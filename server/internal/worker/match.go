@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/timothydodd/couchside/internal/db"
@@ -78,6 +79,13 @@ func (w *Worker) match(ctx context.Context, itemID int64) error {
 		RuntimeMin: d.RuntimeMin, ImdbID: d.ImdbID, TotalSeasons: d.TotalSeasons, PosterURL: d.PosterURL, BackdropURL: d.BackdropURL,
 		Provider: p.Name(),
 	}); err != nil {
+		return err
+	}
+	credits := make([]db.Credit, len(d.Credits))
+	for i, c := range d.Credits {
+		credits[i] = db.Credit{PersonID: c.PersonID, Name: c.Name, ProfilePath: c.ProfilePath, Kind: c.Kind, Role: c.Role, Order: c.Order}
+	}
+	if err := w.db.SetCredits(ctx, itemID, credits); err != nil {
 		return err
 	}
 	if item.Kind == "series" && d.ImdbID != "" {
@@ -156,6 +164,7 @@ func (w *Worker) artwork(ctx context.Context, itemID int64) error {
 	}
 	if src, err := w.db.BackdropSource(ctx, itemID); err == nil && src != nil && !customBackdrop && !hasBackdrop {
 		at := imaging.GrabOffset(src.DurationSec, 0.2)
+		_ = os.Remove(filepath.Join(dir, "backdrop.src")) // a frame grab, not the provider's image
 		if err := w.ff.FrameGrab(ctx, src.Path, filepath.Join(dir, "backdrop.webp"), at, 1280); err != nil {
 			errs = append(errs, "backdrop: "+err.Error())
 		} else {
@@ -171,7 +180,25 @@ func (w *Worker) artwork(ctx context.Context, itemID int64) error {
 	return nil
 }
 
+// fetchedFrom records which link an artwork file came from, so a re-match
+// that finds the same link doesn't download it again.
+func fetchedFrom(dir, name, url string) bool {
+	src, err := os.ReadFile(filepath.Join(dir, name+".src"))
+	if err != nil || string(src) != url {
+		return false
+	}
+	_, err = os.Stat(filepath.Join(dir, name+".webp"))
+	return err == nil
+}
+
+func markFetched(dir, name, url string) {
+	_ = os.WriteFile(filepath.Join(dir, name+".src"), []byte(url), 0o644)
+}
+
 func (w *Worker) poster(ctx context.Context, url, dir string) error {
+	if fetchedFrom(dir, "poster", url) {
+		return nil
+	}
 	orig := filepath.Join(dir, "poster.orig")
 	err := download(ctx, url, orig)
 	if err != nil && strings.Contains(url, "._V1_SX800.jpg") {
@@ -185,16 +212,57 @@ func (w *Worker) poster(ctx context.Context, url, dir string) error {
 	if err := w.ff.Resize(ctx, orig, filepath.Join(dir, "poster.webp"), 780); err != nil {
 		return err
 	}
-	return w.ff.Resize(ctx, orig, filepath.Join(dir, "poster-thumb.webp"), 360)
+	if err := w.ff.Resize(ctx, orig, filepath.Join(dir, "poster-thumb.webp"), 360); err != nil {
+		return err
+	}
+	markFetched(dir, "poster", url)
+	return nil
+}
+
+// PersonPhotoPath is where a cast or crew member's photo is cached.
+func PersonPhotoPath(cacheDir string, personID int64) string {
+	return filepath.Join(cacheDir, "people", fmt.Sprintf("%d.webp", personID))
+}
+
+var photoMu sync.Mutex
+
+// PersonPhoto fetches a person's TMDB profile photo into the cache the first
+// time it's asked for, so browsers and TVs never call TMDB themselves.
+func (w *Worker) PersonPhoto(ctx context.Context, personID int64, profilePath string) (string, error) {
+	dst := PersonPhotoPath(w.cfg.CacheDir, personID)
+	photoMu.Lock()
+	defer photoMu.Unlock()
+	if _, err := os.Stat(dst); err == nil {
+		return dst, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return "", err
+	}
+	orig := dst + ".orig"
+	if err := download(ctx, "https://image.tmdb.org/t/p/w185"+profilePath, orig); err != nil {
+		return "", err
+	}
+	defer os.Remove(orig)
+	if err := w.ff.Resize(ctx, orig, dst, 185); err != nil {
+		return "", err
+	}
+	return dst, nil
 }
 
 func (w *Worker) backdrop(ctx context.Context, url, dir string) error {
+	if fetchedFrom(dir, "backdrop", url) {
+		return nil
+	}
 	orig := filepath.Join(dir, "backdrop.orig")
 	if err := download(ctx, url, orig); err != nil {
 		return err
 	}
 	defer os.Remove(orig)
-	return w.ff.Resize(ctx, orig, filepath.Join(dir, "backdrop.webp"), 1280)
+	if err := w.ff.Resize(ctx, orig, filepath.Join(dir, "backdrop.webp"), 1280); err != nil {
+		return err
+	}
+	markFetched(dir, "backdrop", url)
+	return nil
 }
 
 func (w *Worker) still(ctx context.Context, fileID int64) error {

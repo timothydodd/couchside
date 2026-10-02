@@ -13,7 +13,7 @@ type Channel struct {
 	Number     string `json:"number"`
 	Name       string `json:"name"`
 	Affiliate  string `json:"affiliate"`
-	LogoURL    string `json:"logoUrl"`
+	LogoURL    ImageURL `json:"logoUrl"`
 	URL        string `json:"-"`
 	HD         bool   `json:"hd"`
 	DRM        bool   `json:"drm"`
@@ -127,7 +127,7 @@ type Program struct {
 	EpisodeTitle    string   `json:"episodeTitle"`
 	EpisodeNum      string   `json:"episodeNum"`
 	Synopsis        string   `json:"synopsis"`
-	ImageURL        string   `json:"imageUrl"`
+	ImageURL        ImageURL `json:"imageUrl"`
 	SeriesID        string   `json:"seriesId"`
 	OriginalAirdate *int64   `json:"originalAirdate"`
 	IsNew           bool     `json:"isNew"`
@@ -236,7 +236,7 @@ type Recording struct {
 	EpisodeTitle string   `json:"episodeTitle"`
 	EpisodeNum   string   `json:"episodeNum"`
 	Synopsis     string   `json:"synopsis"`
-	ImageURL     string   `json:"imageUrl"`
+	ImageURL     ImageURL `json:"imageUrl"`
 	SeriesID     string   `json:"seriesId"`
 	Categories   []string `json:"categories"`
 	StartAt      int64    `json:"startAt"`

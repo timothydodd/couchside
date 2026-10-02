@@ -82,6 +82,9 @@ func (s *Server) itemLookup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, badRequest(err.Error()))
 		return
 	}
+	for i := range res {
+		res[i].Poster = db.CachedImage(res[i].Poster) // through the server's image cache
+	}
 	writeJSON(w, http.StatusOK, res)
 }
 
@@ -269,6 +272,8 @@ func (s *Server) uploadArtwork(w http.ResponseWriter, r *http.Request) {
 	}
 	orig := filepath.Join(dir, "upload.orig")
 	defer os.Remove(orig)
+	// The upload replaces whatever the provider link gave; forget that link.
+	_ = os.Remove(filepath.Join(dir, kind+".src"))
 	out, err := os.Create(orig)
 	if err != nil {
 		writeErr(w, err)

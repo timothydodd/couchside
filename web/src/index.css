@@ -279,6 +279,11 @@ body {
   }
 
   /* 16:9 tile for episodes and continue-watching. */
+  /* Cast and crew photos: portrait, like TMDB's profile images. */
+  .person-photo {
+    @apply relative block overflow-hidden rounded-lg border border-border-light bg-raised transition-transform duration-200;
+    aspect-ratio: 2 / 3;
+  }
   .still {
     @apply relative block overflow-hidden rounded-lg border border-border-light bg-raised transition-[border-color,box-shadow] duration-200;
     aspect-ratio: 16 / 9;

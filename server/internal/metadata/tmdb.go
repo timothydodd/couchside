@@ -122,12 +122,79 @@ type tmdbDetails struct {
 			} `json:"release_dates"`
 		} `json:"results"`
 	} `json:"release_dates"`
+	Credits          tmdbCredits `json:"credits"`           // movies
+	AggregateCredits tmdbCredits `json:"aggregate_credits"` // tv: every season
+	CreatedBy        []struct {
+		ID          int64  `json:"id"`
+		Name        string `json:"name"`
+		ProfilePath string `json:"profile_path"`
+	} `json:"created_by"`
 	ContentRatings struct {
 		Results []struct {
 			Country string `json:"iso_3166_1"`
 			Rating  string `json:"rating"`
 		} `json:"results"`
 	} `json:"content_ratings"`
+}
+
+type tmdbCredits struct {
+	Cast []struct {
+		ID          int64  `json:"id"`
+		Name        string `json:"name"`
+		ProfilePath string `json:"profile_path"`
+		Character   string `json:"character"` // movies
+		Order       int    `json:"order"`
+		Roles       []struct {
+			Character string `json:"character"`
+		} `json:"roles"` // tv aggregate credits
+	} `json:"cast"`
+	Crew []struct {
+		ID          int64  `json:"id"`
+		Name        string `json:"name"`
+		ProfilePath string `json:"profile_path"`
+		Job         string `json:"job"` // movies
+	} `json:"crew"`
+}
+
+// castLimit is how many billed actors are kept; crewJobs are the crew worth
+// showing (a film's crew list runs to hundreds).
+const castLimit = 20
+
+var crewJobs = map[string]int{"Director": 0, "Screenplay": 1, "Writer": 2, "Story": 3, "Novel": 4,
+	"Original Music Composer": 5, "Director of Photography": 6}
+
+func (d tmdbDetails) credits(kind Kind) []Credit {
+	var out []Credit
+	src := d.Credits
+	if kind == Series {
+		src = d.AggregateCredits
+		for i, c := range d.CreatedBy {
+			out = append(out, Credit{PersonID: c.ID, Name: c.Name, ProfilePath: c.ProfilePath, Kind: "crew", Role: "Creator", Order: i})
+		}
+	}
+	for i, c := range src.Cast {
+		if i >= castLimit {
+			break
+		}
+		role := c.Character
+		if role == "" && len(c.Roles) > 0 {
+			role = c.Roles[0].Character
+		}
+		out = append(out, Credit{PersonID: c.ID, Name: c.Name, ProfilePath: c.ProfilePath, Kind: "cast", Role: role, Order: i})
+	}
+	if kind == Movie {
+		seen := map[string]bool{}
+		for _, c := range src.Crew {
+			rank, ok := crewJobs[c.Job]
+			key := fmt.Sprintf("%d|%s", c.ID, c.Job)
+			if !ok || seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, Credit{PersonID: c.ID, Name: c.Name, ProfilePath: c.ProfilePath, Kind: "crew", Role: c.Job, Order: 100 + rank})
+		}
+	}
+	return out
 }
 
 type tmdbSeason struct {
@@ -345,10 +412,10 @@ func (t *TMDB) resolve(ctx context.Context, kind Kind, id string) (Kind, int, er
 
 func (t *TMDB) details(ctx context.Context, kind Kind, id int) (*Details, error) {
 	var d tmdbDetails
-	extra := "external_ids,release_dates"
+	extra := "external_ids,release_dates,credits"
 	ttl := tmdbMovieTTL
 	if kind == Series {
-		extra, ttl = "external_ids,content_ratings", tmdbTVTTL
+		extra, ttl = "external_ids,content_ratings,aggregate_credits", tmdbTVTTL
 	}
 	if err := t.get(ctx, fmt.Sprintf("/%s/%d", tmdbKind(kind), id), url.Values{"append_to_response": {extra}}, ttl, &d); err != nil {
 		if errors.Is(err, errNotFound) {
@@ -378,6 +445,7 @@ func (t *TMDB) details(ctx context.Context, kind Kind, id int) (*Details, error)
 		out.TotalSeasons = &n
 	}
 	out.Rated = usCertification(d)
+	out.Credits = d.credits(kind)
 	return out, nil
 }
 
