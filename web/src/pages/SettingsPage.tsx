@@ -163,6 +163,16 @@ function ProfileSettings() {
                 options={[1080, 720, 480].map((h) => ({ id: h, label: `${h}p` }))}
               />
             </div>
+            <span className="text-content-muted">On TVs</span>
+            <label className="flex items-center gap-2 text-content-secondary">
+              <input
+                type="checkbox"
+                className="accent-brand"
+                checked={p.livePassthrough !== false}
+                onChange={(e) => setPrefs({ livePassthrough: e.target.checked })}
+              />
+              Play channels in their original broadcast format when the TV can (full quality, almost no server work; up to about 19 Mbps)
+            </label>
           </>
         )}
       </div>

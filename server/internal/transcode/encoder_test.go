@@ -33,6 +33,17 @@ func TestVAAPIFullPipeline(t *testing.T) {
 	}
 }
 
+func TestVAAPILiveTV(t *testing.T) {
+	e := Encoder{HW: "vaapi", VAAPIDevice: "/dev/dri/renderD128", HWDecode: true}
+	_, chain, codec := e.VideoParts(VideoOpts{MaxHeight: 720, BitrateK: 4000, Deinterlace: true, Live: true, HWDecode: true})
+	if chain != "deinterlace_vaapi=auto=1,scale_vaapi=w=-2:h=720:format=nv12" {
+		t.Errorf("live chain = %q", chain)
+	}
+	if !strings.Contains(strings.Join(codec, " "), "-bf 0") {
+		t.Errorf("live codec = %v (B-frames make live segments bursty)", codec)
+	}
+}
+
 func TestVAAPIWithoutGPUDecodeKeepsTheOldPipeline(t *testing.T) {
 	// Not verified at start-up, or a session that fell back: CPU decodes, GPU encodes.
 	for _, e := range []Encoder{

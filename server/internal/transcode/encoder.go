@@ -159,6 +159,9 @@ func (e Encoder) VideoParts(o VideoOpts) (in []string, chain string, codec []str
 		f = append(f, "format=nv12", "hwupload")
 		in = []string{"-vaapi_device", e.VAAPIDevice}
 		codec = []string{"-c:v", "h264_vaapi", "-b:v", br, "-maxrate", br, "-bufsize", buf}
+		if o.Live {
+			codec = append(codec, "-bf", "0")
+		}
 	case "qsv":
 		f = append(f, "format=nv12")
 		preset := "veryfast"
@@ -200,7 +203,8 @@ func (e Encoder) vaapiFull(o VideoOpts) (in []string, chain string, codec []stri
 		"-hwaccel", "vaapi", "-hwaccel_device", "va", "-hwaccel_output_format", "vaapi"}
 	var f []string
 	if o.Deinterlace {
-		f = append(f, "deinterlace_vaapi")
+		// auto=1: only frames flagged interlaced, like yadif's deint=interlaced.
+		f = append(f, "deinterlace_vaapi=auto=1")
 	}
 	size := ""
 	if o.MaxHeight > 0 && (o.SrcHeight == 0 || o.SrcHeight > o.MaxHeight) {
@@ -218,6 +222,9 @@ func (e Encoder) vaapiFull(o VideoOpts) (in []string, chain string, codec []stri
 	}
 	br := fmt.Sprintf("%dk", o.BitrateK)
 	codec = []string{"-c:v", "h264_vaapi", "-b:v", br, "-maxrate", br, "-bufsize", fmt.Sprintf("%dk", o.BitrateK*2)}
+	if o.Live {
+		codec = append(codec, "-bf", "0") // no B-frames: segments arrive as steadily as the broadcast
+	}
 	return in, strings.Join(f, ","), codec
 }
 

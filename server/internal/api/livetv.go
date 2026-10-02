@@ -132,12 +132,16 @@ func (s *Server) tvWatch(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Channel string `json:"channel"`
 		Height  int    `json:"height"`
+		// Codecs the client can decode itself (a Roku: mpeg2, h264, ac3…): a
+		// channel in them is passed through instead of transcoded.
+		VideoCodecs []string `json:"videoCodecs"`
+		AudioCodecs []string `json:"audioCodecs"`
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, err)
 		return
 	}
-	sess, err := s.tv.Watch(r.Context(), in.Channel, in.Height)
+	sess, err := s.tv.Watch(r.Context(), in.Channel, livetv.WatchOpts{Height: in.Height, VideoCodecs: in.VideoCodecs, AudioCodecs: in.AudioCodecs})
 	switch {
 	case errors.Is(err, livetv.ErrNoTuner):
 		writeErr(w, httpError{http.StatusServiceUnavailable, "All tuners are busy (recordings, other viewers or Plex). Try again when one frees up."})
@@ -155,6 +159,7 @@ func (s *Server) tvWatch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"sessionId": sess.ID, "playlist": "/api/live/" + sess.ID + "/index.m3u8",
 		"channel": sess.Channel, "name": sess.Name, "height": sess.Height, "hw": sess.HW, "now": prog,
+		"copyVideo": sess.CopyVideo, "copyAudio": sess.CopyAudio, "hwDecode": sess.HWDecode,
 	})
 }
 
@@ -303,10 +308,12 @@ func (s *Server) dvrWatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Height int `json:"height"`
+		Height      int      `json:"height"`
+		VideoCodecs []string `json:"videoCodecs"`
+		AudioCodecs []string `json:"audioCodecs"`
 	}
 	_ = decode(r, &in)
-	sess, err := s.tv.WatchRecording(r.Context(), id, in.Height)
+	sess, err := s.tv.WatchRecording(r.Context(), id, livetv.WatchOpts{Height: in.Height, VideoCodecs: in.VideoCodecs, AudioCodecs: in.AudioCodecs})
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			writeErr(w, err)
@@ -324,6 +331,7 @@ func (s *Server) dvrWatch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"sessionId": sess.ID, "playlist": "/api/live/" + sess.ID + "/index.m3u8",
 		"channel": sess.Channel, "name": sess.Name, "height": sess.Height, "hw": sess.HW, "recording": rec,
+		"copyVideo": sess.CopyVideo, "copyAudio": sess.CopyAudio, "hwDecode": sess.HWDecode,
 	})
 }
 

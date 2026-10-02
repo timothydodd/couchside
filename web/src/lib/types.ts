@@ -162,6 +162,7 @@ export interface Prefs {
   commercials?: BreakMode; // default "auto"
   subtitleLang?: string; // turn on text subtitles in this language; "" = only forced ones (default)
   liveHeight?: number; // live TV and in-progress recording quality, default 720
+  livePassthrough?: boolean; // TV apps play broadcasts they can decode untouched; default true
 }
 
 export interface Profile {
@@ -413,6 +414,9 @@ export interface LiveSessionInfo {
   name: string;
   height: number;
   hw: string;
+  hwDecode?: boolean;
+  copyVideo?: boolean;
+  copyAudio?: boolean;
   now: Program | null;
 }
 

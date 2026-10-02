@@ -34,6 +34,11 @@ type LiveSession struct {
 	Height  int       `json:"height"`
 	HW      string    `json:"hw"`
 	Started time.Time `json:"started"`
+	// Passthrough: the client can decode the broadcast's own video and/or
+	// audio, so it's repackaged into HLS instead of re-encoded.
+	CopyVideo bool `json:"copyVideo"`
+	CopyAudio bool `json:"copyAudio"`
+	HWDecode  bool `json:"hwDecode"` // VAAPI decodes and deinterlaces too
 
 	key        string // what's being streamed: "ch:2.1" or "rec:42"
 	dir        string
@@ -87,29 +92,43 @@ func (m *liveManager) count() int {
 	return len(m.sessions)
 }
 
+// Spec says how to stream a channel or recording.
+type Spec struct {
+	Height     int    // output height when transcoding
+	CopyVideo  bool   // repackage the broadcast's video as is (height is then the source's)
+	CopyAudio  bool   // repackage the broadcast's audio as is (e.g. AC-3 for a Roku)
+	VideoCodec string // the broadcast's video codec, normalized ("mpeg2", "h264", "hevc"); "" if unknown
+}
+
 // start tunes a channel, or joins a running stream of it at the same quality.
 // It returns once the first playlist exists, or with an error if the tuner
 // refused (all tuners busy) or ffmpeg failed.
-func (m *liveManager) start(ctx context.Context, channel, name, streamURL string, height int) (*LiveSession, error) {
+func (m *liveManager) start(ctx context.Context, channel, name, streamURL string, spec Spec) (*LiveSession, error) {
 	return m.startInput(ctx, "ch:"+channel, channel, name, []string{
 		"-rw_timeout", "15000000", // 15s without data from the tuner → give up
 		"-fflags", "+genpts+discardcorrupt", "-err_detect", "ignore_err", "-i", streamURL,
-	}, height)
+	}, spec)
 }
 
 // startRecordingPlayback streams a recording that's still being written, from
 // its beginning: ffmpeg follows the growing file instead of stopping at EOF.
-func (m *liveManager) startRecordingPlayback(ctx context.Context, recID int64, channel, name, file string, height int) (*LiveSession, error) {
+func (m *liveManager) startRecordingPlayback(ctx context.Context, recID int64, channel, name, file string, spec Spec) (*LiveSession, error) {
 	return m.startInput(ctx, fmt.Sprintf("rec:%d", recID), channel, name, []string{
 		"-follow", "1", "-rw_timeout", "30000000",
 		"-fflags", "+genpts+discardcorrupt", "-err_detect", "ignore_err", "-i", "file:" + file,
-	}, height)
+	}, spec)
 }
 
-func (m *liveManager) startInput(ctx context.Context, key, channel, name string, input []string, height int) (*LiveSession, error) {
+// gpuCodecs maps broadcast codecs to the ffprobe names transcode.HWDecodable uses.
+var gpuCodecs = map[string]string{"mpeg2": "mpeg2video", "h264": "h264", "hevc": "hevc"}
+
+func (m *liveManager) startInput(ctx context.Context, key, channel, name string, input []string, spec Spec) (*LiveSession, error) {
+	if spec.CopyVideo {
+		spec.Height = 0 // the broadcast's own size
+	}
 	m.mu.Lock()
 	for _, s := range m.sessions {
-		if s.key == key && s.Height == height && s.running() {
+		if s.key == key && s.Height == spec.Height && s.CopyVideo == spec.CopyVideo && s.CopyAudio == spec.CopyAudio && s.running() {
 			m.mu.Unlock()
 			s.touch()
 			return s, nil
@@ -117,31 +136,72 @@ func (m *liveManager) startInput(ctx context.Context, key, channel, name string,
 	}
 	m.mu.Unlock()
 
+	// Decode on the GPU when it passed the start-up test and knows the codec;
+	// if that run fails (not a busy tuner), tune again with the CPU decoding.
+	hwDecode := !spec.CopyVideo && m.enc.HWDecode && transcode.HWDecodable[gpuCodecs[spec.VideoCodec]]
+	s, err := m.launch(ctx, key, channel, name, input, spec, hwDecode)
+	if err != nil && hwDecode && !errors.Is(err, ErrNoTuner) && ctx.Err() == nil {
+		slog.Warn("live tv: GPU decoding failed, decoding on the CPU instead", "channel", channel, "err", err)
+		s, err = m.launch(ctx, key, channel, name, input, spec, false)
+	}
+	if err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	m.sessions[s.ID] = s
+	m.mu.Unlock()
+	slog.Info("live tv", "channel", channel, "name", name, "height", spec.Height, "hw", s.HW, "gpuDecode", s.HWDecode,
+		"copyVideo", spec.CopyVideo, "copyAudio", spec.CopyAudio, "session", s.ID)
+	return s, nil
+}
+
+// liveArgs builds the ffmpeg command for one live stream.
+func (m *liveManager) liveArgs(input []string, spec Spec, hwDecode bool, dir string) []string {
+	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
+	var vIn, vOut []string
+	if !spec.CopyVideo {
+		vIn, vOut = m.enc.Video(transcode.VideoOpts{MaxHeight: spec.Height, BitrateK: transcode.BitrateFor(spec.Height),
+			Deinterlace: true, Live: true, HWDecode: hwDecode})
+	}
+	args = append(args, vIn...)
+	args = append(args, input...)
+	args = append(args, "-map", "0:v:0", "-map", "0:a:0", "-sn", "-dn")
+	if spec.CopyVideo {
+		// Segments are cut at the broadcast's own keyframes (MPEG-2 sends one about every half second).
+		args = append(args, "-c:v", "copy")
+	} else {
+		args = append(args, vOut...)
+		args = append(args, "-force_key_frames", fmt.Sprintf("expr:gte(t,n_forced*%d)", liveSegDur))
+	}
+	if spec.CopyAudio {
+		args = append(args, "-c:a", "copy")
+	} else {
+		args = append(args, transcode.AudioArgs()...)
+	}
+	return append(args, "-f", "hls", "-hls_time", strconv.Itoa(liveSegDur), "-hls_list_size", "0",
+		"-hls_playlist_type", "event", "-hls_flags", "temp_file+independent_segments",
+		"-hls_segment_filename", filepath.Join(dir, "seg%d.ts"), filepath.Join(dir, "index.m3u8"))
+}
+
+// launch starts ffmpeg and waits for its first playlist.
+func (m *liveManager) launch(ctx context.Context, key, channel, name string, input []string, spec Spec, hwDecode bool) (*LiveSession, error) {
 	id := randomID()
 	dir := filepath.Join(m.root, id)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	vIn, vOut := m.enc.Video(transcode.VideoOpts{MaxHeight: height, BitrateK: transcode.BitrateFor(height), Deinterlace: true, Live: true})
-	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
-	args = append(args, vIn...)
-	args = append(args, input...)
-	args = append(args, "-map", "0:v:0", "-map", "0:a:0", "-sn", "-dn")
-	args = append(args, vOut...)
-	args = append(args, "-force_key_frames", fmt.Sprintf("expr:gte(t,n_forced*%d)", liveSegDur))
-	args = append(args, transcode.AudioArgs()...)
-	args = append(args, "-f", "hls", "-hls_time", strconv.Itoa(liveSegDur), "-hls_list_size", "0",
-		"-hls_playlist_type", "event", "-hls_flags", "temp_file+independent_segments",
-		"-hls_segment_filename", filepath.Join(dir, "seg%d.ts"), filepath.Join(dir, "index.m3u8"))
-
-	cmd := exec.Command(m.enc.FFmpeg, args...)
+	cmd := exec.Command(m.enc.FFmpeg, m.liveArgs(input, spec, hwDecode, dir)...)
 	stderr := &syncBuffer{}
 	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start ffmpeg: %w", err)
 	}
 	hw := m.enc.HW
-	s := &LiveSession{ID: id, key: key, Channel: channel, Name: name, Height: height, HW: hw, Started: time.Now(),
+	if spec.CopyVideo {
+		hw = "" // nothing encoded
+	}
+	s := &LiveSession{ID: id, key: key, Channel: channel, Name: name, Height: spec.Height, HW: hw, Started: time.Now(),
+		CopyVideo: spec.CopyVideo, CopyAudio: spec.CopyAudio, HWDecode: hwDecode,
 		dir: dir, cmd: cmd, exited: make(chan struct{}), stderr: stderr, lastAccess: time.Now()}
 	go func() {
 		_ = cmd.Wait()
@@ -174,10 +234,6 @@ func (m *liveManager) startInput(ctx context.Context, key, channel, name string,
 		}
 		time.Sleep(150 * time.Millisecond)
 	}
-	m.mu.Lock()
-	m.sessions[id] = s
-	m.mu.Unlock()
-	slog.Info("live tv", "channel", channel, "name", name, "height", height, "hw", hw, "session", id)
 	return s, nil
 }
 

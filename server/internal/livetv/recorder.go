@@ -17,8 +17,58 @@ import (
 	"github.com/timothydodd/couchside/internal/db"
 )
 
+// WatchOpts is what a client asks for: a height for transcoding, and the
+// codecs it can decode itself (names as NormalizeCodec gives them), so a
+// broadcast it can play is passed through instead of re-encoded.
+type WatchOpts struct {
+	Height      int
+	VideoCodecs []string
+	AudioCodecs []string
+}
+
+// NormalizeCodec maps the HDHomeRun's codec names ("MPEG2", "H264", "AC3")
+// and clients' names to one spelling: mpeg2, h264, hevc, ac3, eac3, ac4, aac, mp3.
+func NormalizeCodec(c string) string {
+	c = strings.ToLower(strings.TrimSpace(c))
+	switch c {
+	case "mpeg2", "mpeg2video", "mpeg-2":
+		return "mpeg2"
+	case "h264", "h.264", "avc", "mpeg4 avc":
+		return "h264"
+	case "hevc", "h265", "h.265":
+		return "hevc"
+	case "eac3", "e-ac3", "ec-3":
+		return "eac3"
+	case "ac-3", "ac3":
+		return "ac3"
+	}
+	return c
+}
+
+func hasCodec(list []string, codec string) bool {
+	if codec == "" {
+		return false
+	}
+	for _, c := range list {
+		if NormalizeCodec(c) == codec {
+			return true
+		}
+	}
+	return false
+}
+
+// spec decides, for a channel's codecs, what to pass through.
+func (o WatchOpts) spec(videoCodec, audioCodec string) Spec {
+	v, a := NormalizeCodec(videoCodec), NormalizeCodec(audioCodec)
+	sp := Spec{Height: o.Height, VideoCodec: v, CopyVideo: hasCodec(o.VideoCodecs, v), CopyAudio: hasCodec(o.AudioCodecs, a)}
+	if sp.Height <= 0 {
+		sp.Height = 720
+	}
+	return sp
+}
+
 // Watch starts (or joins) a live stream of a channel.
-func (s *Service) Watch(ctx context.Context, channel string, height int) (*LiveSession, error) {
+func (s *Service) Watch(ctx context.Context, channel string, o WatchOpts) (*LiveSession, error) {
 	ch, err := s.db.Channel(ctx, channel)
 	if err != nil {
 		return nil, err
@@ -26,14 +76,11 @@ func (s *Service) Watch(ctx context.Context, channel string, height int) (*LiveS
 	if ch.DRM {
 		return nil, errors.New("this channel is copy-protected (ATSC 3.0 DRM) and can only be watched in SiliconDust's own apps")
 	}
-	if height <= 0 {
-		height = 720
-	}
-	return s.live.start(ctx, ch.Number, ch.Name, ch.URL, height)
+	return s.live.start(ctx, ch.Number, ch.Name, ch.URL, o.spec(ch.VideoCodec, ch.AudioCodec))
 }
 
 // WatchRecording plays a recording that's still in progress from its start.
-func (s *Service) WatchRecording(ctx context.Context, id int64, height int) (*LiveSession, error) {
+func (s *Service) WatchRecording(ctx context.Context, id int64, o WatchOpts) (*LiveSession, error) {
 	r, err := s.db.Recording(ctx, id)
 	if err != nil {
 		return nil, err
@@ -45,12 +92,14 @@ func (s *Service) WatchRecording(ctx context.Context, id int64, height int) (*Li
 	if len(parts) == 0 {
 		return nil, errors.New("nothing has been recorded yet; try again in a few seconds")
 	}
-	if height <= 0 {
-		height = 720
+	// A recording holds the channel's broadcast as is, so the same codecs apply.
+	var vc, ac string
+	if ch, err := s.db.Channel(ctx, r.Channel); err == nil {
+		vc, ac = ch.VideoCodec, ch.AudioCodec
 	}
 	// Follow the part being written. After a dropped signal that's only the
 	// latest piece; the rest joins up once the recording finishes.
-	return s.live.startRecordingPlayback(ctx, r.ID, r.Channel, r.Title, parts[len(parts)-1], height)
+	return s.live.startRecordingPlayback(ctx, r.ID, r.Channel, r.Title, parts[len(parts)-1], o.spec(vc, ac))
 }
 
 func (s *Service) LiveFile(id, name string) (string, error) { return s.live.file(id, name) }

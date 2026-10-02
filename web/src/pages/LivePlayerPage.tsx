@@ -276,7 +276,14 @@ function LiveInfo({
       rows={[
         ["Channel", session ? `${session.channel} ${channelName ?? session.name}` : "–"],
         ["Stream", session ? `H.264 ${session.height}p · deinterlaced` : "–"],
-        ["Transcoder", session?.hw && session.hw !== "none" ? session.hw.toUpperCase() : "CPU (software)"],
+        [
+          "Transcoder",
+          session?.copyVideo
+            ? "None (original broadcast)"
+            : session?.hw && session.hw !== "none"
+              ? `${session.hw.toUpperCase()}${session.hw === "vaapi" ? (session.hwDecode ? " · GPU decode" : " · CPU decode") : ""}`
+              : "CPU (software)",
+        ],
         ["Playing", v && v.videoWidth ? `${v.videoWidth}×${v.videoHeight}` : "–"],
         ["Behind live", `${Math.max(0, behind).toFixed(0)}s${latency ? ` (latency ${latency.toFixed(1)}s)` : ""}`],
         ["Buffered", v ? `${bufferedAhead(v).toFixed(0)}s ahead` : "–"],
