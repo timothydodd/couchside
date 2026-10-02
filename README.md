@@ -4,21 +4,43 @@
 
 [couchside.app](https://couchside.app)
 
-A lightweight, self-hosted media server for your home. Point it at your movie
-and TV folders and it matches them against [TMDB](https://www.themoviedb.org),
-fetches artwork, and plays them in any browser or on a TV, with live TV and a
-DVR if you have an HDHomeRun tuner.
+A fast, lightweight media server for your home: your movies, your shows and
+live TV from an HDHomeRun tuner, with a DVR. It runs on your own network,
+answers to no cloud account, and puts care into the parts you look at.
 
-- **Your library, matched.** Posters, backdrops, plots, cast and episode titles
-  with no setup. Split movies play as one, and extras are listed separately.
-- **Plays anywhere.** Direct play when the device can, otherwise transcoding on
-  the fly, on the GPU with VAAPI. Subtitles, audio tracks, quality presets.
-- **Live TV and DVR.** Guide, recording, series rules, and automatic commercial
-  skipping.
-- **For the whole household.** Profiles with their own progress and settings,
-  passwordless at home, proper accounts when exposed to the internet.
-- **Small.** One Go binary with SQLite built in, or one container. A Helm chart
-  for Kubernetes/k3s.
+## What it's for
+
+- **Fast and light.** One Go binary with SQLite built in: no database server,
+  no runtime to install, nothing to tune. The release is a 7 MB download, and
+  a small server idles at a few tens of megabytes of memory, so it's happy on
+  a NAS, a Raspberry Pi or a corner of a k3s cluster. Pages open instantly and
+  grids scroll smoothly through thousands of titles.
+- **Local only.** Built for your home network. There's no Couchside account,
+  no telemetry and nothing that phones home. The server only reaches out for
+  what you set up: TMDB for metadata, and the HDHomeRun guide. It caches
+  everything it fetches, artwork included, so your devices never talk to
+  anyone but your server.
+- **Live TV and DVR done properly.** A guide, one-off and series recordings
+  (new episodes only, skip what's in your library, keep the last N), recording
+  padding, watching a recording while it's still going, and automatic
+  commercial detection and skipping. Recordings survive restarts, tuners can be
+  shared with another DVR, and channels the TV can decode are passed straight
+  through instead of transcoded.
+- **A UI worth using.** A clean dark web app that works just as well on a
+  phone, a Plex-style player with subtitles, audio tracks and quality presets,
+  and a Roku app for the TV.
+
+## Everything else
+
+- **Your library, matched.** Point it at your folders: titles, posters,
+  backdrops, plots, cast and episode names come from TMDB. Split movies play as
+  one, extras are listed separately, and a Manage view finds duplicates and
+  low-quality copies.
+- **Plays anything.** Direct play when the device can, otherwise on-the-fly
+  HLS, on Intel GPUs with VAAPI, with HDR tone mapping.
+- **For the whole household.** Profiles keep their own progress, favourites
+  and settings. Sign-in is a tap on your profile at home, or passwords when you
+  want them. Admins decide who can record.
 
 ## Quick start
 

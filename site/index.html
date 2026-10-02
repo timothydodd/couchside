@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Couchside</title>
 <meta name="theme-color" content="#0D1418">
-<meta name="description" content="A self-hosted media server for your movies, TV shows and live TV, with a web app and a Roku app.">
+<meta name="description" content="A fast, lightweight, local-only media server for your movies, shows and live TV, with a proper DVR, a web app and a Roku app.">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/logo-32.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta property="og:title" content="Couchside">
-<meta property="og:description" content="Your movies, shows and live TV, served from your own server.">
+<meta property="og:description" content="Fast, light and local: your movies, shows and live TV with a proper DVR, served from your own server.">
 <meta property="og:image" content="https://couchside.app/icons/logo-512.png">
 <style>
   /* Tokens from docs/style.md: one dark theme, seafoam on slate. */
@@ -44,6 +44,8 @@
   .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
   .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--text-on-accent); }
   .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; padding-bottom: 48px; }
+  /* The four goals: two across, so none is left alone on a row. */
+  .features.goals { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); padding-bottom: 16px; }
   .card { background: var(--bg-surface); border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; }
   .card h2 { margin: 0 0 6px; font-size: 1rem; }
   .card p { margin: 0; color: var(--text-secondary); font-size: 0.95rem; }
@@ -65,7 +67,7 @@
 <header class="wrap">
   <img src="/icons/logo-256.png" alt="">
   <h1><span class="brand">Couchside</span></h1>
-  <p class="tagline">Your movies, shows and live TV, served from your own server, to your browser and your Roku.</p>
+  <p class="tagline">A fast, lightweight media server for your movies, shows and live TV. It stays on your network, records like a real DVR, and looks good doing it.</p>
   <div class="actions">
     <a class="btn btn-primary" href="https://github.com/timothydodd/couchside/releases/latest">Download</a>
     <a class="btn" href="https://github.com/timothydodd/couchside">Source on GitHub</a>
@@ -73,13 +75,17 @@
 </header>
 
 <main class="wrap">
-  <section class="features" aria-label="Features">
-    <div class="card"><h2>Your library, organised</h2><p>Point it at your movie and TV folders. Couchside finds the titles, fetches posters, plots and episode names, and keeps up as files come and go.</p></div>
-    <div class="card"><h2>Plays everything</h2><p>Direct play when the device can, otherwise on-the-fly HLS with hardware transcoding, HDR tone mapping, subtitles and audio tracks.</p></div>
-    <div class="card"><h2>Live TV and DVR</h2><p>Watch and record from an HDHomeRun tuner, with a guide, series recordings and automatic commercial skipping.</p></div>
-    <div class="card"><h2>Everyone gets their own</h2><p>Profiles keep progress, favourites and settings apart. Turn on accounts for passwords, roles and signed-in device control.</p></div>
-    <div class="card"><h2>Search</h2><p>Find any movie, show, episode, channel or programme in a few letters, forgiving of spelling and punctuation.</p></div>
-    <div class="card"><h2>Yours, not ours</h2><p>One binary or container on your own hardware. No account with us and no tracking: it only talks to the services you set up, like TMDB for metadata and the HDHomeRun guide.</p></div>
+  <section class="features goals" aria-label="What it's for">
+    <div class="card"><h2>Fast and light</h2><p>One small binary with its database built in: a 7&nbsp;MB download that idles in tens of megabytes. Happy on a NAS, a Raspberry Pi or a corner of a k3s cluster, and every page opens instantly.</p></div>
+    <div class="card"><h2>Local only</h2><p>Runs on your network with no Couchside account, no telemetry and nothing phoning home. It only reaches TMDB and the HDHomeRun guide, and caches what it fetches, so your devices talk to nobody but your server.</p></div>
+    <div class="card"><h2>Live TV and a real DVR</h2><p>Guide, one-off and series recordings, padding, watch while recording, and automatic commercial skipping. Recordings survive restarts, and broadcasts your TV can decode play without transcoding.</p></div>
+    <div class="card"><h2>A UI worth using</h2><p>A clean dark web app that works as well on a phone as on a desktop, a Plex-style player with subtitles, audio tracks and quality presets, and a Roku app for the couch.</p></div>
+  </section>
+
+  <section class="features" aria-label="Also">
+    <div class="card"><h2>Your library, matched</h2><p>Point it at your folders: posters, backdrops, plots, cast and episode names, kept up to date as files come and go. A Manage view finds duplicates and low-quality copies.</p></div>
+    <div class="card"><h2>Plays anything</h2><p>Direct play when the device can, otherwise on-the-fly HLS on an Intel GPU, with HDR tone mapping.</p></div>
+    <div class="card"><h2>For the whole household</h2><p>Profiles keep their own progress, favourites and settings. Tap your profile to sign in at home, or set passwords. Admins decide who can record.</p></div>
   </section>
 
   <section class="install">
@@ -88,7 +94,7 @@
   -v couchside-data:/data -v couchside-cache:/cache \
   -v /path/to/media:/media \
   ghcr.io/timothydodd/couchside:latest</pre>
-    <p>Then open <code>http://localhost:8080</code> and add your libraries. Zips for Linux, macOS and Windows, a Helm chart for Kubernetes and the full setup guide are in the <a href="https://github.com/timothydodd/couchside#install">README</a>.</p>
+    <p>Then open <code>http://localhost:8080</code> and add your libraries. Zips for Linux, macOS and Windows, a Helm chart for Kubernetes and the full setup guide are in the <a href="https://github.com/timothydodd/couchside/blob/main/docs/install.md">install guide</a>.</p>
   </section>
 </main>
 
