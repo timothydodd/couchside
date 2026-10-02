@@ -46,7 +46,10 @@ type Service struct {
 	recCancel map[int64]context.CancelFunc
 	libraryID int64
 	wakeSched chan struct{}
-	lookups   map[string]bool // guide series being identified in the background
+	lookups   map[string]bool      // guide series being identified in the background
+	lookupErr map[string]time.Time // series whose identification just failed, by series id or title
+	starting  map[int64]bool       // recordings the scheduler is starting
+	pathMu    sync.Mutex           // one new recording picks its file at a time
 
 	virtualErr   map[int64]string // why a virtual channel has no schedule
 	wakeVirtual  chan struct{}
@@ -72,6 +75,7 @@ func New(cfg Config, d *db.DB, enc transcode.Encoder, work Enqueuer, cacheDir st
 	}
 	return &Service{cfg: cfg, db: d, hdhr: hdhr, enc: enc, work: work, live: lm,
 		recCancel: map[int64]context.CancelFunc{}, wakeSched: make(chan struct{}, 1), lookups: map[string]bool{},
+		lookupErr: map[string]time.Time{}, starting: map[int64]bool{},
 		virtualErr: map[int64]string{}, wakeVirtual: make(chan struct{}, 1)}, nil
 }
 
