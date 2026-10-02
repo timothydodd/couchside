@@ -13,8 +13,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/timothydodd/couchside/internal/db"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 // WatchOpts is what a client asks for: a height for transcoding, and the
@@ -74,13 +76,13 @@ func (s *Service) Watch(ctx context.Context, channel string, o WatchOpts) (*Live
 		return nil, err
 	}
 	if ch.DRM {
-		return nil, errors.New("this channel is copy-protected (ATSC 3.0 DRM) and can only be watched in SiliconDust's own apps")
+		return nil, usererr.New("this channel is copy-protected (ATSC 3.0 DRM) and can only be watched in SiliconDust's own apps")
 	}
 	if ch.VirtualID != nil {
 		return s.watchVirtual(ctx, *ch.VirtualID, ch, o)
 	}
 	if s.hdhr == nil {
-		return nil, errors.New("no tuner is set up")
+		return nil, usererr.New("no tuner is set up")
 	}
 	return s.live.start(ctx, ch.Number, ch.Name, ch.URL, o.spec(ch.VideoCodec, ch.AudioCodec))
 }
@@ -92,11 +94,11 @@ func (s *Service) WatchRecording(ctx context.Context, id int64, o WatchOpts) (*L
 		return nil, err
 	}
 	if r.Status != "recording" {
-		return nil, errors.New("this recording isn't in progress; play it from the library")
+		return nil, usererr.New("this recording isn't in progress; play it from the library")
 	}
 	parts := existingParts(r.Path)
 	if len(parts) == 0 {
-		return nil, errors.New("nothing has been recorded yet; try again in a few seconds")
+		return nil, usererr.New("nothing has been recorded yet; try again in a few seconds")
 	}
 	// A recording holds the channel's broadcast as is, so the same codecs apply.
 	var vc, ac string
@@ -120,17 +122,17 @@ func (s *Service) Record(ctx context.Context, programID int64) (int64, int, erro
 		return 0, 0, err
 	}
 	if p.EndAt <= time.Now().Unix() {
-		return 0, 0, errors.New("that program has already ended")
+		return 0, 0, usererr.New("that program has already ended")
 	}
 	ch, err := s.db.Channel(ctx, p.Channel)
 	if err != nil {
 		return 0, 0, err
 	}
 	if ch.DRM {
-		return 0, 0, errors.New("this channel is copy-protected (ATSC 3.0 DRM) and can't be recorded")
+		return 0, 0, usererr.New("this channel is copy-protected (ATSC 3.0 DRM) and can't be recorded")
 	}
 	if ch.Virtual {
-		return 0, 0, errors.New("Couchside's own channels play from your library, so there's nothing to record")
+		return 0, 0, usererr.New("Couchside's own channels play from your library, so there's nothing to record")
 	}
 	r := db.Recording{Channel: p.Channel, ChannelName: ch.Name, Title: p.Title, EpisodeTitle: p.EpisodeTitle,
 		EpisodeNum: p.EpisodeNum, Synopsis: p.Synopsis, ImageURL: p.ImageURL, SeriesID: p.SeriesID,
@@ -165,7 +167,7 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		return err
 	}
 	if r.Status == "recording" || r.Status == "scheduled" {
-		return errors.New("cancel the recording first")
+		return usererr.New("cancel the recording first")
 	}
 	// Only ever delete files Couchside recorded: the row's own path, and only
 	// if it's a .ts file (recording folders may be shared with a TV library).
@@ -204,7 +206,23 @@ func (s *Service) scheduler(ctx context.Context) {
 				_ = s.db.FinishRecording(ctx, r.ID, "failed", "", 0, "Missed: the server wasn't running when this aired")
 				continue
 			}
-			s.startRecording(ctx, r, "", nil)
+			// Each on its own: picking the file may wait on a metadata
+			// lookup, which mustn't make the next recording start late.
+			s.mu.Lock()
+			busy := s.starting[r.ID]
+			s.starting[r.ID] = true
+			s.mu.Unlock()
+			if busy {
+				continue
+			}
+			go func(r db.Recording) {
+				defer func() {
+					s.mu.Lock()
+					delete(s.starting, r.ID)
+					s.mu.Unlock()
+				}()
+				s.startRecording(ctx, r, "", nil)
+			}(r)
 		}
 		select {
 		case <-ctx.Done():
@@ -219,13 +237,22 @@ func (s *Service) scheduler(ctx context.Context) {
 // path and the parts captured so far are given.
 func (s *Service) startRecording(parent context.Context, r db.Recording, path string, parts []string) {
 	if path == "" {
-		path = s.recordingPath(parent, r)
+		year := s.showYear(parent, r, true) // may wait on the network; outside pathMu
+		s.pathMu.Lock()
+		path = s.pathInDir(s.RecordingsDir(parent), recordingName(r, year))
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			s.pathMu.Unlock()
 			_ = s.db.FinishRecording(parent, r.ID, "failed", "", 0, "Recordings folder isn't writable: "+err.Error())
 			return
 		}
-		if err := s.db.MarkRecording(parent, r.ID, path); err != nil {
+		ok, err := s.db.MarkRecording(parent, r.ID, path)
+		s.pathMu.Unlock()
+		if err != nil {
 			slog.Error("dvr: mark recording", "err", err)
+			return
+		}
+		if !ok {
+			slog.Info("dvr: not starting a recording that was cancelled meanwhile", "title", r.Title)
 			return
 		}
 	}
@@ -422,7 +449,11 @@ func recordingName(r db.Recording, year int) recName {
 	start := time.Unix(r.StartAt, 0).Local()
 	var season, file string
 	if m := reEpisode.FindStringSubmatch(r.EpisodeNum); m != nil {
-		season = "Season " + strings.TrimLeft(m[1], "0")
+		n := strings.TrimLeft(m[1], "0")
+		if n == "" {
+			n = "0" // specials: "S00E05" goes in "Season 0"
+		}
+		season = "Season " + n
 		file = fmt.Sprintf("%s - %s", show, r.EpisodeNum)
 	} else {
 		season = fmt.Sprintf("Season %d", start.Year())
@@ -431,16 +462,19 @@ func recordingName(r db.Recording, year int) recName {
 	if r.EpisodeTitle != "" {
 		file += " - " + safeName(r.EpisodeTitle)
 	}
-	if len(file) > 180 {
-		file = file[:180]
-	}
+	file = truncateUTF8(file, 180)
 	return recName{show: show, season: season, file: file, title: title, year: year}
 }
 
-// recordingPath is where a new recording goes: the current recordings folder,
-// inside an existing matching show/season folder when there is one.
-func (s *Service) recordingPath(ctx context.Context, r db.Recording) string {
-	return s.pathInDir(s.RecordingsDir(ctx), recordingName(r, s.showYear(ctx, r, true)))
+// truncateUTF8 cuts s to at most n bytes without splitting a character.
+func truncateUTF8(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return strings.TrimRight(s[:n], " .")
 }
 
 func safeName(s string) string {

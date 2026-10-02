@@ -38,8 +38,12 @@ var (
 //
 // path is relative to the library root. Files in an extras folder
 // ("Inception (2010)/Featurettes/x.mkv") belong to the movie folder above it.
-func Movie(path string) Result {
-	if _, ok := inExtrasDir(path); ok {
+func Movie(path string) Result { return MovieIn(path, nil) }
+
+// MovieIn is Movie with a look at the folders around the file (list may be
+// nil), so it agrees with MovieRoleIn about what's an extras folder.
+func MovieIn(path string, list Lister) Result {
+	if _, ok := inExtrasDir(path, list); ok {
 		if d := Name(filepath.Base(filepath.Dir(filepath.Dir(path)))); d.Title != "" {
 			return d
 		}

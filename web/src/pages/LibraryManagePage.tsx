@@ -9,16 +9,17 @@ import { fmtAgo, fmtBytes } from "../lib/format";
 import { codecLabel, extraFiles, qualityLabel, qualityTier, qualityTone } from "../lib/quality";
 import type { Library, ManageRow } from "../lib/types";
 import { useStatus } from "../stores/status";
+import { attempt } from "../lib/notices";
 
 type Filter = "all" | "duplicates" | "unmatched" | "low";
 type SortKey = "title" | "quality" | "files" | "size" | "added";
 
-const optimizeAll = async (l: Library) => {
+const optimizeAll = attempt("Couldn't queue the encodes", async (l: Library) => {
   if (!confirm(`Encode browser-friendly copies of everything in "${l.name}" that can't play directly?\n\nThis runs in the background, one file at a time, and the copies take disk space in the cache volume (roughly 1-4 GB per movie at 1080p).`)) return;
   const r = await api<{ queued: number }>(`/api/libraries/${l.id}/optimize`, { method: "POST" });
   alert(r.queued ? `Queued ${r.queued} encodes. Follow them on the Activity page.` : "Nothing to do: everything already plays directly or has an optimized copy.");
   void useStatus.getState().refresh();
-};
+});
 
 const isDuplicate = (r: ManageRow) => extraFiles(r) > 0 || r.sameImdb > 0;
 const isLow = (r: ManageRow) => qualityTier(r.maxHeight) <= 1;

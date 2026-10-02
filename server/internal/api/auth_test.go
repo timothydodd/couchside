@@ -380,3 +380,52 @@ func TestForgedForwardedForDoesNotDodgeThrottle(t *testing.T) {
 		t.Fatalf("8th failed sign-in with a new forged address each time = %d, want 429", code)
 	}
 }
+
+// Behind a reverse proxy that rewrites Host (nginx's default proxy_pass), the
+// browser's Origin never matches Host. Refreshing and other cookie writes
+// must still work, going by Sec-Fetch-Site, or the web app signs out every
+// time its access token runs out.
+func TestCookieWritesBehindHostRewritingProxy(t *testing.T) {
+	dir := t.TempDir()
+	d, err := db.Open(filepath.Join(dir, "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	s, err := New(d, config.Config{DataDir: dir}, nil, nil, nil, nil, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+	c := newClient(t, ts.URL)
+	c.origin = "https://demo.example" // what the browser shows; Host is the upstream address
+	c.header = map[string]string{"Sec-Fetch-Site": "same-origin"}
+
+	var info authInfo
+	c.do("GET", "/api/auth", nil, &info)
+	if code := c.do("POST", "/api/auth/pick", map[string]any{"profileId": info.Profiles[0].ID, "client": "web"}, nil); code != 200 {
+		t.Fatalf("pick = %d", code)
+	}
+	for i := 0; i < 2; i++ {
+		if code := c.do("POST", "/api/auth/refresh", map[string]any{}, nil); code != 200 {
+			t.Fatalf("refresh %d through the proxy = %d, want 200", i, code)
+		}
+	}
+	if code := c.do("PATCH", "/api/profiles/1/prefs", map[string]any{"autoplayNext": false}, nil); code != 200 && code != 204 {
+		t.Fatalf("cookie write through the proxy = %d", code)
+	}
+
+	// A browser saying the request is cross-site is still refused, whatever Origin says.
+	c.origin = ts.URL
+	c.header = map[string]string{"Sec-Fetch-Site": "cross-site"}
+	if code := c.do("POST", "/api/auth/refresh", map[string]any{}, nil); code != 403 {
+		t.Fatalf("cross-site refresh = %d, want 403", code)
+	}
+	// Without Sec-Fetch-Site, Origin must match Host.
+	c.origin = "https://evil.example"
+	c.header = nil
+	if code := c.do("POST", "/api/auth/refresh", map[string]any{}, nil); code != 403 {
+		t.Fatalf("mismatched Origin without Sec-Fetch-Site = %d, want 403", code)
+	}
+}

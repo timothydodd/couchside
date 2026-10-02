@@ -3,6 +3,7 @@ import { Star } from "lucide-react";
 import { api } from "../../lib/api";
 import type { TvChannel } from "../../lib/types";
 import { WEAK_SIGNAL } from "./filters";
+import { notify } from "../../lib/notices";
 
 /** Four bars from the tuner's signal-quality reading; amber when marginal. */
 export function SignalBars({ c }: { c: TvChannel }) {
@@ -36,6 +37,8 @@ export function PinButton({ c, onChange, className = "" }: { c: TvChannel; onCha
     try {
       await api(`/api/livetv/channels/${c.number}/pin`, { method: "PUT", json: { pinned: !c.pinned } });
       onChange();
+    } catch (e) {
+      notify(`Couldn't change favourites: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(false);
     }

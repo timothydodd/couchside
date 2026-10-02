@@ -36,6 +36,16 @@ auth:
   # Empty trusts nobody: sign-in throttling then sees the proxy's address.
   trustedProxies: []
 
+# LAN discovery: TV apps find the server with an SSDP search instead of
+# having its address typed in. Multicast from the LAN only reaches a pod on
+# the host's network, so it does nothing unless hostNetwork is true (the pod
+# then also listens on the node's port 8080 directly).
+discovery:
+  enabled: true
+  hostNetwork: false
+  serverName: ""        # shown in TV apps; "" = the node's host name with hostNetwork
+  url: ""               # base URL to advertise when the LAN reaches Couchside elsewhere (an ingress, a NodePort)
+
 config:
   workers: 2            # concurrent scan/match/thumbnail jobs
   scanInterval: 6h      # "0" disables periodic rescans

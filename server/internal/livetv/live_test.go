@@ -46,7 +46,7 @@ func TestLiveStreamsWithFFmpeg(t *testing.T) {
 	if out, err := gen.CombinedOutput(); err != nil {
 		t.Fatalf("making a test broadcast: %v %s", err, out)
 	}
-	m, err := newLiveManager(transcode.Encoder{FFmpeg: ff, HW: "none"}, filepath.Join(dir, "live"))
+	m, err := newLiveManager(transcode.Encoder{FFmpeg: ff, HW: "none"}, filepath.Join(dir, "live"), 2)
 	if err != nil {
 		t.Fatal(err)
 	}

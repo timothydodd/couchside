@@ -224,17 +224,48 @@ func PersonPhotoPath(cacheDir string, personID int64) string {
 	return filepath.Join(cacheDir, "people", fmt.Sprintf("%d.webp", personID))
 }
 
-var photoMu sync.Mutex
+var (
+	photoLocks sync.Map // person id → *sync.Mutex: one fetch per person, others in parallel
+	photoMiss  sync.Map // person id → time.Time of a failed fetch
+)
+
+// photoMissFor is how long a person whose photo couldn't be fetched isn't tried again.
+const photoMissFor = 24 * time.Hour
+
+// ErrNoPhoto means the photo failed recently and isn't being tried again yet.
+var ErrNoPhoto = errors.New("no photo (failed recently)")
 
 // PersonPhoto fetches a person's TMDB profile photo into the cache the first
 // time it's asked for, so browsers and TVs never call TMDB themselves.
 func (w *Worker) PersonPhoto(ctx context.Context, personID int64, profilePath string) (string, error) {
 	dst := PersonPhotoPath(w.cfg.CacheDir, personID)
-	photoMu.Lock()
-	defer photoMu.Unlock()
 	if _, err := os.Stat(dst); err == nil {
 		return dst, nil
 	}
+	if at, ok := photoMiss.Load(personID); ok {
+		if time.Since(at.(time.Time)) < photoMissFor {
+			return "", ErrNoPhoto
+		}
+		photoMiss.Delete(personID)
+	}
+	lk, _ := photoLocks.LoadOrStore(personID, &sync.Mutex{})
+	mu := lk.(*sync.Mutex)
+	mu.Lock()
+	defer func() {
+		mu.Unlock()
+		photoLocks.Delete(personID)
+	}()
+	if _, err := os.Stat(dst); err == nil {
+		return dst, nil // fetched while we waited
+	}
+	path, err := w.fetchPersonPhoto(ctx, dst, profilePath)
+	if err != nil && ctx.Err() == nil {
+		photoMiss.Store(personID, time.Now())
+	}
+	return path, err
+}
+
+func (w *Worker) fetchPersonPhoto(ctx context.Context, dst, profilePath string) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return "", err
 	}

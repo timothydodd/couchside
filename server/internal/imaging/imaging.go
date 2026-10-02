@@ -5,6 +5,8 @@ package imaging
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
@@ -14,8 +16,13 @@ import (
 
 type FFmpeg struct{ Bin string }
 
-// Resize converts any image ffmpeg can read into a WebP of the given width.
+// Resize converts a JPEG, PNG, WebP or GIF into a WebP of the given width.
+// Anything else is refused before ffmpeg sees it: a downloaded or uploaded
+// "image" could be a playlist or concat list ffmpeg would follow.
 func (f FFmpeg) Resize(ctx context.Context, src, dst string, width int) error {
+	if err := checkImage(src); err != nil {
+		return err
+	}
 	return f.run(ctx, dst, "-i", src, "-vf", fmt.Sprintf("scale='min(%d,iw)':-2", width), "-frames:v", "1",
 		"-c:v", "libwebp", "-quality", "82")
 }
@@ -55,4 +62,20 @@ func GrabOffset(duration *float64, frac float64) float64 {
 		return 60
 	}
 	return max(1, *duration*frac)
+}
+
+func checkImage(path string) error {
+	fh, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+	head := make([]byte, 512)
+	n, _ := io.ReadFull(fh, head)
+	switch t := http.DetectContentType(head[:n]); t {
+	case "image/jpeg", "image/png", "image/webp", "image/gif":
+		return nil
+	default:
+		return fmt.Errorf("not a JPEG, PNG, WebP or GIF image (%s)", t)
+	}
 }

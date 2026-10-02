@@ -11,6 +11,7 @@ import { PROBLEM_TEXT, type EpisodeRow, type ItemDetail, type MediaFile } from "
 import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
+import { attempt } from "../lib/notices";
 
 export default function ItemPage({ id }: { id: number }) {
   const { data, error, loading, reload } = useApi<ItemDetail>(`/api/items/${id}`);
@@ -39,10 +40,10 @@ export default function ItemPage({ id }: { id: number }) {
   const resumeAt = isSeries ? next?.positionSec : movieAt >= 0 ? partOffset + movieFile.positionSec : 0;
   const allWatched = item.fileCount > 0 && item.watchedCount >= item.fileCount;
 
-  const setWatched = async (watched: boolean) => {
+  const setWatched = attempt("Couldn't change watched", async (watched: boolean) => {
     await api(`/api/items/${item.id}/watched`, { method: "POST", json: { watched } });
     await reload();
-  };
+  });
 
   const runtime = item.runtimeMin ? fmtRuntime(item.runtimeMin * 60) : fmtRuntime(feature.reduce((t, f) => t + (f.durationSec ?? 0), 0) || null);
 
@@ -379,10 +380,11 @@ function PlaybackChip({ f }: { f: MediaFile }) {
 
 function FilesCard({ files, onChange }: { files: MediaFile[]; onChange: () => void }) {
   const admin = useIsAdmin();
-  const dropOptimized = async (id: number) => {
+  const dropOptimized = attempt("Couldn't delete the optimized copy", async (id: number) => {
+    if (!confirm("Delete the optimized copy? Playback falls back to the original file or a server stream.")) return;
     await api(`/api/files/${id}/optimized`, { method: "DELETE" });
     onChange();
-  };
+  });
   return (
     <section className="mt-10 gutter">
       <h2 className="row-title mb-3">{files.length === 1 ? "File" : `Files (${files.length})`}</h2>

@@ -16,6 +16,10 @@ spec:
       annotations:
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
     spec:
+      {{- if .Values.discovery.hostNetwork }}
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- end }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets: {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -57,6 +61,18 @@ spec:
             {{- with .Values.auth.trustedProxies }}
             - name: COUCHSIDE_TRUSTED_PROXIES
               value: {{ join "," . | quote }}
+            {{- end }}
+            {{- if not .Values.discovery.enabled }}
+            - name: COUCHSIDE_DISCOVERY
+              value: "false"
+            {{- end }}
+            {{- with .Values.discovery.serverName }}
+            - name: COUCHSIDE_SERVER_NAME
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.discovery.url }}
+            - name: COUCHSIDE_DISCOVERY_URL
+              value: {{ . | quote }}
             {{- end }}
             {{- if .Values.config.debug }}
             - name: COUCHSIDE_DEBUG
