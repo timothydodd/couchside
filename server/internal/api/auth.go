@@ -204,18 +204,26 @@ func safeMethod(m string) bool {
 	return m == http.MethodGet || m == http.MethodHead || m == http.MethodOptions
 }
 
-// sameOrigin trusts the browser's Origin header (sent with every non-GET
-// fetch), falling back to Sec-Fetch-Site.
+// sameOrigin reports whether a request comes from Couchside's own pages.
+// Browsers send Sec-Fetch-Site on every request and pages can't set it, so
+// it decides when present. That also holds behind a reverse proxy that
+// rewrites Host (nginx's default proxy_pass does), where Origin and Host
+// never match and every refresh was refused, signing the web app out once
+// its access token ran out. Origin against Host is the fallback for clients
+// that don't send it.
 func sameOrigin(r *http.Request) bool {
+	switch r.Header.Get("Sec-Fetch-Site") {
+	case "same-origin", "none":
+		return true
+	case "":
+	default: // same-site, cross-site
+		return false
+	}
 	if o := r.Header.Get("Origin"); o != "" {
 		u, err := url.Parse(o)
 		return err == nil && strings.EqualFold(u.Host, r.Host)
 	}
-	switch r.Header.Get("Sec-Fetch-Site") {
-	case "", "same-origin", "none":
-		return true
-	}
-	return false
+	return true
 }
 
 // passwordCurrent holds back everything but the account routes until a

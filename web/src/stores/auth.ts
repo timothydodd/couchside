@@ -116,39 +116,57 @@ useAuth.subscribe((s, prev) => {
 
 // --- keeping the access token fresh ------------------------------------------------
 
-let refreshing: Promise<boolean> | null = null;
+/** ok: renewed. ended: the session is over (401). failed: the network or server let us down; the session may be fine. */
+type RefreshResult = "ok" | "ended" | "failed";
+
+let refreshing: Promise<RefreshResult> | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let expiresAt = 0;
 
 /**
  * Trades the refresh cookie for new tokens; one at a time. A 409 means another
  * tab just did it and the browser already has the new cookie, so try again.
+ * Network errors and server errors are retried, and then reported as failed,
+ * never as signed out: only the server saying 401 ends the session here.
  */
-export function refreshSession(profileId?: number): Promise<boolean> {
+function refresh(profileId?: number): Promise<RefreshResult> {
   if (refreshing && !profileId) return refreshing;
-  const run = async () => {
-    for (let attempt = 0; attempt < 3; attempt++) {
+  const run = async (): Promise<RefreshResult> => {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, attempt * 700 + Math.random() * 400));
       const res = await fetch("/api/auth/refresh", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(profileId ? { profileId } : {}),
       }).catch(() => null);
-      if (!res) return false;
-      if (res.ok) {
+      if (res?.ok) {
         const t = (await res.json()) as SignedIn;
         useAuth.setState({ user: t.user });
         schedule(t.accessExpiresAt);
-        return true;
+        return "ok";
       }
-      if (res.status !== 409) return false;
-      await new Promise((r) => setTimeout(r, 300 + Math.random() * 400));
+      if (res?.status === 401) return "ended";
+      if (res && res.status !== 409 && res.status < 500) return "failed";
     }
-    return false;
+    return "failed";
   };
-  refreshing = run().finally(() => {
+  const p = run().then((r) => {
+    // Try again in a while rather than leave the access token to run out.
+    if (r === "failed" && !profileId) {
+      clearTimeout(timer);
+      timer = setTimeout(() => void refresh(), 30_000);
+    }
+    return r;
+  });
+  refreshing = p.finally(() => {
     refreshing = null;
   });
   return refreshing;
+}
+
+/** Renews the session, or switches to profileId's; true when it worked. */
+export async function refreshSession(profileId?: number): Promise<boolean> {
+  return (await refresh(profileId)) === "ok";
 }
 
 /** Renew two minutes before the access token runs out. */
@@ -156,21 +174,22 @@ function schedule(exp: number) {
   expiresAt = exp;
   clearTimeout(timer);
   const ms = exp * 1000 - Date.now() - 120_000;
-  timer = setTimeout(() => void refreshSession(), Math.max(5_000, ms));
+  timer = setTimeout(() => void refresh(), Math.max(5_000, ms));
 }
 
 // Timers stall in background tabs and sleeping laptops; catch up on return.
 document.addEventListener("visibilitychange", () => {
   const { user } = useAuth.getState();
-  if (document.visibilityState === "visible" && user && expiresAt * 1000 - Date.now() < 180_000) void refreshSession();
+  if (document.visibilityState === "visible" && user && expiresAt * 1000 - Date.now() < 180_000) void refresh();
 });
 
 setAuthHooks({
   refresh: async () => {
-    const ok = await refreshSession();
+    const r = await refresh();
     // The session is over (signed out elsewhere, expired): back to sign-in.
-    if (!ok) useAuth.setState({ user: null });
-    return ok;
+    // A failed attempt keeps the user; the request fails and is retried later.
+    if (r === "ended") useAuth.setState({ user: null });
+    return r === "ok";
   },
   passwordChange: () => {
     const u = useAuth.getState().user;
