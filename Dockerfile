@@ -3,7 +3,7 @@
 # build machine's native platform; Go cross-compiles for the target.
 
 # --- web: build the React UI once --------------------------------------------
-FROM --platform=$BUILDPLATFORM node:22-alpine AS web
+FROM --platform=$BUILDPLATFORM node:26-alpine AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
