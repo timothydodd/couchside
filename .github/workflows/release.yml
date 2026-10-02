@@ -77,14 +77,15 @@ jobs:
           name="couchside-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}"
           mkdir -p "pkg/${name}"
           cp dist/* README.md .env.example docker-compose.yml "pkg/${name}/"
+          mkdir -p "pkg/${name}/docs" && cp docs/install.md docs/configuration.md "pkg/${name}/docs/"
           cat > "pkg/${name}/QUICKSTART.txt" <<'TXT'
           Couchside needs ffmpeg and ffprobe on the PATH (or set COUCHSIDE_FFMPEG / COUCHSIDE_FFPROBE).
 
             COUCHSIDE_MEDIA_ROOT=/path/to/media ./couchside      (Windows: couchside.exe)
 
           Then open http://localhost:8080 and add a library on the Libraries page.
-          Optional: OMDB_API_KEY for posters and plots, COUCHSIDE_HDHOMERUN=<tuner IP> for Live TV.
-          All settings are in README.md under Configuration.
+          Optional: COUCHSIDE_HDHOMERUN=<tuner IP> for Live TV. Movie and TV details come from TMDB with no setup.
+          All settings are in docs/configuration.md.
           TXT
           (cd pkg && zip -qr "../${name}.zip" "${name}")
       - uses: actions/upload-artifact@v4
