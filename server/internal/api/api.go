@@ -27,6 +27,7 @@ import (
 	"github.com/timothydodd/couchside/internal/metadata"
 	"github.com/timothydodd/couchside/internal/sysstat"
 	"github.com/timothydodd/couchside/internal/transcode"
+	"github.com/timothydodd/couchside/internal/usererr"
 	"github.com/timothydodd/couchside/internal/webui"
 	"github.com/timothydodd/couchside/internal/worker"
 )
@@ -80,6 +81,12 @@ func (s *Server) Run(ctx context.Context) {
 		slog.Error("accounts", "err", err)
 	}
 	s.pruneSessions(ctx)
+	if s.cfg.Auth {
+		// Passwords are required now; sessions from passwordless days end.
+		if err := s.endPasswordlessSessions(ctx); err != nil {
+			slog.Error("accounts", "err", err)
+		}
+	}
 }
 
 // pruneTables drops rows that would otherwise only grow: finished jobs after
@@ -300,7 +307,11 @@ func writeErr(w http.ResponseWriter, err error) {
 			return
 		}
 		slog.Error("request failed", "err", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		msg := "internal error; see the server log"
+		if usererr.Is(err) {
+			msg = err.Error() // written for the user ("all tuners are busy")
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg})
 	}
 }
 

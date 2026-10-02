@@ -17,6 +17,7 @@ import (
 
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/transcode"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 // A virtual channel's stream plays its schedule one piece at a time: one
@@ -87,7 +88,7 @@ func (m *liveManager) launchVirtual(ctx context.Context, key, channel, name stri
 			cancel()
 			<-s.exited
 			_ = os.RemoveAll(dir)
-			return nil, errors.New("the channel didn't start in time: " + lastLine(s.stderr.String()))
+			return nil, usererr.New("the channel didn't start in time: " + lastLine(s.stderr.String()))
 		case <-ctx.Done():
 			cancel()
 			<-s.exited
@@ -112,7 +113,7 @@ func (m *liveManager) playVirtual(ctx context.Context, s *LiveSession, pl *merge
 		}
 		pieces, err := src(ctx, pos)
 		if err == nil && len(pieces) == 0 {
-			err = errors.New("nothing is scheduled on this channel; check that its filters match something in your library")
+			err = usererr.New("nothing is scheduled on this channel; check that its filters match something in your library")
 		}
 		if err != nil {
 			if pl.count() == 0 {

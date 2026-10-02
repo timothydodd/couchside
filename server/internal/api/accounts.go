@@ -126,6 +126,16 @@ func (s *Server) updateAccount(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, accountErr(err))
 		return
 	}
+	// The new role and status are committed: whatever fails below (a taken
+	// name, say), cached sessions mustn't keep the old ones, and a disabled
+	// account is signed out now.
+	defer s.auth.sessions.forgetAll()
+	if in.Disabled {
+		if err := s.db.DeleteSessions(ctx, id, ""); err != nil {
+			writeErr(w, err)
+			return
+		}
+	}
 	if err := s.db.SetPasswordLocked(ctx, id, in.PasswordLocked); err != nil {
 		writeErr(w, accountErr(err))
 		return
@@ -135,13 +145,6 @@ func (s *Server) updateAccount(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, accountErr(err))
 		return
 	}
-	if in.Disabled {
-		if err := s.db.DeleteSessions(ctx, id, ""); err != nil {
-			writeErr(w, err)
-			return
-		}
-	}
-	s.auth.sessions.forgetAll()
 	writeJSON(w, http.StatusOK, p)
 }
 

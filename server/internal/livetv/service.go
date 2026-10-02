@@ -3,7 +3,6 @@ package livetv
 import (
 	"net/url"
 	"context"
-	"errors"
 	"log/slog"
 	"path/filepath"
 	"sync"
@@ -12,6 +11,7 @@ import (
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/metadata"
 	"github.com/timothydodd/couchside/internal/transcode"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 // Enqueuer lets the service ask the worker to scan the recordings library.
@@ -350,4 +350,4 @@ func (s *Service) scanRecordings(ctx context.Context) {
 	}
 }
 
-var ErrNoTuner = errors.New("all tuners are busy")
+var ErrNoTuner = usererr.New("all tuners are busy")

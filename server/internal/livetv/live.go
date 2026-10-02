@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/timothydodd/couchside/internal/transcode"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 const (
@@ -350,13 +351,13 @@ func (m *liveManager) launch(ctx context.Context, key, channel, name string, inp
 			if msg == "" {
 				msg = "ffmpeg exited without output"
 			}
-			return nil, fmt.Errorf("couldn't tune %s: %s", channel, lastLine(msg))
+			return nil, usererr.Errorf("couldn't tune %s: %s", channel, lastLine(msg))
 		}
 		if time.Now().After(deadline) || ctx.Err() != nil {
 			_ = cmd.Process.Kill()
 			<-s.exited
 			_ = os.RemoveAll(dir)
-			return nil, errors.New("the tuner didn't deliver video in time; weak signal?")
+			return nil, usererr.New("the tuner didn't deliver video in time; weak signal?")
 		}
 		time.Sleep(150 * time.Millisecond)
 	}

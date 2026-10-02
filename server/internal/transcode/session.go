@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/timothydodd/couchside/internal/probe"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 // SegDur is the HLS segment length in seconds. Keyframes are forced on this
@@ -39,7 +40,7 @@ const (
 
 var (
 	ErrNoSession  = errors.New("transcode session not found")
-	ErrBusy       = errors.New("too many streams are transcoding right now")
+	ErrBusy       = usererr.New("too many streams are transcoding right now")
 	ErrBadSegment = errors.New("segment out of range")
 	ErrPastEnd    = errors.New("past the end of the stream")
 )
@@ -134,7 +135,7 @@ func (m *Manager) Max() int         { return m.max }
 // a minute on a slow share) happens before the manager lock is taken.
 func (m *Manager) Create(ctx context.Context, r Request) (*Session, error) {
 	if r.Duration <= 0 {
-		return nil, errors.New("file duration is unknown, so it can't be streamed; try rescanning")
+		return nil, usererr.New("file duration is unknown, so it can't be streamed; try rescanning")
 	}
 	info, err := probe.Probe(ctx, m.ffprobe, r.Path)
 	if err != nil {
@@ -355,7 +356,7 @@ func (m *Manager) Segment(ctx context.Context, id string, n int) (string, error)
 		case <-ctx.Done():
 			return "", ctx.Err()
 		case <-deadline.C:
-			return "", errors.New("timed out waiting for the transcoder; the server may be too slow for this file")
+			return "", usererr.New("timed out waiting for the transcoder; the server may be too slow for this file")
 		case <-tick.C:
 		}
 	}

@@ -47,9 +47,15 @@ rules and server settings are shared. Switch profiles from the sidebar.
   a replayed refresh token ends its session. A session ends after a year
   unused (each use pushes that out again), so devices stay signed in. Signing
   out, changing a password, or an admin signing a device out or disabling the
-  account ends sessions straight away.
+  account ends sessions straight away. So does turning passwordless sign-in
+  off (or starting with `COUCHSIDE_AUTH=true`) for profiles without a
+  password. A profile keeps at most 50 sessions; signing in again drops the
+  least recently used.
 - Failed sign-ins are slowed per address and per account, then locked out for
-  up to 15 minutes, and logged.
+  up to 15 minutes, and logged. The per-account limit means someone who knows
+  a name can keep that account locked by failing on purpose; that's the price
+  of stopping password guessing from many addresses. Passwordless picks are
+  limited to 20 per address per 10 minutes.
 - **Open without a session:** `/healthz`, the sign-in endpoints, and artwork
   (posters, backdrops, episode stills), so TV apps can load images without a
   token. Everything else, streams included, needs a session.
