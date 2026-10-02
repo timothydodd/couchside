@@ -64,6 +64,53 @@ helm install couchside deploy/helm/couchside -n media \
 
 ## Putting it on the internet
 
-Turn off passwordless sign-in first (`COUCHSIDE_AUTH=true`, Helm
-`auth.enabled`), give every account a password, and serve it over HTTPS. See
-[accounts.md](accounts.md).
+Couchside serves plain HTTP. On the internet, put it behind something that
+does HTTPS, and lock sign-in down first:
+
+1. **Require passwords**: `COUCHSIDE_AUTH=true` (Helm `auth.enabled`), and give
+   every account a password. See [accounts.md](accounts.md).
+2. **Serve it over HTTPS** with a reverse proxy or the ingress (below). The
+   sign-in page and the server log warn when someone signs in over plain HTTP
+   from an internet address.
+3. **Tell Couchside which proxy to believe**: `COUCHSIDE_TRUSTED_PROXIES` (Helm
+   `auth.trustedProxies`), the proxy's address or network. Only then are
+   `X-Forwarded-For` (the visitor's address, for the sign-in throttle, the
+   sessions list and the log) and `X-Forwarded-Proto` (so sign-in cookies are
+   marked `Secure`) taken from it. From anyone else they're ignored, so a
+   client can't dodge the throttle by sending its own. Left empty, everyone
+   seems to come from the proxy's address and shares one throttle.
+
+The proxy needs long timeouts on `/api` (HLS segments are made on request,
+and live TV playlists are polled for hours) and a request body of at least
+25 MB for artwork uploads. Keep buffering off for `/api/files/*/stream`.
+
+**Helm with TLS.** With cert-manager:
+
+```bash
+helm upgrade --install couchside deploy/helm/couchside -n media --reuse-values \
+  --set auth.enabled=true \
+  --set ingress.enabled=true --set ingress.host=tv.example.com \
+  --set ingress.tls.enabled=true --set ingress.tls.clusterIssuer=letsencrypt \
+  --set 'auth.trustedProxies={10.42.0.0/16}'
+```
+
+`10.42.0.0/16` is k3s's pod network, where Traefik runs. For Traefik to see
+visitors' real addresses at all, its Service needs
+`externalTrafficPolicy: Local`. Traefik's own ACME resolver works too: leave
+`clusterIssuer` empty and add its `traefik.ingress.kubernetes.io/router.tls.certresolver`
+annotation under `ingress.annotations`.
+
+**Docker or a zip behind Caddy.** Caddy gets a certificate on its own:
+
+```
+tv.example.com {
+	reverse_proxy localhost:8080
+}
+```
+
+Run Couchside with `COUCHSIDE_TRUSTED_PROXIES=127.0.0.1` (or the Docker
+network's address range, e.g. `172.16.0.0/12`, when Caddy runs in a container).
+nginx works as well: set `proxy_set_header X-Forwarded-For
+$proxy_add_x_forwarded_for;` and `X-Forwarded-Proto $scheme;`,
+`proxy_read_timeout 3600s;`, `proxy_buffering off;` and
+`client_max_body_size 25m;`.

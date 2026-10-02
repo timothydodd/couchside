@@ -30,6 +30,11 @@ omdb:
 #   kubectl exec -it deploy/couchside -- couchside reset-password -admin <name>
 auth:
   enabled: false
+  # Reverse proxies whose X-Forwarded-For / X-Forwarded-Proto Couchside
+  # believes (CIDRs or addresses). Behind the ingress, that's the ingress
+  # controller's pods: on k3s with Traefik, the pod network, 10.42.0.0/16.
+  # Empty trusts nobody: sign-in throttling then sees the proxy's address.
+  trustedProxies: []
 
 config:
   workers: 2            # concurrent scan/match/thumbnail jobs

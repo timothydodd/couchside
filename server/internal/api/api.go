@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
+	"net/netip"
 	"os"
 	"path"
 	"path/filepath"
@@ -43,6 +44,7 @@ type Server struct {
 	sys       sysstat.Sampler
 	index     searchIndex
 	auth      *authState
+	proxies   []netip.Prefix // COUCHSIDE_TRUSTED_PROXIES
 }
 
 func init() {
@@ -57,6 +59,9 @@ func New(d *db.DB, cfg config.Config, w *worker.Worker, providers *metadata.Chai
 		return nil, fmt.Errorf("auth key: %w", err)
 	}
 	s.auth = newAuthState(key)
+	if s.proxies, err = parseProxies(cfg.TrustedProxies); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -83,7 +88,7 @@ func (s *Server) Run(ctx context.Context) {
 
 func (s *Server) Handler() http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.RealIP, middleware.Recoverer)
+	r.Use(s.realIP, middleware.Recoverer)
 
 	r.Get("/healthz", s.health)
 	r.Route("/api", func(r chi.Router) {

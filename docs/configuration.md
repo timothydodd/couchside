@@ -21,6 +21,7 @@ UI that are stored in its database. Release builds work with none of them set.
 | `OMDB_API_KEY` | none | Optional fallback metadata source; free keys at omdbapi.com |
 | **Accounts** | | |
 | `COUCHSIDE_AUTH` | `false` | Require passwords: no passwordless sign-in. Set it for a server on the internet |
+| `COUCHSIDE_TRUSTED_PROXIES` | none | Reverse proxies (CIDRs or addresses, comma-separated) whose `X-Forwarded-For` and `X-Forwarded-Proto` are believed. See [install.md](install.md#putting-it-on-the-internet) |
 | **Transcoding** | | |
 | `COUCHSIDE_FFMPEG` / `COUCHSIDE_FFPROBE` | `ffmpeg` / `ffprobe` | Paths to ffmpeg and ffprobe |
 | `COUCHSIDE_HWACCEL` | `none` | `vaapi`, `qsv` or `nvenc`; falls back to software if unusable |

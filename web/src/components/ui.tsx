@@ -131,6 +131,10 @@ export function ErrorNote({ children }: { children: ReactNode }) {
   return <div className="tint-critical rounded-md px-3 py-2 text-xs">{children}</div>;
 }
 
+export function WarningNote({ children }: { children: ReactNode }) {
+  return <div className="tint-warning rounded-md px-3 py-2 text-xs">{children}</div>;
+}
+
 export function SearchInput({
   value,
   onChange,

@@ -20,7 +20,8 @@ Only the latest release gets fixes. Update with
 
 Couchside is built for a home network. If you expose it to the internet:
 
-- **Put it behind HTTPS** (a reverse proxy or tunnel). Couchside itself serves plain HTTP.
+- **Put it behind HTTPS** (a reverse proxy or tunnel). Couchside itself serves
+  plain HTTP, and warns when someone signs in over HTTP from the internet.
 - **Turn passwordless sign-in off**, or set `COUCHSIDE_AUTH=true` to require
   passwords. With passwordless on, anyone who can reach the server can pick a
   profile without a password.
@@ -28,8 +29,10 @@ Couchside is built for a home network. If you expose it to the internet:
   password" on shared profiles.
 - **Know what's public:** posters, backdrops and episode stills are served
   without signing in, so TVs can load them. Everything else needs a session.
-- **Behind a proxy,** sign-in throttling sees the proxy's address, so failed
-  attempts from everyone count together.
+- **Name your proxy** in `COUCHSIDE_TRUSTED_PROXIES`. Forwarding headers are
+  believed only from the addresses listed there, so sign-in throttling counts
+  each visitor's real address. Left empty, it sees the proxy's address and
+  failed attempts from everyone count together.
 
 ## In scope
 

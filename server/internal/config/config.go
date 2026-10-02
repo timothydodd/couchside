@@ -38,6 +38,9 @@ type Config struct {
 	// Settings, which is the default on a server where nobody has a password.
 	// Set it for a server reachable from the internet.
 	Auth bool
+	// COUCHSIDE_TRUSTED_PROXIES: CIDRs or addresses of reverse proxies whose
+	// X-Forwarded-For and X-Forwarded-Proto are believed. Empty trusts nobody.
+	TrustedProxies []string
 
 	Comskip    string // COUCHSIDE_COMSKIP: comskip binary; commercial detection is off when it isn't found
 	ComskipINI string // COUCHSIDE_COMSKIP_INI: your own comskip.ini; empty uses Couchside's defaults
@@ -69,7 +72,8 @@ func Load() Config {
 		PadBefore:     envDur("COUCHSIDE_DVR_PAD_BEFORE", 10*time.Second),
 		PadAfter:      envDur("COUCHSIDE_DVR_PAD_AFTER", 10*time.Second),
 
-		Auth: envBool("COUCHSIDE_AUTH"),
+		Auth:           envBool("COUCHSIDE_AUTH"),
+		TrustedProxies: strings.FieldsFunc(os.Getenv("COUCHSIDE_TRUSTED_PROXIES"), func(r rune) bool { return r == ',' || r == ' ' }),
 
 		Comskip:    env("COUCHSIDE_COMSKIP", "comskip"),
 		ComskipINI: os.Getenv("COUCHSIDE_COMSKIP_INI"),

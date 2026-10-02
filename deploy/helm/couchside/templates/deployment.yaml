@@ -54,6 +54,10 @@ spec:
             - name: COUCHSIDE_AUTH
               value: "true"
             {{- end }}
+            {{- with .Values.auth.trustedProxies }}
+            - name: COUCHSIDE_TRUSTED_PROXIES
+              value: {{ join "," . | quote }}
+            {{- end }}
             {{- if .Values.config.debug }}
             - name: COUCHSIDE_DEBUG
               value: "1"
