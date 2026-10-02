@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/imaging"
 	"github.com/timothydodd/couchside/internal/metadata"
+	"github.com/timothydodd/couchside/internal/remoteimg"
 )
 
 func (w *Worker) match(ctx context.Context, itemID int64) error {
@@ -314,7 +316,8 @@ func (w *Worker) still(ctx context.Context, fileID int64) error {
 	return w.db.SetFileStill(ctx, fileID, true)
 }
 
-var httpClient = &http.Client{Timeout: 30 * time.Second}
+// Artwork comes only from the providers' image hosts, redirects included.
+var httpClient = remoteimg.NewClient(30 * time.Second)
 
 // errGone means the remote image doesn't exist (404/410).
 var errGone = errors.New("remote image not found")
@@ -327,6 +330,9 @@ func abs(n int) int {
 }
 
 func download(ctx context.Context, url, dst string) error {
+	if u, err := neturl.Parse(url); err != nil || !remoteimg.Allowed(u) {
+		return fmt.Errorf("not an image host Couchside fetches from: %s", url)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
