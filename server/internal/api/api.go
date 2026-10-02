@@ -67,6 +67,7 @@ func (s *Server) Run(ctx context.Context) {
 		defer t.Stop()
 		for {
 			s.pruneRemote()
+			s.pruneTables(ctx)
 			select {
 			case <-ctx.Done():
 				return
@@ -81,9 +82,35 @@ func (s *Server) Run(ctx context.Context) {
 	s.pruneSessions(ctx)
 }
 
+// pruneTables drops rows that would otherwise only grow: finished jobs after
+// two weeks, provider responses past the longest cache time (30 days).
+func (s *Server) pruneTables(ctx context.Context) {
+	now := time.Now()
+	jobs, err := s.db.PruneJobs(ctx, now.Add(-14*24*time.Hour).Unix())
+	if err != nil {
+		slog.Warn("prune jobs", "err", err)
+	}
+	cached, err := s.db.PruneCache(ctx, now.Add(-31*24*time.Hour).Unix())
+	if err != nil {
+		slog.Warn("prune provider cache", "err", err)
+	}
+	if jobs+cached > 0 {
+		slog.Info("pruned old rows", "jobs", jobs, "providerResponses", cached)
+	}
+}
+
+// securityHeaders: nothing is sniffed into another type, and the UI can't be
+// framed by another site.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) Handler() http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.RealIP, middleware.Recoverer)
+	r.Use(middleware.RealIP, middleware.Recoverer, securityHeaders)
 
 	r.Get("/healthz", s.health)
 	r.Route("/api", func(r chi.Router) {
@@ -317,6 +344,7 @@ func spa(fsys fs.FS) http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Content-Security-Policy", "frame-ancestors 'self'")
 		http.ServeFileFS(w, r, fsys, "index.html")
 	}
 }
