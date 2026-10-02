@@ -220,7 +220,7 @@ func (s *Server) dvrRecord(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	id, overlap, err := s.tv.Record(r.Context(), in.ProgramID)
+	id, overlap, existing, err := s.tv.Record(r.Context(), in.ProgramID, currentUser(r.Context()).ID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			writeErr(w, err)
@@ -229,15 +229,16 @@ func (s *Server) dvrRecord(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, badRequest(err.Error()))
 		return
 	}
-	if err := s.db.SetRecordingOwner(r.Context(), id, currentUser(r.Context()).ID); err != nil {
-		writeErr(w, err)
-		return
-	}
 	tuners := 0
 	if st := s.tv.Status(r.Context()); st.Device != nil {
 		tuners = st.Device.TunerCount
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "overlapping": overlap, "tuners": tuners,
+	code := http.StatusCreated
+	if existing {
+		// Already set to record (perhaps by someone else's rule): it will be recorded anyway.
+		code = http.StatusOK
+	}
+	writeJSON(w, code, map[string]any{"id": id, "overlapping": overlap, "tuners": tuners,
 		"conflict": tuners > 0 && overlap >= tuners})
 }
 

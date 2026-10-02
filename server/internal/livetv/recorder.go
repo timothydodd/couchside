@@ -114,36 +114,41 @@ func (s *Service) LiveSessions() []*LiveSession             { return s.live.sess
 
 // Record schedules a guide program. Returns the recording id and how many
 // other recordings overlap it (more than the tuner count means a conflict).
-func (s *Service) Record(ctx context.Context, programID int64) (int64, int, error) {
+// Record schedules a guide program for owner (see db.ScheduleRecording).
+// existing is true when the airing was already set to record, in which case
+// nothing changed.
+func (s *Service) Record(ctx context.Context, programID, owner int64) (id int64, overlap int, existing bool, err error) {
 	p, err := s.db.Program(ctx, programID)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, false, err
 	}
 	if p.EndAt <= time.Now().Unix() {
-		return 0, 0, errors.New("that program has already ended")
+		return 0, 0, false, errors.New("that program has already ended")
 	}
 	ch, err := s.db.Channel(ctx, p.Channel)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, false, err
 	}
 	if ch.DRM {
-		return 0, 0, errors.New("this channel is copy-protected (ATSC 3.0 DRM) and can't be recorded")
+		return 0, 0, false, errors.New("this channel is copy-protected (ATSC 3.0 DRM) and can't be recorded")
 	}
 	if ch.Virtual {
-		return 0, 0, errors.New("Couchside's own channels play from your library, so there's nothing to record")
+		return 0, 0, false, errors.New("Couchside's own channels play from your library, so there's nothing to record")
 	}
 	r := db.Recording{Channel: p.Channel, ChannelName: ch.Name, Title: p.Title, EpisodeTitle: p.EpisodeTitle,
 		EpisodeNum: p.EpisodeNum, Synopsis: p.Synopsis, ImageURL: p.ImageURL, SeriesID: p.SeriesID,
 		Categories: p.Categories, StartAt: p.StartAt, EndAt: p.EndAt}
 	r.PadBefore, r.PadAfter = s.Padding(ctx)
-	id, err := s.db.ScheduleRecording(ctx, r)
+	id, outcome, err := s.db.ScheduleRecording(ctx, r, owner)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, false, err
 	}
-	s.prefetchShow(r)
-	overlap, _ := s.db.Overlapping(ctx, r.StartAt-r.PadBefore, r.EndAt+r.PadAfter, id)
-	s.wake()
-	return id, overlap, nil
+	if outcome != db.ScheduleExisting {
+		s.prefetchShow(r)
+		s.wake()
+	}
+	overlap, _ = s.db.Overlapping(ctx, r.StartAt-r.PadBefore, r.EndAt+r.PadAfter, id)
+	return id, overlap, outcome == db.ScheduleExisting, nil
 }
 
 // Cancel stops a running recording (keeping what was recorded) or drops a scheduled one.
