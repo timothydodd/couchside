@@ -24,7 +24,7 @@ jobs:
   chart-version:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Chart appVersion matches the tag
         if: github.event_name == 'push'
         run: |
