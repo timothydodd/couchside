@@ -3,7 +3,6 @@ package livetv
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"regexp"
 	"sort"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/metadata"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 // RuleSummary explains what a rule evaluation did, for the UI.
@@ -79,7 +79,7 @@ func (s *Service) CreateRule(ctx context.Context, programID int64, mode, channel
 		return db.SeriesRule{}, RuleSummary{}, err
 	}
 	if p.SeriesID == "" {
-		return db.SeriesRule{}, RuleSummary{}, errors.New("the guide doesn't identify this as a series, so it can only be recorded once")
+		return db.SeriesRule{}, RuleSummary{}, usererr.New("the guide doesn't identify this as a series, so it can only be recorded once")
 	}
 	if err := validMode(mode); err != nil {
 		return db.SeriesRule{}, RuleSummary{}, err
@@ -140,7 +140,7 @@ func validMode(m string) error {
 	case "new", "missing", "all":
 		return nil
 	}
-	return errors.New("mode must be new, missing or all")
+	return usererr.New("mode must be new, missing or all")
 }
 
 // LibraryMatch is a library show a rule can be compared against.
@@ -299,8 +299,13 @@ func (s *Service) evaluateRule(ctx context.Context, rule db.SeriesRule) (RuleSum
 		want := true
 		switch rule.Mode {
 		case "new":
-			if !p.IsNew {
+			switch {
+			case !p.IsNew:
 				sum.NotNew++
+				want = false
+			case key != "" && !own && recorded[key]:
+				// Still flagged new on a later airing, but already recorded.
+				sum.AlreadyRecorded++
 				want = false
 			}
 		case "missing":
@@ -333,7 +338,7 @@ func (s *Service) evaluateRule(ctx context.Context, rule db.SeriesRule) (RuleSum
 			continue
 		}
 		padB, padA := s.Padding(ctx)
-		if n, _ := s.db.Overlapping(ctx, p.StartAt-padB, p.EndAt+padA, 0); tuners > 0 && n >= tuners {
+		if tuners > 0 && s.peakBusy(ctx, p.StartAt-padB, p.EndAt+padA) >= tuners {
 			sum.Conflicts++ // a later airing of the same episode may still fit
 			continue
 		}
@@ -382,6 +387,72 @@ func (s *Service) applyRules(ctx context.Context) {
 }
 
 // afterRecording enforces keep-last-N for the rule that made a recording.
+// newestEpisodesFirst orders recordings by season and episode, newest first,
+// when every one has them, so a re-recorded rerun of an old episode doesn't
+// push out a newer one. Otherwise they stay in recording order.
+func newestEpisodesFirst(recs []db.Recording) {
+	type se struct{ s, e int }
+	keys := make([]se, len(recs))
+	for i, r := range recs {
+		m := reEpisode.FindStringSubmatch(r.EpisodeNum)
+		if m == nil {
+			return
+		}
+		keys[i].s, _ = strconv.Atoi(m[1])
+		keys[i].e, _ = strconv.Atoi(m[2])
+	}
+	idx := make([]int, len(recs))
+	for i := range idx {
+		idx[i] = i
+	}
+	sort.SliceStable(idx, func(a, b int) bool {
+		ka, kb := keys[idx[a]], keys[idx[b]]
+		if ka.s != kb.s {
+			return ka.s > kb.s
+		}
+		return ka.e > kb.e
+	})
+	sorted := make([]db.Recording, len(recs))
+	for i, j := range idx {
+		sorted[i] = recs[j]
+	}
+	copy(recs, sorted)
+}
+
+// peakBusy is the most recordings in progress at any one moment of [from,
+// to): two that don't overlap each other share a tuner.
+func (s *Service) peakBusy(ctx context.Context, from, to int64) int {
+	wins, err := s.db.ActiveWindows(ctx, from, to)
+	if err != nil {
+		return 0
+	}
+	return peakOverlap(wins, from, to)
+}
+
+func peakOverlap(wins [][2]int64, from, to int64) int {
+	type ev struct {
+		at    int64
+		delta int
+	}
+	var evs []ev
+	for _, w := range wins {
+		evs = append(evs, ev{max(w[0], from), 1}, ev{min(w[1], to), -1})
+	}
+	// Ends before starts at the same instant: back-to-back recordings share a tuner.
+	sort.Slice(evs, func(i, j int) bool {
+		if evs[i].at != evs[j].at {
+			return evs[i].at < evs[j].at
+		}
+		return evs[i].delta < evs[j].delta
+	})
+	n, peak := 0, 0
+	for _, e := range evs {
+		n += e.delta
+		peak = max(peak, n)
+	}
+	return peak
+}
+
 func (s *Service) afterRecording(ctx context.Context, rec db.Recording) {
 	if rec.RuleID == nil {
 		return
@@ -394,6 +465,7 @@ func (s *Service) afterRecording(ctx context.Context, rec db.Recording) {
 	if err != nil {
 		return
 	}
+	newestEpisodesFirst(done)
 	for i, r := range done {
 		if i < rule.KeepLast {
 			continue

@@ -1,8 +1,8 @@
 package livetv
 
 import (
+	"net/url"
 	"context"
-	"errors"
 	"log/slog"
 	"path/filepath"
 	"sync"
@@ -11,6 +11,7 @@ import (
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/metadata"
 	"github.com/timothydodd/couchside/internal/transcode"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 // Enqueuer lets the service ask the worker to scan the recordings library.
@@ -26,6 +27,7 @@ type Config struct {
 	PadAfter      time.Duration
 	Metadata      *metadata.Chain // identifies which same-titled series a recording is; may be nil
 	FFprobe       string          // reads commercial clip lengths for virtual channels
+	MaxEncodes    int             // live streams converting video at once
 }
 
 // Service owns the tuner, guide, live sessions and the DVR scheduler.
@@ -45,7 +47,10 @@ type Service struct {
 	recCancel map[int64]context.CancelFunc
 	libraryID int64
 	wakeSched chan struct{}
-	lookups   map[string]bool // guide series being identified in the background
+	lookups   map[string]bool      // guide series being identified in the background
+	lookupErr map[string]time.Time // series whose identification just failed, by series id or title
+	starting  map[int64]bool       // recordings the scheduler is starting
+	pathMu    sync.Mutex           // one new recording picks its file at a time
 
 	virtualErr   map[int64]string // why a virtual channel has no schedule
 	wakeVirtual  chan struct{}
@@ -61,7 +66,7 @@ func (s *Service) HasTuner() bool { return s.hdhr != nil }
 func (s *Service) configured() bool { return s.hdhr != nil || s.virtualCount > 0 }
 
 func New(cfg Config, d *db.DB, enc transcode.Encoder, work Enqueuer, cacheDir string) (*Service, error) {
-	lm, err := newLiveManager(enc, filepath.Join(cacheDir, "live"))
+	lm, err := newLiveManager(enc, filepath.Join(cacheDir, "live"), cfg.MaxEncodes)
 	if err != nil {
 		return nil, err
 	}
@@ -71,6 +76,7 @@ func New(cfg Config, d *db.DB, enc transcode.Encoder, work Enqueuer, cacheDir st
 	}
 	return &Service{cfg: cfg, db: d, hdhr: hdhr, enc: enc, work: work, live: lm,
 		recCancel: map[int64]context.CancelFunc{}, wakeSched: make(chan struct{}, 1), lookups: map[string]bool{},
+		lookupErr: map[string]time.Time{}, starting: map[int64]bool{},
 		virtualErr: map[int64]string{}, wakeVirtual: make(chan struct{}, 1)}, nil
 }
 
@@ -217,6 +223,11 @@ func (s *Service) refreshLineup(ctx context.Context) error {
 	}
 	chans := make([]db.Channel, 0, len(lineup))
 	for _, l := range lineup {
+		// The URL goes to ffmpeg -i: a tuner's stream, never a file or another protocol.
+		if u, err := url.Parse(l.URL); err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+			slog.Warn("hdhomerun lineup: skipping a channel with an odd stream URL", "channel", l.GuideNumber, "url", l.URL)
+			continue
+		}
 		chans = append(chans, db.Channel{Number: l.GuideNumber, Name: l.GuideName, URL: l.URL, HD: l.HD == 1,
 			DRM: l.DRM == 1, VideoCodec: l.VideoCodec, AudioCodec: l.AudioCodec,
 			SignalStrength: l.SignalStrength, SignalQuality: l.SignalQuality})
@@ -339,4 +350,4 @@ func (s *Service) scanRecordings(ctx context.Context) {
 	}
 }
 
-var ErrNoTuner = errors.New("all tuners are busy")
+var ErrNoTuner = usererr.New("all tuners are busy")

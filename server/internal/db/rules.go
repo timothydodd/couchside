@@ -145,13 +145,17 @@ func (d *DB) RecordedEpisodes(ctx context.Context, seriesID string) (map[string]
 	return out, rows.Err()
 }
 
-// ScheduleRuleRecording inserts a rule's recording but never revives an
-// airing the user cancelled. Returns false when the airing already existed.
+// ScheduleRuleRecording inserts a rule's recording, or retries one whose
+// earlier attempt failed, but never revives an airing the user cancelled.
+// Returns false when the airing already existed and was left alone.
 func (d *DB) ScheduleRuleRecording(ctx context.Context, r Recording, ruleID int64) (bool, error) {
 	res, err := d.sql.ExecContext(ctx, `INSERT INTO recordings (channel, channel_name, title, episode_title, episode_num,
 		synopsis, image_url, series_id, categories, start_at, end_at, pad_before, pad_after, rule_id)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT (channel, start_at) DO NOTHING`,
+		ON CONFLICT (channel, start_at) DO UPDATE SET status = 'scheduled', error = '',
+		  rule_id = COALESCE(recordings.rule_id, excluded.rule_id), end_at = excluded.end_at,
+		  pad_before = excluded.pad_before, pad_after = excluded.pad_after
+		WHERE recordings.status = 'failed'`,
 		r.Channel, r.ChannelName, r.Title, r.EpisodeTitle, r.EpisodeNum, r.Synopsis, r.ImageURL, r.SeriesID,
 		strings.Join(r.Categories, ","), r.StartAt, r.EndAt, r.PadBefore, r.PadAfter, ruleID)
 	if err != nil {

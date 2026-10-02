@@ -519,6 +519,7 @@ func (t *TMDB) get(ctx context.Context, path string, q url.Values, ttl time.Dura
 	}
 	cacheKey := path + "?" + full.Encode() // never holds the key
 	body, ok := t.cache.CacheGet(ctx, t.Name(), cacheKey, ttl)
+	fresh := false
 	if !ok {
 		var status int
 		var err error
@@ -537,7 +538,7 @@ func (t *TMDB) get(ctx context.Context, path string, q url.Values, ttl time.Dura
 		case status != http.StatusOK:
 			return fmt.Errorf("tmdb: HTTP %d", status)
 		}
-		_ = t.cache.CachePut(ctx, t.Name(), cacheKey, body)
+		fresh = true
 	}
 	var probe struct {
 		StatusCode int `json:"status_code"`
@@ -547,6 +548,11 @@ func (t *TMDB) get(ctx context.Context, path string, q url.Values, ttl time.Dura
 	}
 	if err := json.Unmarshal(body, out); err != nil {
 		return fmt.Errorf("tmdb: bad response: %w", err)
+	}
+	// Cached only once it decoded: a captive portal's HTML page or a body
+	// cut off at the size cap would otherwise be served for days.
+	if fresh {
+		_ = t.cache.CachePut(ctx, t.Name(), cacheKey, body)
 	}
 	return nil
 }

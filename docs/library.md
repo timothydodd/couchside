@@ -11,7 +11,9 @@ Libraries page; Couchside scans it, matches every title, and fetches artwork.
   Plex-DVR date names (`Show - 2024-11-10 03 30 00 - Title.ts`).
 - **Rescans** skip unchanged files, prune deleted ones, and run every 6 hours
   (`COUCHSIDE_SCAN_INTERVAL`). Unchanged files are re-parsed each time, so
-  parser fixes reach existing libraries without a re-index.
+  parser fixes reach existing libraries without a re-index. A scan that
+  couldn't read a folder, or found an empty library folder (an unmounted
+  share), removes nothing and shows as failed in Activity.
 - **Stream info** from ffprobe: duration, codecs, resolution and track counts.
   Files that can't be read (corrupt, or DRM-protected iTunes purchases) are
   flagged and the UI explains why they won't play.

@@ -139,6 +139,15 @@ func (d *DB) RetryJob(ctx context.Context, id int64) error {
 	return err
 }
 
+// PruneJobs drops finished and failed jobs older than cutoff (unix seconds).
+func (d *DB) PruneJobs(ctx context.Context, cutoff int64) (int64, error) {
+	res, err := d.sql.ExecContext(ctx, `DELETE FROM jobs WHERE status IN ('done', 'failed') AND COALESCE(finished_at, created_at) < ?`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 func (d *DB) ClearFinishedJobs(ctx context.Context) error {
 	_, err := d.sql.ExecContext(ctx, `DELETE FROM jobs WHERE status = 'done'`)
 	return err
