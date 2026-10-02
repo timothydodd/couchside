@@ -1,6 +1,7 @@
 package livetv
 
 import (
+	"net/url"
 	"context"
 	"errors"
 	"log/slog"
@@ -217,6 +218,11 @@ func (s *Service) refreshLineup(ctx context.Context) error {
 	}
 	chans := make([]db.Channel, 0, len(lineup))
 	for _, l := range lineup {
+		// The URL goes to ffmpeg -i: a tuner's stream, never a file or another protocol.
+		if u, err := url.Parse(l.URL); err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+			slog.Warn("hdhomerun lineup: skipping a channel with an odd stream URL", "channel", l.GuideNumber, "url", l.URL)
+			continue
+		}
 		chans = append(chans, db.Channel{Number: l.GuideNumber, Name: l.GuideName, URL: l.URL, HD: l.HD == 1,
 			DRM: l.DRM == 1, VideoCodec: l.VideoCodec, AudioCodec: l.AudioCodec,
 			SignalStrength: l.SignalStrength, SignalQuality: l.SignalQuality})

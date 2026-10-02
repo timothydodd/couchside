@@ -126,13 +126,19 @@ func run() error {
 	if cfg.Auth {
 		slog.Info("COUCHSIDE_AUTH is set: every profile signs in with a password (no passwordless sign-in)")
 	}
+	// No ReadTimeout or WriteTimeout: streams and uploads run long.
 	srv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           apiServer.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
+	drained := make(chan struct{})
 	go func() {
+		defer close(drained)
 		<-ctx.Done()
+		// A second Ctrl-C or SIGTERM now exits at once.
+		stop()
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(shutdown)
@@ -149,6 +155,9 @@ func run() error {
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
+	// ListenAndServe returns as soon as Shutdown starts; requests still
+	// draining need the database, which closes when run returns.
+	<-drained
 	<-workerDone
 	<-tcDone
 	<-tvDone
