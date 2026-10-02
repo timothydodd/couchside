@@ -1,83 +1,77 @@
 # Couchside style guide
 
-The palette comes from the C logo (`branding/logo-c-original.png`): a cyan rim
-around an electric-blue body that turns azure and then seafoam at the arm
-tips, on a deep navy tile. The app itself sits on neutral dark grays, so the
-logo's cool colours carry the brand and navy stays inside the logo tile. The
-tokens live in `web/src/index.css`; components use them through Tailwind
-utilities (`bg-surface`, `text-content`, `text-accent`…). Never hard-code a
-colour: both themes must keep working.
+**Seafoam on slate.** One dark theme: navy-tinted charcoals that sit well with
+the logo's navy tile, seafoam (the tips of the C) as the colour you act on,
+sky blue for state, coral for warmth. There is no light theme. The tokens
+live in `web/src/index.css`; components use them through Tailwind utilities
+(`bg-surface`, `text-content`, `text-accent`…). Don't hard-code colours.
 
-## Logo colours (sampled)
+## Logo
 
-| Name          | Hex       | Where it is in the logo           |
-| ------------- | --------- | --------------------------------- |
-| Navy          | `#0C1930` | the tile behind the C             |
-| Cyan          | `#17FBFE` | the rim and the top-left glow     |
-| Electric blue | `#016FF0` | the body of the C                 |
-| Deep blue     | `#003FB1` | the shaded inner curve            |
-| Azure         | `#06B6F3` | the arms, between blue and green  |
-| Seafoam       | `#5AF6B9` | the arm tips                      |
+`branding/logo-c-original.png` is the C on its navy tile (`#0D1A31`): a cyan
+rim around an electric-blue body that turns azure and then seafoam at the arm
+tips. The tile stays in the app icons and the Roku channel art; the UI around
+it is slate.
 
 ## Tokens
 
-| Token              | Dark      | Light     | Use                                                    |
-| ------------------ | --------- | --------- | ------------------------------------------------------ |
-| `--bg-page`        | `#111315` | `#F3F4F6` | the app background                                     |
-| `--bg-surface`     | `#181B1F` | `#FFFFFF` | cards, sidebar, panels                                 |
-| `--bg-raised`      | `#22262B` | `#F8F9FA` | things on a surface: guide cells, menus                |
-| `--bg-muted`       | white 5%  | gray 5%   | hover rows, quiet fills                                |
-| `--text-primary`   | `#ECEFF3` | `#15181C` | titles, body                                           |
-| `--text-secondary` | `#B3BAC4` | `#3F4650` | supporting text                                        |
-| `--text-muted`     | `#8C949F` | `#5E6672` | captions, metadata                                     |
-| `--border`         | `#343A42` | `#D5D9DF` | inputs, outlined buttons                               |
-| `--border-light`   | `#262A30` | `#E6E8EC` | card edges, dividers                                   |
-| `--accent`         | `#5B93FF` | `#1A56E8` | primary buttons, active nav, links, progress           |
-| `--accent-hover`   | `#7EA9FF` | `#1446C4` | hover on accent fills                                  |
-| `--text-on-accent` | `#07122A` | `#FFFFFF` | text on accent (and status) fills                      |
-| `--brand-cyan`     | `#1FEEFE` | `#08788F` | cyan: small highlights, avatar colour                  |
-| `--brand-seafoam`  | `#5AF6B9` | `#0B7F5C` | seafoam: the guide's "now" line, placeholder glow      |
-| `--brand-gradient` | sweep     | sweep     | cyan → blue → azure → seafoam, via `.brand-text` only  |
-| `--secondary`      | `#A873FF` | `#6A24E0` | violet: avatar colour only (from the old logo)         |
-| `--brand-pink`     | `#FF4FE6` | `#B8169F` | pink: avatar colour only (from the old logo)           |
-| `--critical`       | `#FF5C74` | `#CC2B45` | errors, destructive actions, "recording"               |
-| `--warning`        | `#FFB547` | `#A35F00` | unmatched, low quality, duplicates                     |
-| `--good`           | `#3DDC97` | `#107553` | watched, healthy, done                                 |
-| `--info`           | `#45C6FF` | `#0B6FB8` | neutral notices, in progress                           |
+| Token              | Value     | Use                                                      |
+| ------------------ | --------- | -------------------------------------------------------- |
+| `--bg-page`        | `#0D1418` | the app background (near-black navy)                     |
+| `--bg-surface`     | `#151F24` | sidebar, cards, panels (dark charcoal)                   |
+| `--bg-raised`      | `#1D292E` | things on a surface: guide cells, menus, chips (slate)   |
+| `--bg-muted`       | white 5%  | hover rows, quiet fills                                  |
+| `--text-primary`   | `#EDF4F2` | titles, body (cool white)                                |
+| `--text-secondary` | `#9DAEAA` | supporting text (gray-green)                             |
+| `--text-muted`     | `#869894` | captions, metadata                                       |
+| `--text-disabled`  | `#667570` | disabled controls only (below AA on purpose)             |
+| `--border`         | `#55696F` | inputs, outlined buttons (3:1 against the field)         |
+| `--border-light`   | `#304047` | card edges, dividers (muted slate)                       |
+| `--accent`         | `#63D6BE` | seafoam: buttons, links, focus, progress, active nav     |
+| `--accent-hover`   | `#7DE3CE` | hover on accent fills                                    |
+| `--text-on-accent` | `#0D1418` | text on seafoam (and other bright) fills                 |
+| `--brand-sky`      | `#62A9D1` | sky blue: the second brand colour                        |
+| `--brand-coral`    | `#F08070` | coral: the warm accent                                   |
+| `--brand-gradient` | sweep     | seafoam → sky, via `.brand-text` only                    |
+| `--good`           | `#62A9D1` | watched, done, healthy (sky)                             |
+| `--info`           | `#A9D2EA` | in progress, neutral notices (light sky)                 |
+| `--warning`        | `#E8B65A` | unmatched, low quality, duplicates (amber)               |
+| `--critical`       | `#F08070` | errors, destructive actions, recording, favourites (coral) |
+| `--brand-cyan`, `--secondary` (violet), `--brand-pink` | | avatar colours only |
 
-Violet and pink stay because profiles have them saved as avatar colours; they
-aren't part of the brand any more and shouldn't be used anywhere else.
+## Contrast
+
+| Pair                                  | Ratio      |
+| ------------------------------------- | ---------- |
+| Primary text on page / surface / raised | 16.7 / 15.0 / 13.4 |
+| Secondary text, worst case (raised)   | 6.4        |
+| Muted text, worst case (raised)       | 4.9        |
+| Seafoam on raised                     | 8.4        |
+| Sky / coral on raised                 | 5.8 / 5.7  |
+| Navy text on seafoam                  | 10.5       |
+| Input border against the field        | 3.2        |
 
 ## Rules
 
-- **Contrast.** Every text colour above passes WCAG AA (4.5:1) on the page,
-  surface and raised backgrounds in both themes (violet and pink are only ever
-  fills). Re-check if you add a pairing.
-- **Dark buttons carry dark text.** The dark accent is bright (`#5B93FF`), so
-  white on it fails contrast; `--text-on-accent` is a near-black navy. Always
-  pair accent fills with `text-on-accent`, never `text-white`.
-- **One accent.** Blue is the only interactive colour. Cyan and seafoam are
-  brand colours for identity and small highlights, not for buttons or links.
-- **Seafoam isn't "good".** Seafoam and the green status colour are neighbours.
-  Keep seafoam to brand moments (the gradient, the guide's now line, artwork
-  placeholders) and never use it to mean done, watched or healthy.
-- **Navy is the logo's.** The UI is neutral gray; navy appears only in the logo
-  tile and the app icons, never as a surface.
-- **The gradient is a signature, not a background.** Use `.brand-text` for
-  short brand labels ("media" in the sidebar, "Just added" on Home). Not for
-  body copy, buttons or large fills.
-- **Status colours mean state.** Critical, warning, good and info are never
-  used decoratively or as chart series.
-- **The player is always dark** (`data-theme="dark"` on its root), whatever
-  the app theme.
+- **One accent.** Seafoam is the only interactive colour. Sky, coral and amber
+  mean something; they're never used for buttons or links.
+- **No green.** Seafoam is too close to a green to share the screen with one,
+  so "watched" and "done" are sky blue.
+- **Bright fills carry dark text.** Seafoam, sky, coral and amber fills take
+  `text-on-accent` (`#0D1418`), never white.
+- **Coral means attention:** recording, errors, deletes, and the favourite
+  heart. Keep it rare so it stays noticeable.
+- **The gradient is a signature, not a background.** `.brand-text` for short
+  brand labels only.
+- **The player is always on black** (`--player-bg`), whatever is behind it.
 - **New reusable styles** go in `index.css` under `@layer components`, named
   like the existing ones (`.poster`, `.still`, `.chip`, `.badge`, `.card`).
 
 ## Artwork
 
-- `branding/logo-c-original.png` is the source: the C on its navy tile.
-- `python3 branding/make-icons.py` writes the web icons (`web/public/icons`,
-  `favicon.ico`, `apple-touch-icon.png`), and `python3 branding/make-transparent.py`
-  cuts the C out to `branding/logo-c-transparent.png`.
-- The Roku app's channel icons are the C on the logo navy; its splash is the C
-  on the dark page gray (see `../couchside-roku`).
+- `python3 branding/make-icons.py` writes the web icons from the logo, and
+  `python3 branding/make-transparent.py` cuts the C out to
+  `branding/logo-c-transparent.png`.
+- The Roku app's artwork comes from `../couchside-roku/scripts/make-art.py`:
+  channel icons are the C on the logo's navy; the splash is the C on the page
+  colour; 9-patches and badges are recoloured to these tokens.

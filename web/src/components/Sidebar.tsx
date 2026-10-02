@@ -1,4 +1,4 @@
-import { Activity, Clapperboard, FolderOpen, Home, Moon, RadioTower, Settings, Sun, Tv, type LucideIcon } from "lucide-react";
+import { Activity, Clapperboard, FolderOpen, Home, RadioTower, Settings, Tv, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import Link from "./Link";
 import ProfileAvatar from "./ProfileAvatar";
@@ -6,8 +6,7 @@ import { SearchInput } from "./ui";
 import { useRouter, type Route } from "../stores/router";
 import { useStatus } from "../stores/status";
 import { useIsAdmin } from "../stores/auth";
-import { setTheme, useProfile } from "../stores/profile";
-import { useThemeStore } from "../stores/theme";
+import { useProfile } from "../stores/profile";
 
 type NavName = Route["name"];
 
@@ -29,7 +28,6 @@ export default function Sidebar() {
   const route = useRouter((s) => s.route);
   const counts = useStatus((s) => s.status?.counts);
   const jobs = useStatus((s) => s.status?.jobs);
-  const resolved = useThemeStore((s) => s.resolved);
   const profile = useProfile((s) => s.current);
   const admin = useIsAdmin();
 
@@ -108,13 +106,6 @@ export default function Sidebar() {
             <span className="min-w-0 flex-1 truncate text-left">{profile.name}</span>
           </Link>
         )}
-        <button
-          onClick={() => setTheme(resolved === "dark" ? "light" : "dark")}
-          className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-content-secondary hover:bg-muted hover:text-content"
-        >
-          {resolved === "dark" ? <Sun size={16} className="text-content-muted" /> : <Moon size={16} className="text-content-muted" />}
-          {resolved === "dark" ? "Light theme" : "Dark theme"}
-        </button>
       </div>
     </nav>
   );

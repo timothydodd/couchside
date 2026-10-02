@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
 import type { Prefs, Profile, ProfileColor } from "../lib/types";
-import { useThemeStore, type ThemePref } from "./theme";
 
 interface ProfileState {
   loaded: boolean;
@@ -31,7 +30,6 @@ export const useProfile = create<ProfileState>((set, get) => ({
       const r = await api<{ profiles: Profile[]; current: number; chosen: boolean }>("/api/profiles");
       const current = r.profiles.find((p) => p.id === r.current) ?? null;
       set({ loaded: true, error: null, profiles: r.profiles, current, chosen: r.chosen });
-      if (current?.prefs.theme) useThemeStore.getState().setPref(current.prefs.theme);
     } catch (e) {
       set({ loaded: true, error: e instanceof Error ? e.message : String(e) });
     }
@@ -67,9 +65,3 @@ export const useProfile = create<ProfileState>((set, get) => ({
 /** The current profile's preferences. */
 export const usePrefs = (): Prefs => useProfile((s) => s.current?.prefs) ?? NO_PREFS;
 const NO_PREFS: Prefs = {};
-
-/** Change the theme for this profile (also remembered per browser for the first paint). */
-export function setTheme(pref: ThemePref) {
-  useThemeStore.getState().setPref(pref);
-  useProfile.getState().setPrefs({ theme: pref });
-}

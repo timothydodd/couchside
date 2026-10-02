@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Couchside</title>
-<meta name="theme-color" content="#111315">
+<meta name="theme-color" content="#0D1418">
 <meta name="description" content="A self-hosted media server for your movies, TV shows and live TV, with a web app and a Roku app.">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/logo-32.png">
@@ -13,23 +13,14 @@
 <meta property="og:description" content="Your movies, shows and live TV, served from your own server.">
 <meta property="og:image" content="https://couchside.app/icons/logo-512.png">
 <style>
-  /* Tokens from docs/style.md. */
+  /* Tokens from docs/style.md: one dark theme, seafoam on slate. */
   :root {
-    color-scheme: dark light;
-    --bg-page: #111315; --bg-surface: #181B1F; --bg-raised: #22262B;
-    --text-primary: #ECEFF3; --text-secondary: #B3BAC4; --text-muted: #8C949F;
-    --border: #343A42; --border-light: #262A30;
-    --accent: #5B93FF; --accent-hover: #7EA9FF; --text-on-accent: #07122A;
-    --brand-gradient: linear-gradient(90deg, #1FEEFE, #2F7DFF 40%, #06B6F3 70%, #5AF6B9);
-  }
-  @media (prefers-color-scheme: light) {
-    :root {
-      --bg-page: #F3F4F6; --bg-surface: #FFFFFF; --bg-raised: #F8F9FA;
-      --text-primary: #15181C; --text-secondary: #3F4650; --text-muted: #5E6672;
-      --border: #D5D9DF; --border-light: #E6E8EC;
-      --accent: #1A56E8; --accent-hover: #1446C4; --text-on-accent: #FFFFFF;
-      --brand-gradient: linear-gradient(90deg, #0891A8, #1A56E8 40%, #0A86B8 70%, #0B8F66);
-    }
+    color-scheme: dark;
+    --bg-page: #0D1418; --bg-surface: #151F24; --bg-raised: #1D292E;
+    --text-primary: #EDF4F2; --text-secondary: #9DAEAA; --text-muted: #869894;
+    --border: #55696F; --border-light: #304047;
+    --accent: #63D6BE; --accent-hover: #7DE3CE; --text-on-accent: #0D1418;
+    --brand-gradient: linear-gradient(90deg, #63D6BE, #62A9D1);
   }
   * { box-sizing: border-box; }
   body {

@@ -1,47 +1,47 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------
-   Design tokens, from the C logo (branding/logo-c-original.png): dark gray
-   surfaces, the C's electric blue as the accent, cyan and seafoam as brand
-   colours, and the logo's cyan → blue → seafoam sweep as --brand-gradient.
-   Violet and pink are avatar colours only. Every text
-   pairing meets WCAG AA (4.5:1); see docs/style.md. Dark is the default;
-   `[data-theme="light"]` on <html> switches to the light variant. The theme
-   store stamps that attribute (see stores/theme.ts).
+   Design tokens: one dark theme, "seafoam on slate". Navy-tinted charcoals
+   (they sit well with the logo's navy tile), seafoam as the only interactive
+   colour, sky blue for state (watched, in progress), coral for warmth
+   (favourites, recording, errors), amber for warnings. Violet and pink are
+   avatar colours only. Every text pairing meets WCAG AA (4.5:1) and input
+   borders 3:1; see docs/style.md. There is no light theme.
 --------------------------------------------------------------------------- */
-:root,
-[data-theme="dark"] {
-  --bg-page: #111315;
-  --bg-surface: #181b1f;
-  --bg-raised: #22262b;
-  --bg-muted: rgba(255, 255, 255, 0.05);
-  --bg-input: #111315;
+:root {
+  --bg-page: #0d1418;
+  --bg-surface: #151f24; /* sidebar, cards, panels */
+  --bg-raised: #1d292e; /* on a surface: guide cells, menus, chips */
+  --bg-muted: rgba(237, 244, 242, 0.05);
+  --bg-input: #0d1418;
 
-  --text-primary: #eceff3;
-  --text-secondary: #b3bac4;
-  --text-muted: #8c949f;
-  /* The dark accent is bright enough for text on navy, so buttons carry navy text. */
-  --text-on-accent: #07122a;
+  --text-primary: #edf4f2;
+  --text-secondary: #9daeaa;
+  --text-muted: #869894; /* captions, metadata */
+  --text-disabled: #667570; /* disabled controls only: below AA by design */
+  --text-on-accent: #0d1418;
 
-  --border: #343a42;
-  --border-light: #262a30;
+  --border: #55696f; /* inputs and outlined buttons: 3:1 */
+  --border-light: #304047; /* card edges, dividers */
 
   /* Brand */
-  --accent: #5b93ff;
-  --accent-hover: #7ea9ff;
+  --accent: #63d6be; /* seafoam */
+  --accent-hover: #7de3ce;
+  --brand-seafoam: #63d6be;
+  --brand-sky: #62a9d1;
+  --brand-coral: #f08070;
+  --brand-cyan: #1feefe; /* avatar colour */
   --secondary: #a873ff; /* avatar colour only */
   --brand-pink: #ff4fe6; /* avatar colour only */
-  --brand-cyan: #1feefe;
-  --brand-seafoam: #5af6b9;
-  --brand-gradient: linear-gradient(90deg, #1feefe 0%, #2f7dff 40%, #06b6f3 70%, #5af6b9 100%);
+  --brand-gradient: linear-gradient(90deg, #63d6be 0%, #62a9d1 100%);
 
   /* Status — reserved for state, never reused as a series color. */
-  --critical: #ff5c74;
-  --warning: #ffb547;
-  --info: #45c6ff;
-  --good: #3ddc97;
+  --critical: #f08070; /* coral */
+  --warning: #e8b65a;
+  --info: #a9d2ea;
+  --good: #62a9d1; /* sky: watched, done (no green, so nothing reads as seafoam) */
 
-  --focus-ring: rgba(91, 147, 255, 0.5);
+  --focus-ring: rgba(99, 214, 190, 0.45);
   --shadow-md: 0 8px 28px rgba(0, 0, 0, 0.55);
 
   /* Media */
@@ -50,43 +50,6 @@
   color-scheme: dark;
 }
 
-[data-theme="light"] {
-  --bg-page: #f3f4f6;
-  --bg-surface: #ffffff;
-  --bg-raised: #f8f9fa;
-  --bg-muted: rgba(21, 24, 28, 0.05);
-  --bg-input: #ffffff;
-
-  --text-primary: #15181c;
-  --text-secondary: #3f4650;
-  --text-muted: #5e6672;
-  --text-on-accent: #ffffff;
-
-  --border: #d5d9df;
-  --border-light: #e6e8ec;
-
-  --accent: #1a56e8;
-  --accent-hover: #1446c4;
-  --secondary: #6a24e0; /* avatar colour only */
-  --brand-pink: #b8169f; /* avatar colour only */
-  --brand-cyan: #08788f;
-  --brand-seafoam: #0b7f5c;
-  --brand-gradient: linear-gradient(90deg, #0891a8 0%, #1a56e8 40%, #0a86b8 70%, #0b8f66 100%);
-
-  --critical: #cc2b45;
-  --warning: #a35f00;
-  --info: #0b6fb8;
-  --good: #107553;
-
-  --focus-ring: rgba(26, 86, 232, 0.3);
-  --shadow-md: 0 8px 28px rgba(21, 24, 28, 0.12);
-
-  --shadow-poster: 0 10px 24px rgba(21, 24, 28, 0.2);
-  --player-bg: #000000;
-  color-scheme: light;
-}
-
-/* Map tokens to Tailwind color utilities (bg-surface, text-content, …). */
 @theme inline {
   --color-page: var(--bg-page);
   --color-surface: var(--bg-surface);
@@ -108,6 +71,9 @@
   --color-brand-pink: var(--brand-pink);
   --color-brand-cyan: var(--brand-cyan);
   --color-brand-seafoam: var(--brand-seafoam);
+  --color-brand-sky: var(--brand-sky);
+  --color-brand-coral: var(--brand-coral);
+  --color-content-disabled: var(--text-disabled);
 
   --color-critical: var(--critical);
   --color-warning: var(--warning);
@@ -317,8 +283,8 @@ body {
    item via --ph-angle, so a wall of unmatched titles still looks deliberate. */
 .poster-placeholder {
   background:
-    radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, var(--accent) 38%, transparent), transparent 60%),
-    radial-gradient(120% 80% at 100% 100%, color-mix(in srgb, var(--brand-seafoam) 22%, transparent), transparent 60%),
+    radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 60%),
+    radial-gradient(120% 80% at 100% 100%, color-mix(in srgb, var(--brand-sky) 24%, transparent), transparent 60%),
     linear-gradient(var(--ph-angle, 160deg), var(--bg-raised), var(--bg-surface));
 }
 

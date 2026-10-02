@@ -14,9 +14,8 @@ import { languageName } from "../lib/tracks";
 import type { LiveTvStatus } from "../lib/types";
 import { PageHeader, Segmented } from "../components/ui";
 import { useAuth, useIsAdmin } from "../stores/auth";
-import { setTheme, useProfile } from "../stores/profile";
+import { useProfile } from "../stores/profile";
 import { useStatus } from "../stores/status";
-import { useThemeStore, type ThemePref } from "../stores/theme";
 
 export default function SettingsPage() {
   const status = useStatus((s) => s.status);
@@ -115,7 +114,6 @@ export default function SettingsPage() {
 function ProfileSettings() {
   const profile = useProfile((s) => s.current);
   const setPrefs = useProfile((s) => s.setPrefs);
-  const theme = useThemeStore((s) => s.pref);
   const liveTv = useStatus((s) => s.status?.livetv?.configured);
   const accounts = useAuth((s) => s.enabled);
   if (!profile) return null;
@@ -133,19 +131,6 @@ function ProfileSettings() {
         </Link>
       </div>
       <div className="grid grid-cols-[160px_1fr] items-center gap-x-4 gap-y-3 text-sm">
-        <span className="text-content-muted">Theme</span>
-        <div>
-          <Segmented<ThemePref>
-            label="Theme"
-            value={theme}
-            onChange={setTheme}
-            options={[
-              { id: "dark", label: "Dark" },
-              { id: "light", label: "Light" },
-              { id: "system", label: "System" },
-            ]}
-          />
-        </div>
         <span className="text-content-muted">Next episode</span>
         <label className="flex items-center gap-2 text-content-secondary">
           <input type="checkbox" className="accent-brand" checked={p.autoplayNext !== false} onChange={(e) => setPrefs({ autoplayNext: e.target.checked })} />

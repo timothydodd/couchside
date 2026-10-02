@@ -158,7 +158,6 @@ export type ProfileColor = "accent" | "pink" | "cyan" | "secondary" | "good" | "
 
 /** Per-profile preferences, stored on the server. Every key is optional. */
 export interface Prefs {
-  theme?: "light" | "dark" | "system";
   autoplayNext?: boolean; // default true
   commercials?: BreakMode; // default "auto"
   subtitleLang?: string; // turn on text subtitles in this language; "" = only forced ones (default)
