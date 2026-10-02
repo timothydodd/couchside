@@ -7,7 +7,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -18,7 +20,17 @@ type Encoder struct {
 	HW          string // none | vaapi | qsv | nvenc, after detection
 	VAAPIDevice string
 	Tonemap     bool // zscale available for HDR → SDR
+	// VAAPI only: decode and scale on the GPU too (verified at start-up), and
+	// tone map there (the iHD driver's tonemap_vaapi). Without HWDecode the
+	// CPU decodes and scales and the GPU only encodes, which for 4K HEVC is
+	// most of the work on the CPU.
+	HWDecode  bool
+	HWTonemap bool
 }
+
+// HWDecodable lists codecs worth handing to the GPU's decoder. Anything it
+// turns out not to support falls back per session (see Session.hwDecode).
+var HWDecodable = map[string]bool{"h264": true, "hevc": true, "mpeg2video": true, "vp9": true, "av1": true, "vc1": true}
 
 var hwEncoders = map[string]string{"nvenc": "h264_nvenc", "vaapi": "h264_vaapi", "qsv": "h264_qsv"}
 
@@ -57,7 +69,47 @@ func Detect(ctx context.Context, ffmpeg, want, vaapiDevice string) Encoder {
 		return e
 	}
 	e.HW = want
+	if want == "vaapi" {
+		e.HWDecode = testHWDecode(ctx, test, string(filters))
+		e.HWTonemap = e.HWDecode && strings.Contains(string(filters), " tonemap_vaapi ")
+		slog.Info("vaapi pipeline", "gpuDecode", e.HWDecode, "gpuTonemap", e.HWTonemap)
+	}
 	return e
+}
+
+// testHWDecode checks the whole GPU pipeline: it encodes a short clip on the
+// GPU, then decodes, scales and re-encodes it there.
+func testHWDecode(ctx context.Context, e Encoder, filters string) bool {
+	if !strings.Contains(filters, " scale_vaapi ") {
+		return false
+	}
+	dir, err := os.MkdirTemp("", "couchside-hwtest-")
+	if err != nil {
+		return false
+	}
+	defer os.RemoveAll(dir)
+	clip := filepath.Join(dir, "clip.mp4")
+	in, out := e.Video(VideoOpts{MaxHeight: 240, SrcHeight: 240, BitrateK: 500})
+	args := append([]string{"-hide_banner", "-loglevel", "error"}, in...)
+	args = append(args, "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=25:duration=0.4")
+	args = append(args, out...)
+	args = append(args, "-y", clip)
+	if msg, err := exec.CommandContext(ctx, e.FFmpeg, args...).CombinedOutput(); err != nil {
+		slog.Warn("vaapi decode test: couldn't make a test clip", "err", err, "ffmpeg", tail(string(msg), 300))
+		return false
+	}
+	full := e
+	full.HWDecode = true
+	in, out = full.Video(VideoOpts{MaxHeight: 120, SrcHeight: 240, BitrateK: 300, HWDecode: true})
+	args = append([]string{"-hide_banner", "-loglevel", "error"}, in...)
+	args = append(args, "-i", clip)
+	args = append(args, out...)
+	args = append(args, "-f", "null", "-")
+	if msg, err := exec.CommandContext(ctx, e.FFmpeg, args...).CombinedOutput(); err != nil {
+		slog.Warn("vaapi decode test failed: the GPU will only encode", "err", err, "ffmpeg", tail(string(msg), 300))
+		return false
+	}
+	return true
 }
 
 // VideoOpts describes one H.264 encode.
@@ -69,6 +121,7 @@ type VideoOpts struct {
 	File        bool // whole-file encode: slower preset, better compression
 	Deinterlace bool // broadcast TV: deinterlace frames flagged interlaced
 	Live        bool // live TV: steady frame-by-frame output over compression
+	HWDecode    bool // VAAPI: decode, scale and tone map on the GPU (needs Encoder.HWDecode)
 }
 
 // Video returns ffmpeg arguments that go before -i (device setup) and after
@@ -81,6 +134,9 @@ func (e Encoder) Video(o VideoOpts) (in, out []string) {
 // VideoParts is Video split up, for callers that need the filter chain inside
 // a -filter_complex (e.g. to burn in subtitles first).
 func (e Encoder) VideoParts(o VideoOpts) (in []string, chain string, codec []string) {
+	if e.HW == "vaapi" && o.HWDecode && e.HWDecode {
+		return e.vaapiFull(o)
+	}
 	var f []string
 	if o.Deinterlace {
 		// Only touches frames flagged interlaced, so progressive channels pass through.
@@ -132,6 +188,36 @@ func (e Encoder) VideoParts(o VideoOpts) (in []string, chain string, codec []str
 			codec = append(codec, "-tune", "zerolatency")
 		}
 	}
+	return in, strings.Join(f, ","), codec
+}
+
+// vaapiFull keeps frames on the GPU from decode to encode, as Plex and
+// Jellyfin do: VAAPI decodes, scale_vaapi resizes (and converts 10-bit to
+// 8-bit), tonemap_vaapi maps HDR to SDR, h264_vaapi encodes. When the driver
+// can't tone map, only the already-scaled frames visit the CPU for it.
+func (e Encoder) vaapiFull(o VideoOpts) (in []string, chain string, codec []string) {
+	in = []string{"-init_hw_device", "vaapi=va:" + e.VAAPIDevice, "-filter_hw_device", "va",
+		"-hwaccel", "vaapi", "-hwaccel_device", "va", "-hwaccel_output_format", "vaapi"}
+	var f []string
+	if o.Deinterlace {
+		f = append(f, "deinterlace_vaapi")
+	}
+	size := ""
+	if o.MaxHeight > 0 && (o.SrcHeight == 0 || o.SrcHeight > o.MaxHeight) {
+		size = fmt.Sprintf("w=-2:h=%d:", o.MaxHeight)
+	}
+	switch {
+	case o.HDR && e.HWTonemap:
+		f = append(f, "scale_vaapi="+size+"format=p010", "tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709")
+	case o.HDR && e.Tonemap:
+		f = append(f, "scale_vaapi="+size+"format=p010", "hwdownload", "format=p010le",
+			"zscale=t=linear:npl=100", "format=gbrpf32le", "zscale=p=bt709",
+			"tonemap=tonemap=hable:desat=0", "zscale=t=bt709:m=bt709:r=tv", "format=nv12", "hwupload")
+	default:
+		f = append(f, "scale_vaapi="+size+"format=nv12")
+	}
+	br := fmt.Sprintf("%dk", o.BitrateK)
+	codec = []string{"-c:v", "h264_vaapi", "-b:v", br, "-maxrate", br, "-bufsize", fmt.Sprintf("%dk", o.BitrateK*2)}
 	return in, strings.Join(f, ","), codec
 }
 

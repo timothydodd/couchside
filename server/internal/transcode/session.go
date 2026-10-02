@@ -51,6 +51,7 @@ type Request struct {
 	Path           string
 	Duration       float64
 	Height         int  // 0 = best available (source height, capped at 1080p)
+	BitrateK       int  // video bitrate in kbit/s; 0 = the default for the height
 	AllowCopyVideo bool // client can play the source's H.264 as is
 	AllowCopyAudio bool // client can play the source's AAC/MP3 as is
 	AudioIndex     int  // which audio track (0:a:N)
@@ -71,6 +72,7 @@ type Session struct {
 	BurnSub   int       `json:"burnSubtitle"`
 	HDR       bool      `json:"hdr"`
 	HW        string    `json:"hw"`
+	HWDecode  bool      `json:"hwDecode"` // VAAPI: decoding and scaling on the GPU too
 	Created   time.Time `json:"created"`
 
 	src       string
@@ -170,6 +172,11 @@ func (m *Manager) Create(ctx context.Context, r Request) (*Session, error) {
 		s.Mode = "transcode"
 		s.Height = OutputHeight(r.Height, srcH)
 		s.BitrateK = BitrateFor(s.Height)
+		if r.BitrateK > 0 {
+			s.BitrateK = min(max(r.BitrateK, 300), 40000)
+		}
+		// Burned-in subtitles are overlaid on the CPU, so those frames can't stay on the GPU.
+		s.HWDecode = m.enc.HWDecode && !burn && HWDecodable[info.VideoCodec]
 	}
 	s.dir = filepath.Join(m.root, s.ID)
 	if err := os.MkdirAll(s.dir, 0o755); err != nil {
@@ -177,7 +184,7 @@ func (m *Manager) Create(ctx context.Context, r Request) (*Session, error) {
 	}
 	m.sessions[s.ID] = s
 	slog.Info("transcode session", "id", s.ID, "file", r.FileID, "mode", s.Mode, "height", s.Height,
-		"copyAudio", copyAudio, "hdr", s.HDR, "hw", m.enc.HW, "src", info.VideoCodec+"/"+info.PixFmt+"/"+info.AudioCodec)
+		"copyAudio", copyAudio, "hdr", s.HDR, "hw", m.enc.HW, "gpuDecode", s.HWDecode, "bitrateK", s.BitrateK, "src", info.VideoCodec+"/"+info.PixFmt+"/"+info.AudioCodec)
 	return s, nil
 }
 
@@ -318,6 +325,9 @@ func (m *Manager) Segment(ctx context.Context, id string, n int) (string, error)
 				// remux can have fewer segments than the playlist lists.
 				return "", ErrPastEnd
 			}
+			if s.gpuFallback(n, errMsg) {
+				continue
+			}
 			if errMsg == "" {
 				errMsg = "ffmpeg stopped before producing this segment"
 			}
@@ -333,6 +343,21 @@ func (m *Manager) Segment(ctx context.Context, id string, n int) (string, error)
 	}
 }
 
+// gpuFallback handles a failed GPU-pipeline run: the GPU may not decode this
+// codec or profile, or the driver can't tone map it. The session switches to
+// CPU decoding (GPU encoding) for good and restarts at segment n. It returns
+// false when there's nothing to fall back to.
+func (s *Session) gpuFallback(n int, errMsg string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.HWDecode {
+		return false
+	}
+	slog.Warn("GPU decoding failed for this file; decoding on the CPU instead", "session", s.ID, "file", s.FileID, "ffmpeg", errMsg)
+	s.HWDecode = false
+	return s.start(n) == nil
+}
+
 // start (re)launches ffmpeg at segment n. Caller holds s.mu.
 func (s *Session) start(n int) error {
 	s.stop()
@@ -341,7 +366,8 @@ func (s *Session) start(n int) error {
 	var vIn, vCodec []string
 	var chain string
 	if !s.CopyVideo {
-		vIn, chain, vCodec = s.enc.VideoParts(VideoOpts{MaxHeight: s.Height, SrcHeight: s.srcHeight, BitrateK: s.BitrateK, HDR: s.HDR})
+		vIn, chain, vCodec = s.enc.VideoParts(VideoOpts{MaxHeight: s.Height, SrcHeight: s.srcHeight, BitrateK: s.BitrateK, HDR: s.HDR,
+			HWDecode: s.HWDecode})
 	}
 	args = append(args, vIn...)
 	if startSec > 0 {

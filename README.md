@@ -29,6 +29,8 @@ A lightweight self-hosted media server for a home k3s cluster. It scans your mov
 - **Live HLS.** H.264 video with incompatible audio (DTS, AC3, TrueHD) or an MKV container is remuxed: the video is copied and only the audio is converted. Everything else is transcoded to H.264/AAC. HDR is tone-mapped to SDR.
 - **Seeking.** Keyframes are forced every 4 seconds, so the full timeline is seekable immediately. Jumping ahead restarts ffmpeg at that point.
 - **Throttling.** ffmpeg pauses once it's two minutes ahead of the player and stops when nobody is watching.
+- **Quality presets.** Like Plex: 1080p at 20, 12, 10 or 8 Mbps, 720p at 4, 3 or 2 Mbps, 480p and 360p, from the gear menu.
+- **Full GPU transcoding (VAAPI).** Decoding, scaling and HDR tone mapping run on the GPU along with the encode, so a 4K HEVC HDR film converts with little CPU. Settings → Transcoding shows whether GPU decoding passed its start-up test; a file the GPU can't decode falls back to CPU decoding.
 - **Buffering fallback.** In Auto quality, three stalls within a minute step playback down, from direct to 1080p, then 720p, then 480p. The gear menu picks a quality manually.
 - **Optimize.** Background encodes make browser-friendly MP4 copies per title or per library. They run one at a time, show progress on the Activity page, and can be cancelled.
 - **Player.** Movies, episodes, live TV and in-progress recordings share one player with custom controls:

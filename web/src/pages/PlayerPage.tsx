@@ -4,7 +4,7 @@ import PlayerFrame from "../components/player/PlayerFrame";
 import { InfoRows, type SettingSection } from "../components/player/SettingsMenu";
 import { ApiError, api, useApi } from "../lib/api";
 import { fmtResolution } from "../lib/format";
-import { QUALITIES, chooseSource, hlsCopyCaps, nativeHls, sourceKey, stepDown, type Quality, type Source } from "../lib/playback";
+import { chooseSource, fmtMbps, hlsCopyCaps, nativeHls, presetById, presetSource, presetsFor, sourceKey, stepDown, type Quality, type Source } from "../lib/playback";
 import { audioLabel, subtitleDetail, subtitleLabel, type AudioTrack, type SubtitleTrack } from "../lib/tracks";
 import { parseVtt } from "../lib/vtt";
 import { PROBLEM_TEXT, type BreakMode, type Commercials, type HlsSession, type PlayInfo } from "../lib/types";
@@ -73,7 +73,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
 
   const source: Source | null = useMemo(() => {
     if (!info || info.problem) return null;
-    if (needServer) return { kind: "hls", height: quality === "auto" ? stepHeight : quality };
+    if (needServer) return quality === "auto" ? { kind: "hls", height: stepHeight } : presetSource(quality);
     return chooseSource(info, quality, forceHls, stepHeight);
   }, [info, quality, forceHls, stepHeight, needServer]);
   const key = source ? `${sourceKey(source)}:${audio ?? "d"}:${burnIndex ?? "n"}:${nonce}` : null;
@@ -153,7 +153,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
         try {
           s = await api<HlsSession>(`/api/files/${info.fileId}/hls`, {
             method: "POST",
-            json: { height: source.height, ...hlsCopyCaps(), audioIndex: audio ?? defaultAudio, burnSubtitle: burnIndex ?? -1 },
+            json: { height: source.height, bitrateK: source.bitrateK ?? 0, ...hlsCopyCaps(), audioIndex: audio ?? defaultAudio, burnSubtitle: burnIndex ?? -1 },
           });
         } catch (e) {
           if (!cancelled) {
@@ -423,21 +423,24 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
 
   // --- settings ------------------------------------------------------------------------
   const mode = describe(source, session);
-  const qualityLabel = (q: Quality) => (q === "auto" ? "Auto" : `${q}p`);
+  const qualityLabel = (q: Quality) => (q === "auto" ? "Auto" : (presetById(q)?.label ?? q));
   const settings: SettingSection[] = [
     {
       id: "quality",
       label: "Quality",
       value: quality === "auto" ? `Auto${session?.height && source?.kind === "hls" ? ` (${session.height}p)` : info?.height ? ` (${fmtResolution(info.width, info.height)})` : ""}` : qualityLabel(quality),
-      options: QUALITIES.map((q) => ({
-        id: String(q),
-        label: q === "auto" ? "Auto" : `${q}p`,
-        detail: q === "auto" ? "Original when your browser can play it; steps down if it keeps buffering" : q === 1080 ? "8 Mbps" : q === 720 ? "4 Mbps" : "1.5 Mbps",
-        active: q === quality,
-      })),
+      options: [
+        {
+          id: "auto",
+          label: "Auto",
+          detail: "Original when your browser can play it; steps down if it keeps buffering",
+          active: quality === "auto",
+        },
+        ...presetsFor(info?.height).map((p) => ({ id: p.id, label: p.label, detail: fmtMbps(p.bitrateK), active: p.id === quality })),
+      ],
       onSelect: (id) =>
         switchTo(() => {
-          const q = (id === "auto" ? "auto" : Number(id)) as Quality;
+          const q = id as Quality;
           setQuality(q);
           if (q === "auto") {
             setForceHls(false);
@@ -616,7 +619,14 @@ function PlaybackInfo({
     rows.push(["Video", session.copyVideo ? "Copied (no re-encode)" : `H.264 ${session.height}p${session.bitrateK ? ` · ${(session.bitrateK / 1000).toFixed(1)} Mbps` : ""}${session.hdr ? " · HDR→SDR" : ""}`]);
     rows.push(["Audio", session.copyAudio ? "Copied" : "AAC stereo"]);
     if (session.burnSub >= 0) rows.push(["Subtitles", "Burned in by the server"]);
-    rows.push(["Transcoder", session.copyVideo ? "–" : session.hw && session.hw !== "none" ? session.hw.toUpperCase() : "CPU (software)"]);
+    rows.push([
+      "Transcoder",
+      session.copyVideo
+        ? "–"
+        : session.hw && session.hw !== "none"
+          ? `${session.hw.toUpperCase()}${session.hw === "vaapi" ? (session.hwDecode ? " · GPU decode" : " · CPU decode") : ""}`
+          : "CPU (software)",
+    ]);
   }
   rows.push(["Playing", v && v.videoWidth ? `${v.videoWidth}×${v.videoHeight}` : "–"]);
   rows.push(["Buffered", `${ahead.toFixed(0)}s ahead`]);

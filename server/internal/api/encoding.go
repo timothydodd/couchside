@@ -28,6 +28,7 @@ func (s *Server) createHLS(w http.ResponseWriter, r *http.Request) {
 	}
 	var in struct {
 		Height       int  `json:"height"`
+		BitrateK     int  `json:"bitrateK"` // a quality preset's bitrate; 0 = the default for the height
 		CopyVideo    bool `json:"copyVideo"`
 		CopyAudio    bool `json:"copyAudio"`
 		AudioIndex   int  `json:"audioIndex"`
@@ -65,7 +66,7 @@ func (s *Server) createHLS(w http.ResponseWriter, r *http.Request) {
 	}
 	sess, err := s.tc.Create(r.Context(), transcode.Request{
 		FileID: id, Title: title, Path: f.Path, Duration: dur,
-		Height: in.Height, AllowCopyVideo: in.CopyVideo, AllowCopyAudio: in.CopyAudio,
+		Height: in.Height, BitrateK: in.BitrateK, AllowCopyVideo: in.CopyVideo, AllowCopyAudio: in.CopyAudio,
 		AudioIndex: max(0, in.AudioIndex), BurnSubtitle: burn,
 	})
 	if err != nil {
@@ -85,6 +86,7 @@ func (s *Server) createHLS(w http.ResponseWriter, r *http.Request) {
 		"copyAudio": sess.CopyAudio,
 		"hdr":       sess.HDR,
 		"hw":        sess.HW,
+		"hwDecode":  sess.HWDecode,
 		"audio":     sess.Audio,
 		"burnSub":   sess.BurnSub,
 		"bitrateK":  sess.BitrateK,

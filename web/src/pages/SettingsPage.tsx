@@ -60,8 +60,26 @@ export default function SettingsPage() {
                 </span>
               )}
             </dd>
+            {status?.transcode?.hwaccel === "vaapi" && (
+              <>
+                <dt className="text-content-muted">GPU decoding</dt>
+                <dd>
+                  {status.transcode.gpuDecode
+                    ? "Yes: decoding and scaling run on the GPU too"
+                    : "No: the CPU decodes and the GPU only encodes (check the server log for the vaapi decode test)"}
+                </dd>
+              </>
+            )}
             <dt className="text-content-muted">HDR tone mapping</dt>
-            <dd>{status?.transcode ? (status.transcode.tonemap ? "Available" : "Unavailable (HDR will look washed out)") : "–"}</dd>
+            <dd>
+              {status?.transcode
+                ? status.transcode.gpuTonemap
+                  ? "On the GPU"
+                  : status.transcode.tonemap
+                    ? "On the CPU"
+                    : "Unavailable (HDR will look washed out)"
+                : "–"}
+            </dd>
             <dt className="text-content-muted">Live streams</dt>
             <dd>{status?.transcode ? `${status.transcode.active} of ${status.transcode.maxSessions}` : "–"}</dd>
             <dt className="text-content-muted">Optimized copies</dt>

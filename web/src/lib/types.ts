@@ -202,6 +202,8 @@ export interface HlsSession {
   copyAudio: boolean;
   hdr: boolean;
   hw: string;
+  /** VAAPI: decoding and scaling on the GPU too, not just encoding. */
+  hwDecode?: boolean;
   audio: number;
   burnSub: number;
   bitrateK: number;
@@ -314,6 +316,8 @@ export interface Status {
     hwaccel: string;
     requested: string;
     tonemap: boolean;
+    gpuDecode?: boolean;
+    gpuTonemap?: boolean;
     maxSessions: number;
     active: number;
     encodeWorkers: number;
