@@ -12,6 +12,7 @@ import (
 
 const (
 	identifyTimeout = 8 * time.Second     // when a recording starts and nothing is stored yet
+	identifyRetry   = 10 * time.Minute    // after a failed lookup, record under the plain name until then
 	recheckUnknown  = 7 * 24 * time.Hour  // a series that couldn't be identified
 	recheckKnown    = 30 * 24 * time.Hour // a new same-titled series may have appeared
 )
@@ -38,6 +39,20 @@ func (s *Service) showYear(ctx context.Context, r db.Recording, lookup bool) int
 	if !lookup || s.cfg.Metadata.Empty() {
 		return 0
 	}
+	failKey := r.SeriesID
+	if failKey == "" {
+		failKey = "t:" + r.Title
+	}
+	s.mu.Lock()
+	failed, ok := s.lookupErr[failKey]
+	if ok && time.Since(failed) >= identifyRetry {
+		delete(s.lookupErr, failKey)
+		ok = false
+	}
+	s.mu.Unlock()
+	if ok {
+		return 0
+	}
 	h := metadata.EpisodeHint{Title: r.Title, EpisodeTitle: r.EpisodeTitle}
 	if m := reEpisode.FindStringSubmatch(r.EpisodeNum); m != nil {
 		h.Season, _ = strconv.Atoi(m[1])
@@ -52,6 +67,9 @@ func (s *Service) showYear(ctx context.Context, r db.Recording, lookup bool) int
 	if err != nil {
 		// Network or quota trouble: record under the plain name, ask again next time.
 		slog.Warn("dvr: couldn't identify series", "title", r.Title, "err", err)
+		s.mu.Lock()
+		s.lookupErr[failKey] = time.Now()
+		s.mu.Unlock()
 		return 0
 	}
 	imdb, year := "", 0

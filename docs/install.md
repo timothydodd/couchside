@@ -20,6 +20,9 @@ docker run -d --name couchside -p 8080:8080 \
   to record into a library folder, or want to delete files from the Manage view.
 - Add `-e COUCHSIDE_HDHOMERUN=<tuner IP>` for [Live TV](live-tv.md).
 - Add `-e TZ=America/New_York` (your zone) so guide times and recording names are local.
+- For TV apps to find the server on their own (LAN discovery), run it with
+  `--network host` instead of `-p`: SSDP's multicast doesn't reach a container
+  on Docker's bridge network. Otherwise type the address into the TV app.
 - For GPU transcoding, pass the GPU in (`--device /dev/dri`) and set
   `-e COUCHSIDE_HWACCEL=vaapi`. See [playback.md](playback.md#hardware).
 
@@ -57,6 +60,8 @@ helm install couchside deploy/helm/couchside -n media \
   database lives on its own PVC.
 - The Deployment uses `strategy: Recreate` because the database sits on a
   ReadWriteOnce volume. Don't scale it past one replica.
+- LAN discovery needs `discovery.hostNetwork=true` (multicast doesn't reach
+  the pod network); the pod then serves on the node's port 8080.
 - Optional keys come from Secrets: `tmdb.existingSecret` for your own TMDB key
   (release builds have one built in) and `omdb.existingSecret` for the OMDb
   fallback. See `deploy/helm/couchside/values.yaml` for everything else,

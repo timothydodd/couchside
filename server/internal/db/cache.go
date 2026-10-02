@@ -21,3 +21,13 @@ func (d *DB) CachePut(ctx context.Context, provider, key string, body []byte) er
 		ON CONFLICT (provider, key) DO UPDATE SET body = excluded.body, fetched_at = excluded.fetched_at`, provider, key, body)
 	return err
 }
+
+// PruneCache drops provider responses fetched before cutoff (unix seconds).
+// Nothing asks for one older than its provider's longest TTL.
+func (d *DB) PruneCache(ctx context.Context, cutoff int64) (int64, error) {
+	res, err := d.sql.ExecContext(ctx, `DELETE FROM provider_cache WHERE fetched_at < ?`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}

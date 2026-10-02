@@ -20,7 +20,9 @@ import (
 // Folders NAS boxes and download tools litter libraries with.
 var skipDirs = map[string]bool{"@eadir": true, "#recycle": true, "$recycle.bin": true, ".trash": true, "lost+found": true}
 
-var reSample = regexp.MustCompile(`(?i)(^|[^a-z])sample([^a-z]|$)`)
+// reSample is a sample clip's name: "sample", or a "-sample" style suffix.
+// A word inside a title ("S02E05 - Free Sample") isn't one.
+var reSample = regexp.MustCompile(`(?i)(^|[-._])sample$`)
 
 // rePartFile matches the pieces a DVR recording writes before joining them.
 var rePartFile = regexp.MustCompile(`\.(part\d+|joining)\.ts$`)
@@ -35,14 +37,23 @@ func (w *Worker) scan(ctx context.Context, libID int64) error {
 	}
 	// Every file visited gets last_seen = start; anything older is gone.
 	start := time.Now().Unix()
-	var added, changed, skipped int
+	var added, changed, skipped, videos int
+	// unreadable is the first path the walk couldn't read. Files under it
+	// weren't seen, so nothing may be pruned.
+	var unreadable string
+	missed := func(path string, err error) {
+		slog.Warn("scan: skipping unreadable path", "path", path, "err", err)
+		if unreadable == "" {
+			unreadable = path
+		}
+	}
 
 	walkErr := filepath.WalkDir(lib.Path, func(path string, d fs.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		if err != nil {
-			slog.Warn("scan: skipping unreadable path", "path", path, "err", err)
+			missed(path, err)
 			if d != nil && d.IsDir() {
 				return fs.SkipDir
 			}
@@ -53,8 +64,9 @@ func (w *Worker) scan(ctx context.Context, libID int64) error {
 			if path != lib.Path && (strings.HasPrefix(name, ".") || skipDirs[strings.ToLower(name)]) {
 				return fs.SkipDir
 			}
-			// Movie extras are indexed as extras of their movie; TV has no use for them.
-			if _, extras := parse.ExtrasDir(name); extras && lib.Kind == "tv" && path != lib.Path {
+			// Movie extras are indexed as extras of their movie; TV has no use for
+			// them. A show folder at the top ("Extras", "Shorts") is a show.
+			if _, extras := parse.ExtrasDir(name); extras && lib.Kind == "tv" && path != lib.Path && filepath.Dir(path) != lib.Path {
 				return fs.SkipDir
 			}
 			return nil
@@ -69,11 +81,15 @@ func (w *Worker) scan(ctx context.Context, libID int64) error {
 				return err
 			}
 		}
+		videos++
 		info, err := d.Info()
 		if err != nil {
+			missed(path, err)
 			return nil
 		}
-		if reSample.MatchString(name) && info.Size() < 300<<20 {
+		if isSample(path) && info.Size() < 300<<20 {
+			slog.Debug("scan: skipping a sample clip", "path", path)
+			skipped++
 			return nil
 		}
 		stamp, err := w.db.FileStamp(ctx, path)
@@ -104,12 +120,45 @@ func (w *Worker) scan(ctx context.Context, libID int64) error {
 		// Don't prune after a partial walk: missing files may just be unvisited.
 		return walkErr
 	}
+	if unreadable != "" {
+		slog.Warn("scan incomplete, nothing removed", "library", lib.Name, "unreadable", unreadable, "added", added, "changed", changed)
+		return fmt.Errorf("couldn't read %s, so nothing was removed", unreadable)
+	}
+	// An unmounted share is usually an empty folder. Someone who really
+	// emptied a library removes it in Libraries.
+	if videos == 0 && lib.FileCount > 0 {
+		slog.Warn("scan found no files, nothing removed", "library", lib.Name, "path", lib.Path)
+		return fmt.Errorf("library folder %s is empty; is the share mounted? Nothing was removed", lib.Path)
+	}
 	removed, err := w.db.PruneLibrary(ctx, lib.ID, start)
 	if err != nil {
 		return err
 	}
 	slog.Info("scan complete", "library", lib.Name, "added", added, "changed", changed, "removed", removed, "skipped", skipped)
 	return w.db.MarkLibraryScanned(ctx, lib.ID, time.Now().Unix())
+}
+
+func isSample(path string) bool {
+	return reSample.MatchString(strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))) ||
+		strings.EqualFold(filepath.Base(filepath.Dir(path)), "sample")
+}
+
+// videosIn lists the video files directly in a folder under the library, for
+// parse.MovieRoleIn. It's only asked about extras folders and part markers.
+func videosIn(lib db.Library) parse.Lister {
+	return func(dir string) []string {
+		entries, err := os.ReadDir(filepath.Join(lib.Path, dir))
+		if err != nil {
+			return nil
+		}
+		var out []string
+		for _, e := range entries {
+			if !e.IsDir() && parse.IsVideo(e.Name()) {
+				out = append(out, filepath.Join(dir, e.Name()))
+			}
+		}
+		return out
+	}
 }
 
 // parseChanged reports whether today's parser reads an unchanged file
@@ -121,7 +170,7 @@ func (w *Worker) parseChanged(lib db.Library, path string, st *db.FileStamp) boo
 		r, ok := parse.Episode(rel)
 		return ok && (r.Title != st.ParsedTitle || r.Year != st.ParsedYear || r.Season != st.Season || r.Episode != st.Episode)
 	}
-	r := parse.Movie(relPath(lib, path))
+	r := parse.MovieIn(relPath(lib, path), videosIn(lib))
 	return r.Title != st.ParsedTitle || r.Year != st.ParsedYear
 }
 
@@ -139,7 +188,7 @@ func (w *Worker) refreshRole(ctx context.Context, lib db.Library, path string, s
 	if lib.Kind == "tv" || st.RolePinned {
 		return nil
 	}
-	r := parse.MovieRole(relPath(lib, path), st.ParsedTitle)
+	r := parse.MovieRoleIn(relPath(lib, path), st.ParsedTitle, videosIn(lib))
 	if r.Kind == st.Role && r.Part == st.PartNo && r.Extra == st.ExtraTitle {
 		return nil
 	}
@@ -181,12 +230,12 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 		label = r.Title
 	} else {
 		rel := relPath(lib, path)
-		r := parse.Movie(rel)
+		r := parse.MovieIn(rel, videosIn(lib))
 		if itemID, created, err = w.db.EnsureItem(ctx, lib.ID, "movie", r.Title, r.Year); err != nil {
 			return false, err
 		}
 		label = r.Title
-		role = parse.MovieRole(rel, r.Title)
+		role = parse.MovieRoleIn(rel, r.Title, videosIn(lib))
 	}
 	f.MediaItemID = itemID
 

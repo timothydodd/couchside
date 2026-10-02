@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/timothydodd/couchside/internal/parse"
 	"github.com/timothydodd/couchside/internal/probe"
 )
 
@@ -34,22 +35,74 @@ type subtitleTrack struct {
 var sidecarExts = map[string]bool{".srt": true, ".vtt": true, ".ass": true, ".ssa": true}
 
 // sidecars finds subtitle files next to a video: "Movie.srt", "Movie.en.srt",
-// "Movie.en.forced.srt".
+// "Movie.en.forced.srt". A file that fits a longer video name in the same
+// folder is that video's: "Alien.Resurrection.srt" isn't Alien.mkv's.
 func sidecars(videoPath string) []string {
 	dir := filepath.Dir(videoPath)
-	stem := strings.TrimSuffix(filepath.Base(videoPath), filepath.Ext(videoPath))
+	stem := videoStem(videoPath)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
 	}
-	var out []string
+	var longer []string
 	for _, e := range entries {
-		n := e.Name()
-		if !e.IsDir() && sidecarExts[strings.ToLower(filepath.Ext(n))] && strings.HasPrefix(n, stem+".") {
-			out = append(out, filepath.Join(dir, n))
+		if n := e.Name(); !e.IsDir() && parse.IsVideo(n) {
+			if o := videoStem(n); len(o) > len(stem) && strings.HasPrefix(o, stem+".") {
+				longer = append(longer, o)
+			}
 		}
 	}
+	var out []string
+next:
+	for _, e := range entries {
+		n := e.Name()
+		if e.IsDir() || !sidecarExts[strings.ToLower(filepath.Ext(n))] {
+			continue
+		}
+		if _, ok := sidecarTags(stem, n); !ok {
+			continue
+		}
+		for _, o := range longer {
+			if strings.HasPrefix(n, o+".") {
+				continue next
+			}
+		}
+		out = append(out, filepath.Join(dir, n))
+	}
 	return out
+}
+
+func videoStem(path string) string {
+	return strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+}
+
+var (
+	reSubLang  = regexp.MustCompile(`^[a-z]{2,3}(-[a-z0-9]{2,4})?$`)
+	subFlagTag = map[string]bool{"forced": true, "sdh": true, "cc": true, "default": true, "hi": true}
+)
+
+// sidecarTags reads the tags between a video's stem and a subtitle file's
+// extension ("Movie.en.forced.srt" → [en forced]). ok is false unless the
+// name is the stem plus at most two tags, each a language code ("en", "eng",
+// "pt-BR") or one of forced, sdh, cc, default and hi.
+func sidecarTags(stem, name string) (tags []string, ok bool) {
+	if !strings.HasPrefix(name, stem+".") {
+		return nil, false
+	}
+	mid := strings.TrimSuffix(strings.TrimPrefix(name, stem), filepath.Ext(name))
+	if mid == "" {
+		return nil, true
+	}
+	tags = strings.Split(strings.TrimPrefix(mid, "."), ".")
+	if len(tags) > 2 {
+		return nil, false
+	}
+	for _, t := range tags {
+		if l := strings.ToLower(t); !subFlagTag[l] && !reSubLang.MatchString(l) {
+			return nil, false
+		}
+	}
+	return tags, true
 }
 
 func (s *Server) fileStreams(w http.ResponseWriter, r *http.Request) {
@@ -73,23 +126,22 @@ func (s *Server) fileStreams(w http.ResponseWriter, r *http.Request) {
 		subs = append(subs, subtitleTrack{Key: fmt.Sprintf("s%d", sub.Index), Language: sub.Language, Title: sub.Title,
 			Codec: sub.Codec, Text: sub.Text, Forced: sub.Forced, Default: sub.Default, Index: sub.Index})
 	}
-	stem := strings.TrimSuffix(filepath.Base(f.Path), filepath.Ext(f.Path))
+	stem := videoStem(f.Path)
 	for i, p := range sidecars(f.Path) {
-		// "Movie.en.forced.srt" → language "en", title "forced"
-		mid := strings.Split(strings.TrimSuffix(strings.TrimPrefix(filepath.Base(p), stem), filepath.Ext(p)), ".")
+		// "Movie.en.forced.srt" → language "en", forced
+		tags, _ := sidecarTags(stem, filepath.Base(p))
 		t := subtitleTrack{Key: fmt.Sprintf("x%d", i), Codec: strings.TrimPrefix(strings.ToLower(filepath.Ext(p)), "."),
 			Text: true, External: true, Index: -1}
-		for _, part := range mid {
-			switch l := strings.ToLower(part); {
-			case l == "":
-			case l == "forced":
+		for _, tag := range tags {
+			switch l := strings.ToLower(tag); l {
+			case "forced":
 				t.Forced = true
-			case l == "sdh" || l == "cc" || l == "hi":
-				t.Title = strings.ToUpper(part)
-			case t.Language == "" && len(l) <= 3:
-				t.Language = l
+			case "default":
+				t.Default = true
+			case "sdh", "cc", "hi":
+				t.Title = strings.ToUpper(l)
 			default:
-				t.Title = part
+				t.Language = l
 			}
 		}
 		subs = append(subs, t)

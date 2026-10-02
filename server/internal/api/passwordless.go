@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/timothydodd/couchside/internal/db"
@@ -81,7 +82,27 @@ func (s *Server) setPasswordless(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	if !in.Enabled {
+		if err := s.endPasswordlessSessions(ctx); err != nil {
+			writeErr(w, err)
+			return
+		}
+	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// endPasswordlessSessions signs out profiles without a password, which can't
+// sign in once passwordless sign-in is off.
+func (s *Server) endPasswordlessSessions(ctx context.Context) error {
+	n, err := s.db.DeleteSessionsWithoutPassword(ctx)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		slog.Info("passwordless sign-in is off: signed out profiles without a password", "sessions", n)
+	}
+	s.auth.sessions.forgetAll()
+	return nil
 }
 
 type pickInput struct {
@@ -118,6 +139,11 @@ func (s *Server) pick(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, forbidden("cross-site request refused"))
 		return
 	}
+	ip := clientIP(r)
+	if wait := s.auth.picks.Wait(ip); wait > 0 {
+		retryLater(w, wait)
+		return
+	}
 	p, err := s.db.Profile(ctx, in.ProfileID)
 	if errors.Is(err, db.ErrNotFound) {
 		writeErr(w, db.ErrNotFound)
@@ -134,6 +160,7 @@ func (s *Server) pick(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": p.Name + " has a password", "code": "password_required"})
 		return
 	}
+	s.auth.picks.Fail(ip) // every pick counts: each one makes a session
 	s.startSession(w, r, p, in.Client, in.Device)
 }
 

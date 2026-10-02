@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestUpdateLibraryKeepsFilesAndHistory(t *testing.T) {
@@ -57,4 +58,27 @@ func TestUpdateLibraryKeepsFilesAndHistory(t *testing.T) {
 		t.Fatalf("missing library err = %v", err)
 	}
 	_ = other
+}
+
+func TestPruneJobsAndCache(t *testing.T) {
+	d, err := Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ctx := context.Background()
+	_ = d.Enqueue(ctx, "scan", 1, "old")
+	_ = d.Enqueue(ctx, "scan", 2, "queued")
+	j, _ := d.ClaimJob(ctx, false)
+	_ = d.FinishJob(ctx, j.ID, nil)
+	if n, err := d.PruneJobs(ctx, time.Now().Add(time.Hour).Unix()); err != nil || n != 1 {
+		t.Fatalf("PruneJobs = %d, %v; want the finished job only", n, err)
+	}
+	_ = d.CachePut(ctx, "tmdb", "k", []byte("{}"))
+	if n, _ := d.PruneCache(ctx, time.Now().Add(-time.Hour).Unix()); n != 0 {
+		t.Fatal("a fresh cache row was pruned")
+	}
+	if n, _ := d.PruneCache(ctx, time.Now().Add(time.Hour).Unix()); n != 1 {
+		t.Fatal("an old cache row was kept")
+	}
 }

@@ -27,8 +27,9 @@ updates:
       actions:
         patterns: ["*"]
 
-  # Base images in the Dockerfile (node, golang, alpine). CI doesn't build the
-  # image, so check a bump with a Docker build before releasing.
+  # Base images in the Dockerfile (node, golang, alpine), pinned by digest;
+  # Dependabot moves tag and digest together. docker.yml builds the image for
+  # each bump.
   - package-ecosystem: docker
     directory: /
     schedule:

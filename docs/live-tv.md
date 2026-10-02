@@ -30,7 +30,7 @@ Broadcast TV needs an [HDHomeRun](https://www.silicondust.com) tuner: set
 - **Timeline.** The seek bar spans the program you're watching in clock time
   (9:00–10:00 at 9:30 sits in the middle), or the half-hour slot when the
   guide has nothing. Time before you tuned in and not yet aired is hatched.
-  Pause and rewind within the session; **GO LIVE** jumps back.
+  Pause and rewind within the session (up to 3 hours); **GO LIVE** jumps back.
 - **Smooth playback.** The player stays about 8 seconds behind live and waits
   for a few seconds of video before starting or after a stall, so a hiccup
   means one short pause instead of constant stutter. Playback info shows the

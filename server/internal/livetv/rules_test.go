@@ -263,7 +263,7 @@ func TestRecordingPathSkipsOneInProgress(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := d.MarkRecording(ctx, id, first); err != nil {
+	if _, err := d.MarkRecording(ctx, id, first); err != nil {
 		t.Fatal(err)
 	}
 	if got := s.pathInDir(dir, name); got == first {

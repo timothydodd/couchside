@@ -12,6 +12,8 @@ services:
     container_name: couchside
     ports:
       - "8080:8080"
+    # For TV apps to find the server on the LAN (SSDP), replace "ports" with:
+    # network_mode: host
     environment:
       # Metadata: release images have a built-in TMDB key. Set TMDB_API_KEY to
       # use your own ("off" disables TMDB); OMDB_API_KEY adds a fallback.

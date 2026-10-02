@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 
@@ -37,6 +38,7 @@ const (
 	webIdle = 365 * 24 * time.Hour
 	tvIdle  = 365 * 24 * time.Hour
 
+	maxSessions    = 50               // per profile; signing in again drops the least recently used
 	sessionRecheck = 30 * time.Second // how stale the cached session/role check may be
 )
 
@@ -52,6 +54,7 @@ type authState struct {
 	signer   *auth.Signer
 	byIP     *auth.Limiter
 	byName   *auth.Limiter
+	picks    *auth.Limiter // passwordless picks per address
 	sessions sessionCache
 
 	mu        sync.Mutex
@@ -64,7 +67,9 @@ func newAuthState(key []byte) *authState {
 		// Five free tries per address, then 2s doubling to 15 minutes.
 		byIP: auth.NewLimiter(5, 2*time.Second, 15*time.Minute, 15*time.Minute),
 		// Per account, wherever the guesses come from: 30s doubling to 15 minutes.
-		byName:   auth.NewLimiter(5, 30*time.Second, 15*time.Minute, 15*time.Minute),
+		byName: auth.NewLimiter(5, 30*time.Second, 15*time.Minute, 15*time.Minute),
+		// Each pick makes a year-long session: 20 per address per 10 minutes, then waits.
+		picks:    auth.NewLimiter(20, 5*time.Second, 5*time.Minute, 10*time.Minute),
 		sessions: sessionCache{m: map[string]cachedSession{}},
 	}
 }
@@ -199,18 +204,26 @@ func safeMethod(m string) bool {
 	return m == http.MethodGet || m == http.MethodHead || m == http.MethodOptions
 }
 
-// sameOrigin trusts the browser's Origin header (sent with every non-GET
-// fetch), falling back to Sec-Fetch-Site.
+// sameOrigin reports whether a request comes from Couchside's own pages.
+// Browsers send Sec-Fetch-Site on every request and pages can't set it, so
+// it decides when present. That also holds behind a reverse proxy that
+// rewrites Host (nginx's default proxy_pass does), where Origin and Host
+// never match and every refresh was refused, signing the web app out once
+// its access token ran out. Origin against Host is the fallback for clients
+// that don't send it.
 func sameOrigin(r *http.Request) bool {
+	switch r.Header.Get("Sec-Fetch-Site") {
+	case "same-origin", "none":
+		return true
+	case "":
+	default: // same-site, cross-site
+		return false
+	}
 	if o := r.Header.Get("Origin"); o != "" {
 		u, err := url.Parse(o)
 		return err == nil && strings.EqualFold(u.Host, r.Host)
 	}
-	switch r.Header.Get("Sec-Fetch-Site") {
-	case "", "same-origin", "none":
-		return true
-	}
-	return false
+	return true
 }
 
 // passwordCurrent holds back everything but the account routes until a
@@ -279,9 +292,9 @@ type authInfo struct {
 	PasswordlessLocked bool          `json:"passwordlessLocked"` // COUCHSIDE_AUTH=true requires passwords
 	Profiles           []profileStub `json:"profiles"`           // passwordless: every profile to pick from
 	SetupRequired      bool          `json:"setupRequired"`
-	User            *db.Profile   `json:"user"`
-	AccessExpiresAt int64         `json:"accessExpiresAt,omitempty"`
-	SignedIn        []profileStub `json:"signedIn"` // web: profiles this browser holds a session for
+	User               *db.Profile   `json:"user"`
+	AccessExpiresAt    int64         `json:"accessExpiresAt,omitempty"`
+	SignedIn           []profileStub `json:"signedIn"` // web: profiles this browser holds a session for
 }
 
 type profileStub struct {
@@ -367,7 +380,21 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	// proxies is part of S4.
 	ip := clientIP(r)
 	nameKey := strings.ToLower(strings.Join(strings.Fields(in.Name), " "))
+	if utf8.RuneCountInString(nameKey) > maxProfileName {
+		// No account has a name this long. Refuse it before it becomes a
+		// limiter key or a log line.
+		slog.Warn("sign-in failed", "ip", ip, "name", clip(nameKey, 64)+"…", "ua", clip(r.UserAgent(), 200))
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "wrong name or password", "code": "bad_credentials"})
+		return
+	}
 	if s.throttled(w, ip, nameKey) {
+		return
+	}
+	// Too long to be anyone's password. Refused here, before the lookup, so a
+	// known name and an unknown one answer the same way in the same time
+	// (VerifyPassword returns at once for these; DummyVerify doesn't).
+	if len(in.Password) > auth.MaxPassword {
+		s.loginFailed(w, r, ip, nameKey)
 		return
 	}
 	p, hash, err := s.db.ProfileForLogin(ctx, in.Name)
@@ -405,17 +432,21 @@ func (s *Server) throttled(w http.ResponseWriter, ip, nameKey string) bool {
 	if wait == 0 {
 		return false
 	}
+	retryLater(w, wait)
+	return true
+}
+
+func retryLater(w http.ResponseWriter, wait time.Duration) {
 	secs := int(wait.Round(time.Second) / time.Second)
 	w.Header().Set("Retry-After", strconv.Itoa(max(1, secs)))
 	writeJSON(w, http.StatusTooManyRequests, map[string]any{
 		"error": "too many attempts; try again in " + wait.Round(time.Second).String(), "retryAfter": max(1, secs)})
-	return true
 }
 
 func (s *Server) loginFailed(w http.ResponseWriter, r *http.Request, ip, nameKey string) {
 	s.auth.byIP.Fail(ip)
 	s.auth.byName.Fail(nameKey)
-	slog.Warn("sign-in failed", "ip", ip, "name", nameKey, "ua", r.UserAgent())
+	slog.Warn("sign-in failed", "ip", ip, "name", nameKey, "ua", clip(r.UserAgent(), 200))
 	writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "wrong name or password", "code": "bad_credentials"})
 }
 
@@ -427,6 +458,9 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, p db.Profi
 	if err := s.db.CreateSession(r.Context(), sess, auth.HashToken(refresh)); err != nil {
 		writeErr(w, err)
 		return
+	}
+	if err := s.db.TrimSessions(r.Context(), p.ID, maxSessions); err != nil {
+		slog.Warn("trim sessions", "err", err)
 	}
 	slog.Info("signed in", "profile", p.Name, "client", client, "ip", sess.IP)
 	s.issue(w, r, p, sess, refresh)

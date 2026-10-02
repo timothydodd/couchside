@@ -43,6 +43,7 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
     let cancelled = false;
     let hls: HlsType | null = null;
     let sid: string | null = null;
+    setError(null);
     setStarting(true);
     const leave = () => {
       if (sid) void fetch(`/api/live/${sid}`, { method: "DELETE", keepalive: true });

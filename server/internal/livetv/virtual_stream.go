@@ -17,6 +17,7 @@ import (
 
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/transcode"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 // A virtual channel's stream plays its schedule one piece at a time: one
@@ -39,17 +40,22 @@ type playoutSource func(ctx context.Context, ms int64) ([]db.PlayoutPiece, error
 // startVirtual starts (or joins) a virtual channel's stream.
 func (m *liveManager) startVirtual(ctx context.Context, channel, name string, spec Spec, src playoutSource) (*LiveSession, error) {
 	spec.CopyVideo, spec.CopyAudio = false, false
+	spec.Height = snapHeight(spec.Height)
 	key := "vc:" + channel
+	k := fmt.Sprintf("%s|%d", key, spec.Height)
 	m.mu.Lock()
-	for _, s := range m.sessions {
-		if s.key == key && s.Height == spec.Height && s.running() {
-			m.mu.Unlock()
-			s.touch()
-			return s, nil
-		}
-	}
+	joined, f, err := m.claimLocked(ctx, k, func(s *LiveSession) bool { return s.key == key && s.Height == spec.Height }, true)
 	m.mu.Unlock()
+	if err != nil || joined != nil {
+		return joined, err
+	}
+	s, err := m.launchVirtual(ctx, key, channel, name, spec, src)
+	m.finish(k, f, s, err)
+	return s, err
+}
 
+// launchVirtual starts a virtual channel's stream and waits for its first playlist.
+func (m *liveManager) launchVirtual(ctx context.Context, key, channel, name string, spec Spec, src playoutSource) (*LiveSession, error) {
 	id := randomID()
 	dir := filepath.Join(m.root, id)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -82,7 +88,7 @@ func (m *liveManager) startVirtual(ctx context.Context, channel, name string, sp
 			cancel()
 			<-s.exited
 			_ = os.RemoveAll(dir)
-			return nil, errors.New("the channel didn't start in time: " + lastLine(s.stderr.String()))
+			return nil, usererr.New("the channel didn't start in time: " + lastLine(s.stderr.String()))
 		case <-ctx.Done():
 			cancel()
 			<-s.exited
@@ -91,9 +97,6 @@ func (m *liveManager) startVirtual(ctx context.Context, channel, name string, sp
 		case <-time.After(150 * time.Millisecond):
 		}
 	}
-	m.mu.Lock()
-	m.sessions[s.ID] = s
-	m.mu.Unlock()
 	slog.Info("virtual channel playing", "channel", channel, "name", name, "height", spec.Height, "hw", s.HW, "session", s.ID)
 	return s, nil
 }
@@ -110,7 +113,7 @@ func (m *liveManager) playVirtual(ctx context.Context, s *LiveSession, pl *merge
 		}
 		pieces, err := src(ctx, pos)
 		if err == nil && len(pieces) == 0 {
-			err = errors.New("nothing is scheduled on this channel; check that its filters match something in your library")
+			err = usererr.New("nothing is scheduled on this channel; check that its filters match something in your library")
 		}
 		if err != nil {
 			if pl.count() == 0 {

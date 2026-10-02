@@ -522,6 +522,14 @@ video::cue {
   .badge {
     @apply inline-flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-semibold;
   }
+  /* Messages over the page (lib/notices.ts), above the bottom tabs on phones. */
+  .notice-stack {
+    @apply pointer-events-none fixed inset-x-4 bottom-20 z-[60] flex flex-col items-center gap-2 md:inset-x-auto md:bottom-6 md:right-6 md:items-end;
+  }
+  .notice {
+    @apply pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-lg border border-critical/40 bg-raised px-4 py-3 text-sm text-content;
+    box-shadow: var(--shadow-md);
+  }
   /* Drawer that slides over the right edge of the page. */
   .side-panel {
     @apply fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col border-l border-border bg-surface shadow-[var(--shadow-md)];
