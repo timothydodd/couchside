@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/timothydodd/couchside/internal/db"
+	"github.com/timothydodd/couchside/internal/metadata"
 	"github.com/timothydodd/couchside/internal/worker"
 )
 
@@ -38,6 +39,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		"livetv":    tv,
 		"version":   s.version,
 		"providers": s.providers.Names(),
+		"tmdbKey":   s.cfg.TMDBKeySource(),
 		"mediaRoot": s.cfg.MediaRoot,
 		"counts":    counts,
 		"jobs":      jobs,
@@ -377,8 +379,12 @@ func (s *Server) rematch(w http.ResponseWriter, r *http.Request) {
 	}
 	imdb := ""
 	if strings.TrimSpace(in.ImdbID) != "" {
+		// An IMDb id or URL, or a TMDB reference or URL for titles IMDb doesn't have.
 		if imdb = reImdb.FindString(in.ImdbID); imdb == "" {
-			writeErr(w, badRequest("that doesn't look like an IMDb id (tt1234567) or IMDb URL"))
+			imdb = metadata.TMDBID(in.ImdbID)
+		}
+		if imdb == "" {
+			writeErr(w, badRequest("that doesn't look like an IMDb id (tt1234567), an IMDb URL or a TMDB URL"))
 			return
 		}
 	}

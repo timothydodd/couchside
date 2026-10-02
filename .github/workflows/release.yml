@@ -66,9 +66,12 @@ jobs:
           CGO_ENABLED: "0"
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          # Couchside's own TMDB key (repo secret), built in so metadata works with no setup.
+          TMDB_KEY: ${{ secrets.TMDB_API_KEY }}
         run: |
           ext=""; [ "$GOOS" = windows ] && ext=".exe"
-          go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "../dist/couchside${ext}" ./cmd/couchside
+          go build -trimpath -ldflags "-s -w -X main.version=${VERSION} -X github.com/timothydodd/couchside/internal/config.builtinTMDBKey=${TMDB_KEY}" \
+            -o "../dist/couchside${ext}" ./cmd/couchside
       - name: package
         run: |
           name="couchside-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}"
@@ -120,6 +123,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name == 'push' }}
           build-args: VERSION=${{ env.VERSION }}
+          secrets: |
+            tmdb_key=${{ secrets.TMDB_API_KEY }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

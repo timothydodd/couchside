@@ -5,7 +5,17 @@ image:
 
 imagePullSecrets: []
 
-# OMDb API key (free at https://www.omdbapi.com/apikey.aspx).
+# TMDB (The Movie Database) is the main metadata source: titles, plots,
+# posters, backdrops and episode names. Release images carry Couchside's own
+# key, so it works with nothing set. To use your own key instead, put it in a
+# Secret and name it here; enabled: false turns TMDB off.
+tmdb:
+  enabled: true
+  existingSecret: ""
+  existingSecretKey: tmdb-api-key
+
+# OMDb API key (free at https://www.omdbapi.com/apikey.aspx): an optional
+# second source for titles TMDB can't place.
 # Prefer existingSecret so the key never lands in a values file.
 omdb:
   apiKey: ""

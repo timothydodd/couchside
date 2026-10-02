@@ -81,3 +81,13 @@ export function relPath(path: string, root: string): string {
   const r = root.replace(/\/+$/, "") + "/";
   return path.startsWith(r) ? path.slice(r.length) : path;
 }
+
+/**
+ * Where a title id points: an IMDb id ("tt0133093") to IMDb, a TMDB reference
+ * ("tmdb:tv:1399", for titles IMDb doesn't have) to TMDB.
+ */
+export function titleLink(id: string): string | null {
+  if (/^tt\d+$/.test(id)) return `https://www.imdb.com/title/${id}/`;
+  const m = id.match(/^tmdb:(movie|tv):(\d+)$/);
+  return m ? `https://www.themoviedb.org/${m[1]}/${m[2]}` : null;
+}

@@ -28,6 +28,8 @@ export interface Item extends ItemSummary {
   rated: string;
   imdbId: string;
   totalSeasons: number | null;
+  /** Where the details came from: tmdb, omdb, or "" when unmatched. */
+  matchProvider: string;
 }
 
 /** What a movie file is to its movie: another copy, one part of a split movie, or an extra. */
@@ -279,6 +281,8 @@ export interface Status {
   livetv: { configured: boolean; recording?: number; liveSessions?: number; online?: boolean };
   version: string;
   providers: string[];
+  /** Where the TMDB key comes from: this build's own, TMDB_API_KEY, or none. */
+  tmdbKey: "builtin" | "custom" | "";
   mediaRoot: string;
   counts: { movies: number; series: number; episodes: number; unmatched: number; libraries: number };
   jobs: JobCounts;

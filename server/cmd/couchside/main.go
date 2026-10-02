@@ -59,11 +59,16 @@ func run() error {
 	}
 	defer database.Close()
 
+	// TMDB first (backdrops, no sign-up), OMDb as a fallback when configured.
 	providers := &metadata.Chain{}
+	if cfg.TMDBKey != "" {
+		providers.Providers = append(providers.Providers, metadata.NewTMDB(cfg.TMDBKey, database))
+	}
 	if cfg.OMDbKey != "" {
 		providers.Providers = append(providers.Providers, metadata.NewOMDb(cfg.OMDbKey, database))
-	} else {
-		slog.Warn("OMDB_API_KEY not set: items will show with filename titles and no posters")
+	}
+	if providers.Empty() {
+		slog.Warn("no metadata provider: set TMDB_API_KEY (or OMDB_API_KEY); items will show with filename titles and no posters")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -9,7 +9,7 @@ import (
 
 // Details is a provider's answer for one movie or series.
 type Details struct {
-	ID           string // provider id; for OMDb this is the IMDb id
+	ID           string // provider id; for OMDb this is the IMDb id, for TMDB "tmdb:movie:<n>"
 	Title        string
 	Year         int
 	Plot         string
@@ -17,9 +17,10 @@ type Details struct {
 	Rated        string
 	Rating       *float64
 	RuntimeMin   *int
-	ImdbID       string
+	ImdbID       string // the IMDb id, or the provider's id when it knows none ("tmdb:tv:<n>")
 	TotalSeasons *int
 	PosterURL    string
+	BackdropURL  string // empty when the provider has none (OMDb never does)
 }
 
 type Episode struct {
@@ -105,5 +106,5 @@ func (c *Chain) SearchTitles(ctx context.Context, kind Kind, query string, year 
 			}
 		}
 	}
-	return nil, errors.New("no metadata provider can search; set OMDB_API_KEY")
+	return nil, errors.New("no metadata provider can search; set TMDB_API_KEY or OMDB_API_KEY")
 }

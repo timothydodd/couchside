@@ -38,6 +38,8 @@ type Item struct {
 	ImdbPinned   bool   `json:"imdbPinned"` // set by "Fix match"; automatic re-matches keep it
 	TotalSeasons *int   `json:"totalSeasons"`
 	PosterURL    string `json:"-"`
+	BackdropURL  string `json:"-"`
+	Provider     string `json:"matchProvider"` // tmdb | omdb | "" (where the rating and details came from)
 }
 
 // summaryCols counts watched files for the profile in ctx.
@@ -112,9 +114,10 @@ func (d *DB) querySummaries(ctx context.Context, q string, args ...any) ([]ItemS
 func (d *DB) Item(ctx context.Context, id int64) (Item, error) {
 	var it Item
 	err := d.sql.QueryRowContext(ctx, `SELECT `+summaryCols(ctx)+`, m.library_id, m.parsed_title, m.parsed_year,
-		m.plot, m.rated, m.imdb_id, m.imdb_pinned, m.total_seasons, m.poster_url FROM media_items m WHERE m.id = ?`, id).
+		m.plot, m.rated, m.imdb_id, m.imdb_pinned, m.total_seasons, m.poster_url, m.backdrop_url, m.match_provider
+		FROM media_items m WHERE m.id = ?`, id).
 		Scan(scanSummary(&it.ItemSummary, &it.LibraryID, &it.ParsedTitle, &it.ParsedYear, &it.Plot, &it.Rated,
-			&it.ImdbID, &it.ImdbPinned, &it.TotalSeasons, &it.PosterURL)...)
+			&it.ImdbID, &it.ImdbPinned, &it.TotalSeasons, &it.PosterURL, &it.BackdropURL, &it.Provider)...)
 	return it, notFound(err)
 }
 
@@ -148,15 +151,16 @@ type Metadata struct {
 	ImdbID       string
 	TotalSeasons *int
 	PosterURL    string
+	BackdropURL  string
 	Provider     string
 }
 
 func (d *DB) ApplyMetadata(ctx context.Context, id int64, m Metadata) error {
 	_, err := d.sql.ExecContext(ctx, `UPDATE media_items SET title = ?, sort_title = ?, year = NULLIF(?, 0), plot = ?,
 		genres = ?, rated = ?, rating = ?, runtime_min = ?, imdb_id = ?, total_seasons = ?, poster_url = ?,
-		match_status = 'matched', match_provider = ?, updated_at = unixepoch() WHERE id = ?`,
+		backdrop_url = ?, match_status = 'matched', match_provider = ?, updated_at = unixepoch() WHERE id = ?`,
 		m.Title, SortTitle(m.Title), m.Year, m.Plot, strings.Join(m.Genres, ", "), m.Rated, m.Rating, m.RuntimeMin,
-		m.ImdbID, m.TotalSeasons, m.PosterURL, m.Provider, id)
+		m.ImdbID, m.TotalSeasons, m.PosterURL, m.BackdropURL, m.Provider, id)
 	return err
 }
 
@@ -169,7 +173,7 @@ func (d *DB) ClearMatch(ctx context.Context, id int64) error {
 	}
 	_, err := d.sql.ExecContext(ctx, `UPDATE media_items SET match_status = 'unmatched', title = parsed_title,
 		sort_title = ?, year = NULLIF(parsed_year, 0), plot = '', genres = '', rated = '', rating = NULL,
-		runtime_min = NULL, total_seasons = NULL, poster_url = '', has_poster = custom_poster, match_provider = '',
+		runtime_min = NULL, total_seasons = NULL, poster_url = '', backdrop_url = '', has_poster = custom_poster, match_provider = '',
 		imdb_id = CASE WHEN imdb_pinned = 1 THEN imdb_id ELSE '' END, updated_at = unixepoch()
 		WHERE id = ?`, SortTitle(parsed), id)
 	return err

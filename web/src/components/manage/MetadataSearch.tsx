@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { Check, Search } from "lucide-react";
 import { ErrorNote, Spinner } from "../ui";
 import { api } from "../../lib/api";
+import { titleLink } from "../../lib/format";
 import type { ManageRow, SearchResult } from "../../lib/types";
 import { useStatus } from "../../stores/status";
 
 /**
- * Fix a match by searching OMDb under any name (or pasting an IMDb id/URL)
- * and picking the right result. The pick is pinned, so rescans keep it.
+ * Fix a match by searching TMDB (or OMDb) under any name, or pasting an IMDb
+ * or TMDB id or link, and picking the right result. The pick is pinned, so
+ * rescans keep it.
  */
 export default function MetadataSearch({ row, onMatched }: { row: ManageRow; onMatched: () => void }) {
   const hasProvider = !!useStatus((s) => s.status?.providers.length);
@@ -57,14 +59,14 @@ export default function MetadataSearch({ row, onMatched }: { row: ManageRow; onM
       <p className="mb-3 text-xs text-content-muted">
         {row.matchStatus === "unmatched" ? "Not matched to anything yet." : row.matchStatus === "pending" ? "Looking it up…" : "Matched to "}
         {row.imdbId && row.matchStatus !== "unmatched" && (
-          <a href={`https://www.imdb.com/title/${row.imdbId}/`} target="_blank" rel="noreferrer" className="text-content-secondary hover:text-accent">
+          <a href={titleLink(row.imdbId) ?? undefined} target="_blank" rel="noreferrer" className="text-content-secondary hover:text-accent">
             {row.imdbId}
           </a>
         )}
         {row.matchStatus === "matched" && ". Wrong? Search under another name and pick the right one."}
       </p>
       {!hasProvider ? (
-        <p className="text-xs text-warning">Searching needs an OMDb key: set OMDB_API_KEY on the server.</p>
+        <p className="text-xs text-warning">Searching needs a metadata provider: set TMDB_API_KEY (or OMDB_API_KEY) on the server.</p>
       ) : (
         <form
           className="flex gap-2"
@@ -73,7 +75,7 @@ export default function MetadataSearch({ row, onMatched }: { row: ManageRow; onM
             void search();
           }}
         >
-          <input className="field min-w-0 flex-1" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Title, or an IMDb id/URL" aria-label="Title to search" />
+          <input className="field min-w-0 flex-1" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Title, or an IMDb or TMDB id/link" aria-label="Title to search" />
           <input className="field w-20" value={year} onChange={(e) => setYear(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="Year" aria-label="Year" />
           <button className="btn-primary" disabled={!q.trim() || busy !== null}>
             {busy === "search" ? <Spinner size={14} /> : <Search size={14} />}
@@ -97,7 +99,7 @@ export default function MetadataSearch({ row, onMatched }: { row: ManageRow; onM
                 <div className="truncate text-sm text-content">{r.title}</div>
                 <div className="text-xs text-content-muted">
                   {r.year} ·{" "}
-                  <a href={`https://www.imdb.com/title/${r.imdbId}/`} target="_blank" rel="noreferrer" className="hover:text-accent">
+                  <a href={titleLink(r.imdbId) ?? undefined} target="_blank" rel="noreferrer" className="hover:text-accent">
                     {r.imdbId}
                   </a>
                 </div>

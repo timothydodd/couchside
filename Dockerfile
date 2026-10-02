@@ -18,8 +18,13 @@ COPY server/go.mod server/go.sum ./
 RUN go mod download
 COPY server/ ./
 COPY --from=web /web/dist ./internal/webui/dist
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/couchside ./cmd/couchside
+# Couchside's TMDB key comes in as a build secret (never a build arg, which
+# would show in the image history); without it TMDB needs TMDB_API_KEY at runtime.
+RUN --mount=type=secret,id=tmdb_key \
+    TMDB_KEY="$(cat /run/secrets/tmdb_key 2>/dev/null || true)"; \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -trimpath -ldflags "-s -w -X main.version=${VERSION} -X github.com/timothydodd/couchside/internal/config.builtinTMDBKey=${TMDB_KEY}" \
+      -o /out/couchside ./cmd/couchside
 
 # --- comskip: commercial detection for DVR recordings --------------------------
 # Not packaged for Alpine, so it's built from source against Alpine's ffmpeg.

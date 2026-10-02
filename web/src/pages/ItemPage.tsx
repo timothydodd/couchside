@@ -4,7 +4,7 @@ import Link from "../components/Link";
 import { PosterArt } from "../components/PosterCard";
 import { EmptyState, ErrorNote, Meter, Spinner } from "../components/ui";
 import { api, backdropUrl, posterUrl, stillUrl, useApi } from "../lib/api";
-import { fmtAirDate, fmtBytes, fmtClock, fmtResolution, fmtRuntime } from "../lib/format";
+import { fmtAirDate, fmtBytes, fmtClock, fmtResolution, fmtRuntime, titleLink } from "../lib/format";
 import { canDirectPlay } from "../lib/playback";
 import { PROBLEM_TEXT, type EpisodeRow, type ItemDetail, type MediaFile } from "../lib/types";
 import { useIsAdmin } from "../stores/auth";
@@ -82,7 +82,7 @@ export default function ItemPage({ id }: { id: number }) {
               <span className="inline-flex items-center gap-1">
                 <Star size={14} className="fill-warning text-warning" />
                 <span className="font-semibold text-content">{item.rating.toFixed(1)}</span>
-                <span className="text-content-muted">IMDb</span>
+                <span className="text-content-muted">{item.matchProvider === "tmdb" ? "TMDB" : "IMDb"}</span>
               </span>
             )}
           </div>
@@ -197,7 +197,7 @@ function MatchPanel({ id, status, imdbId, parsed, onDone }: { id: number; status
             {imdbId && (
               <>
                 {" · "}
-                <a href={`https://www.imdb.com/title/${imdbId}/`} target="_blank" rel="noreferrer" className="hover:text-accent">
+                <a href={titleLink(imdbId) ?? undefined} target="_blank" rel="noreferrer" className="hover:text-accent">
                   {imdbId}
                 </a>
               </>
@@ -210,13 +210,13 @@ function MatchPanel({ id, status, imdbId, parsed, onDone }: { id: number; status
       ) : (
         <div className="card max-w-xl p-3">
           <label className="field-label" htmlFor="imdb">
-            IMDb id or URL
+            IMDb or TMDB id or URL
           </label>
           <div className="flex gap-2">
             <input
               id="imdb"
               className="field flex-1"
-              placeholder="tt0133093 or https://www.imdb.com/title/tt0133093/"
+              placeholder="tt0133093, or an imdb.com or themoviedb.org link"
               value={value}
               onChange={(e) => setValue(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && value.trim() && void submit(value)}

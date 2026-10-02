@@ -75,7 +75,8 @@ func (w *Worker) match(ctx context.Context, itemID int64) error {
 	}
 	if err := w.db.ApplyMetadata(ctx, itemID, db.Metadata{
 		Title: d.Title, Year: d.Year, Plot: d.Plot, Genres: d.Genres, Rated: d.Rated, Rating: d.Rating,
-		RuntimeMin: d.RuntimeMin, ImdbID: d.ImdbID, TotalSeasons: d.TotalSeasons, PosterURL: d.PosterURL, Provider: p.Name(),
+		RuntimeMin: d.RuntimeMin, ImdbID: d.ImdbID, TotalSeasons: d.TotalSeasons, PosterURL: d.PosterURL, BackdropURL: d.BackdropURL,
+		Provider: p.Name(),
 	}); err != nil {
 		return err
 	}
@@ -111,8 +112,9 @@ func FileStillPath(cacheDir string, fileID int64) string {
 	return filepath.Join(cacheDir, "files", fmt.Sprint(fileID), "still.webp")
 }
 
-// artwork downloads and resizes the poster, and grabs a backdrop frame from
-// the video itself (OMDb has no backdrops; TMDB will replace this later).
+// artwork downloads and resizes the poster and the provider's backdrop. With
+// no backdrop (OMDb has none, and not every TMDB title does) it grabs a frame
+// from the video itself.
 func (w *Worker) artwork(ctx context.Context, itemID int64) error {
 	item, err := w.db.Item(ctx, itemID)
 	if err != nil {
@@ -142,7 +144,17 @@ func (w *Worker) artwork(ctx context.Context, itemID int64) error {
 			hasPoster = true
 		}
 	}
-	if src, err := w.db.BackdropSource(ctx, itemID); err == nil && src != nil && !customBackdrop {
+	if item.BackdropURL != "" && !customBackdrop {
+		switch err := w.backdrop(ctx, item.BackdropURL, dir); {
+		case errors.Is(err, errGone):
+			slog.Info("backdrop link is dead, grabbing a frame instead", "title", item.Title)
+		case err != nil:
+			errs = append(errs, "backdrop: "+err.Error())
+		default:
+			hasBackdrop = true
+		}
+	}
+	if src, err := w.db.BackdropSource(ctx, itemID); err == nil && src != nil && !customBackdrop && !hasBackdrop {
 		at := imaging.GrabOffset(src.DurationSec, 0.2)
 		if err := w.ff.FrameGrab(ctx, src.Path, filepath.Join(dir, "backdrop.webp"), at, 1280); err != nil {
 			errs = append(errs, "backdrop: "+err.Error())
@@ -174,6 +186,15 @@ func (w *Worker) poster(ctx context.Context, url, dir string) error {
 		return err
 	}
 	return w.ff.Resize(ctx, orig, filepath.Join(dir, "poster-thumb.webp"), 360)
+}
+
+func (w *Worker) backdrop(ctx context.Context, url, dir string) error {
+	orig := filepath.Join(dir, "backdrop.orig")
+	if err := download(ctx, url, orig); err != nil {
+		return err
+	}
+	defer os.Remove(orig)
+	return w.ff.Resize(ctx, orig, filepath.Join(dir, "backdrop.webp"), 1280)
 }
 
 func (w *Worker) still(ctx context.Context, fileID int64) error {

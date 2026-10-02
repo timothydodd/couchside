@@ -13,6 +13,9 @@ services:
     ports:
       - "8080:8080"
     environment:
+      # Metadata: release images have a built-in TMDB key. Set TMDB_API_KEY to
+      # use your own ("off" disables TMDB); OMDB_API_KEY adds a fallback.
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
       OMDB_API_KEY: ${OMDB_API_KEY:-}
       # Docker Desktop on Windows can't reach the GPU, so this stays software
       # locally. On a Linux host with an Intel iGPU use vaapi and uncomment devices.

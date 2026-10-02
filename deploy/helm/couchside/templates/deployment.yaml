@@ -58,6 +58,16 @@ spec:
             - name: COUCHSIDE_DEBUG
               value: "1"
             {{- end }}
+            {{- if not .Values.tmdb.enabled }}
+            - name: TMDB_API_KEY
+              value: "off"
+            {{- else if .Values.tmdb.existingSecret }}
+            - name: TMDB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.tmdb.existingSecret }}
+                  key: {{ .Values.tmdb.existingSecretKey }}
+            {{- end }}
             {{- if or .Values.omdb.apiKey .Values.omdb.existingSecret }}
             - name: OMDB_API_KEY
               valueFrom:

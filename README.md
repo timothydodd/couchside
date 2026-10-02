@@ -4,7 +4,7 @@
 
 [couchside.app](https://couchside.app)
 
-A lightweight self-hosted media server for a home k3s cluster. It scans your movie and TV folders, matches them against the Open Movie Database (OMDb), and shows them in a poster-wall UI styled like Portside Lite.
+A lightweight self-hosted media server for a home k3s cluster. It scans your movie and TV folders, matches them against The Movie Database (TMDB), and shows them in a poster-wall UI styled like Portside Lite.
 
 - **Backend:** one static Go binary with pure-Go SQLite (no CGO) and ffmpeg for thumbnails.
 - **Frontend:** React 19, Vite, and Tailwind v4, with the same design tokens as Portside Lite.
@@ -14,13 +14,13 @@ A lightweight self-hosted media server for a home k3s cluster. It scans your mov
 
 - Library scanning with filename parsing, for example `The.Matrix.1999.1080p.mkv` or `Show/Season 1/Show S01E02.mkv`. Unchanged files are skipped and deleted files are pruned.
 - ffprobe stream info: duration, codecs, resolution, and track counts.
-- OMDb matching: title, year, plot, genres, IMDb rating, posters, and per-season episode titles. Responses are cached for 30 days, and "Fix match" pins an IMDb id.
+- Metadata from [TMDB](https://www.themoviedb.org) with no setup (release builds carry Couchside's own key): title, year, plot, genres, rating, posters, backdrops and per-season episode titles. OMDb is an optional fallback (`OMDB_API_KEY`). Responses are cached (30 days, 3 for TV, which gains episodes), and "Fix match" pins an IMDb id, or a TMDB id for titles IMDb doesn't have.
 - Artwork: posters resized to WebP, backdrops grabbed from the video itself, and episode stills.
 - Profiles: each person gets their own watch progress, Continue Watching, favourite channels and settings (theme, autoplay of the next episode, preferred subtitle language, commercial skipping, live TV quality). With more than one profile, each browser asks "Who's watching?" once and remembers the answer; switch from the sidebar. With [accounts](#accounts) on, profiles sign in with passwords.
 - Browsing: Home with a hero and rows, virtualised Movies and TV grids with search, genre, watched filters and sort, plus detail pages with seasons.
 - Direct play with byte-range streaming, resume position, watched state, continue-watching, and next-episode autoplay.
 - An Activity page for background jobs, with retry.
-- Library management: rename a library or move it to another folder (watch history follows), and a **Manage** view per library. Sort by quality, size or date added; filter to duplicates, unmatched or SD titles; fix a match by searching OMDb under any name; upload your own poster or backdrop; delete extra copies or whole movies and series from disk.
+- Library management: rename a library or move it to another folder (watch history follows), and a **Manage** view per library. Sort by quality, size or date added; filter to duplicates, unmatched or SD titles; fix a match by searching TMDB under any name; upload your own poster or backdrop; delete extra copies or whole movies and series from disk.
 
 ## Encoding
 
@@ -53,7 +53,7 @@ A lightweight self-hosted media server for a home k3s cluster. It scans your mov
   - The star on a channel pins it to the top, and **Favorites** shows only pinned channels. Pins are stored on the server; filter choices are remembered per browser.
 - **Live TV.** The tuner stream is deinterlaced and transcoded to HLS at 1080p, 720p or 480p. Viewers of the same channel share one tuner, and the tuner is released about 20 seconds after the last viewer leaves. Pause and rewind work within the session. Page Up and Page Down change channel.
 - **Recording.** Record any program from the guide, the channel list or the live player. Recordings copy the tuner stream with no transcoding, padded by 1 minute before and 2 minutes after. They're named Plex-style (`Show/Season 3/Show - S03E15 - Title.ts`, or by air date) and land in an automatic "DVR Recordings" library.
-- **Same-titled shows.** The guide doesn't say which *MacGyver* is airing (1985 or 2016). When a recording is scheduled, the episode's original air date, season and episode are checked against OMDb, and a show whose title is shared gets the year in its folder (`MacGyver (2016)/Season 2/…`), so it's matched to the right series and kept apart from the other. This needs `OMDB_API_KEY`. Shows with a unique title keep plain folder names.
+- **Same-titled shows.** The guide doesn't say which *MacGyver* is airing (1985 or 2016). When a recording is scheduled, the episode's original air date, season and episode are checked against TMDB (or OMDb), and a show whose title is shared gets the year in its folder (`MacGyver (2016)/Season 2/…`), so it's matched to the right series and kept apart from the other. Shows with a unique title keep plain folder names.
 - **Where recordings go.** Choose in Settings under Live TV & DVR. The options are Couchside's own storage, any TV library folder such as TV Shows, or another folder under the media root. Recordings reuse an existing matching show and season folder (`The Simpsons (1989)/Season 07`), so they join that show instead of duplicating it. Existing recordings can be moved along. Recording into a library folder needs the media share mounted writable, which the compose file does.
 - **Watching a recording in progress.** Use **From start** on the Recordings tab, or **Watch from start** in a program's details, to play a recording that's still in progress from its beginning, with a jump to the live broadcast.
 - **Robustness.** A dropped signal or busy tuner is retried and the parts are joined. A server restart mid-recording resumes into the same file. Overlapping recordings beyond the tuner count are flagged as a conflict.
@@ -96,7 +96,6 @@ Every release on the [Releases page](../../releases) has zips for Linux, macOS a
 docker run -d --name couchside -p 8080:8080 \
   -v couchside-data:/data -v couchside-cache:/cache \
   -v /path/to/media:/media \
-  -e OMDB_API_KEY=xxxx \
   ghcr.io/timothydodd/couchside:latest
 ```
 
@@ -157,7 +156,8 @@ git tag v0.2.0 && git push origin v0.2.0
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `OMDB_API_KEY` | none | Enables metadata matching. Free keys at omdbapi.com |
+| `TMDB_API_KEY` | built in | Your own TMDB key (v3 key or v4 read token) instead of Couchside's; `off` disables TMDB |
+| `OMDB_API_KEY` | none | Optional fallback metadata source. Free keys at omdbapi.com |
 | `COUCHSIDE_ADDR` | `:8080` | Listen address |
 | `COUCHSIDE_DATA_DIR` | `./data` | SQLite database |
 | `COUCHSIDE_CACHE_DIR` | `$DATA_DIR/cache` | Artwork and stills |

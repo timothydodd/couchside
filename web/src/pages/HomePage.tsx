@@ -57,7 +57,7 @@ export default function HomePage() {
           <StatTile
             label="Unmatched"
             value={counts.unmatched.toLocaleString()}
-            sub={!admin ? undefined : status?.providers.length ? "Fix from the title's page" : "Set OMDB_API_KEY to match"}
+            sub={!admin ? undefined : status?.providers.length ? "Fix from the title's page" : "Set TMDB_API_KEY to match"}
             tone={counts.unmatched ? "warning" : undefined}
           />
         </div>

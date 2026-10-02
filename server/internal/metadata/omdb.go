@@ -168,6 +168,9 @@ func (o *OMDb) Lookup(ctx context.Context, kind Kind, title string, year int) (*
 }
 
 func (o *OMDb) ByImdbID(ctx context.Context, kind Kind, imdbID string) (*Details, error) {
+	if !reImdbID.MatchString(imdbID) {
+		return nil, nil // another provider's id ("tmdb:tv:1399")
+	}
 	d, err := o.title(ctx, url.Values{"i": {imdbID}, "plot": {"full"}})
 	if errors.Is(err, errNotFound) {
 		return nil, nil
@@ -176,6 +179,9 @@ func (o *OMDb) ByImdbID(ctx context.Context, kind Kind, imdbID string) (*Details
 }
 
 func (o *OMDb) Season(ctx context.Context, seriesID string, season int) ([]Episode, error) {
+	if !reImdbID.MatchString(seriesID) {
+		return nil, nil
+	}
 	var s omdbSeason
 	if err := o.get(ctx, url.Values{"i": {seriesID}, "Season": {strconv.Itoa(season)}}, &s); err != nil {
 		if errors.Is(err, errNotFound) {

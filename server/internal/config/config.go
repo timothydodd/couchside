@@ -15,7 +15,8 @@ type Config struct {
 	CacheDir     string        // COUCHSIDE_CACHE_DIR: artwork, stills (and later HLS segments)
 	WebDir       string        // COUCHSIDE_WEB_DIR: built frontend to serve; empty = API only
 	MediaRoot    string        // COUCHSIDE_MEDIA_ROOT: libraries must live under it; enables folder browsing
-	OMDbKey      string        // OMDB_API_KEY: empty disables metadata matching
+	OMDbKey      string        // OMDB_API_KEY: optional second metadata source
+	TMDBKey      string        // TMDB_API_KEY: overrides the built-in key; "off" disables TMDB
 	Workers      int           // COUCHSIDE_WORKERS: concurrent background jobs
 	ScanInterval time.Duration // COUCHSIDE_SCAN_INTERVAL: periodic rescan, 0 disables
 	FFmpeg       string        // COUCHSIDE_FFMPEG
@@ -49,6 +50,7 @@ func Load() Config {
 		WebDir:       os.Getenv("COUCHSIDE_WEB_DIR"),
 		MediaRoot:    os.Getenv("COUCHSIDE_MEDIA_ROOT"),
 		OMDbKey:      os.Getenv("OMDB_API_KEY"),
+		TMDBKey:      tmdbKey(),
 		Workers:      2,
 		ScanInterval: 6 * time.Hour,
 		FFmpeg:       env("COUCHSIDE_FFMPEG", "ffmpeg"),
@@ -103,6 +105,36 @@ func env(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// builtinTMDBKey is Couchside's own TMDB key, stamped into release builds
+// (-ldflags "-X .../config.builtinTMDBKey=...") from a CI secret so it isn't
+// in the repo. TMDB lets apps ship their key; each server's requests count
+// against its own address. Empty in dev builds.
+var builtinTMDBKey string
+
+// TMDBKeySource says where the TMDB key in use comes from: "builtin" (this
+// build's own), "custom" (TMDB_API_KEY) or "" (none: TMDB is off).
+func (c Config) TMDBKeySource() string {
+	switch {
+	case c.TMDBKey == "":
+		return ""
+	case c.TMDBKey == builtinTMDBKey:
+		return "builtin"
+	default:
+		return "custom"
+	}
+}
+
+func tmdbKey() string {
+	switch v := strings.TrimSpace(os.Getenv("TMDB_API_KEY")); strings.ToLower(v) {
+	case "":
+		return builtinTMDBKey
+	case "off", "none", "false", "0":
+		return ""
+	default:
+		return v
+	}
 }
 
 func envBool(key string) bool {

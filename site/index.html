@@ -66,6 +66,8 @@
   footer { border-top: 1px solid var(--border-light); padding: 24px 0 40px; color: var(--text-muted); font-size: 0.9rem; }
   footer .wrap { display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between; }
   footer a { color: var(--text-muted); }
+  footer .credits { max-width: 34rem; }
+  footer img { vertical-align: middle; }
 </style>
 </head>
 <body>
@@ -86,7 +88,7 @@
     <div class="card"><h2>Live TV and DVR</h2><p>Watch and record from an HDHomeRun tuner, with a guide, series recordings and automatic commercial skipping.</p></div>
     <div class="card"><h2>Everyone gets their own</h2><p>Profiles keep progress, favourites and settings apart. Turn on accounts for passwords, roles and signed-in device control.</p></div>
     <div class="card"><h2>Search</h2><p>Find any movie, show, episode, channel or programme in a few letters, forgiving of spelling and punctuation.</p></div>
-    <div class="card"><h2>Yours, not ours</h2><p>One binary or container on your own hardware. No account with us and no tracking: it only talks to the services you set up, like OMDb for metadata and the HDHomeRun guide.</p></div>
+    <div class="card"><h2>Yours, not ours</h2><p>One binary or container on your own hardware. No account with us and no tracking: it only talks to the services you set up, like TMDB for metadata and the HDHomeRun guide.</p></div>
   </section>
 
   <section class="install">
@@ -101,7 +103,7 @@
 
 <footer>
   <div class="wrap">
-    <span>Couchside is free, open-source software.</span>
+    <span class="credits">Couchside is free, open-source software. Metadata from <a href="https://www.themoviedb.org"><img src="/brand/tmdb.svg" alt="TMDB" height="10"></a>; this product uses the TMDB API but is not endorsed or certified by TMDB.</span>
     <span><a href="https://github.com/timothydodd/couchside">GitHub</a> · <a href="https://github.com/timothydodd/couchside/issues">Issues</a></span>
   </div>
 </footer>
