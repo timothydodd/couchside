@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode, type Ref } from "react";
 import { Loader2, Search } from "lucide-react";
+import Link from "./Link";
 
 // Shared primitives, ported from Portside Lite's components/ui.tsx so both
 // apps look and behave the same.
@@ -233,5 +234,25 @@ export function MenuButton({
         </div>
       )}
     </div>
+  );
+}
+
+/** A job-queued message; the word "Activity" in it links to the Activity page. */
+export function JobNote({ msg, className = "text-xs text-content-muted" }: { msg: string; className?: string }) {
+  const [before, after] = msg.split("Activity");
+  return (
+    <span className={className}>
+      {after === undefined ? (
+        msg
+      ) : (
+        <>
+          {before}
+          <Link to="/activity" className="text-accent hover:underline">
+            Activity
+          </Link>
+          {after}
+        </>
+      )}
+    </span>
   );
 }

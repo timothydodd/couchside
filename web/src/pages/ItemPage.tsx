@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, Eye, EyeOff, MoreHorizontal, Play, RotateCcw, Star, Trash2, Wand2 } from "lucide-react";
+import { ArrowLeft, Check, Eye, EyeOff, Play, RotateCcw, Star, Trash2, Wand2 } from "lucide-react";
 import { CastRow, CrewLine } from "../components/Credits";
 import Link from "../components/Link";
 import { PosterArt } from "../components/PosterCard";
-import { EmptyState, ErrorNote, MenuButton, Meter, Spinner } from "../components/ui";
+import { EmptyState, ErrorNote, Meter, Spinner } from "../components/ui";
 import { api, backdropUrl, posterUrl, stillUrl, useApi } from "../lib/api";
 import { fmtAirDate, fmtBytes, fmtClock, fmtResolution, fmtRuntime, titleLink } from "../lib/format";
 import { canDirectPlay } from "../lib/playback";
@@ -115,7 +115,6 @@ export default function ItemPage({ id }: { id: number }) {
               {allWatched ? <EyeOff size={15} /> : <Eye size={15} />}
               {allWatched ? "Mark unwatched" : "Mark watched"}
             </button>
-            {admin && <MoreActions itemId={item.id} isSeries={isSeries} />}
           </div>
 
           {item.plot ? (
@@ -358,75 +357,6 @@ function StillRow({
         )}
       </Link>
     </li>
-  );
-}
-
-/**
- * Less-used actions behind a "⋯" button: for now, commercial detection for a
- * whole series (or a movie), when comskip is installed.
- */
-function MoreActions({ itemId, isSeries }: { itemId: number; isSeries: boolean }) {
-  const comskip = useStatus((s) => s.status?.comskip);
-  const [msg, setMsg] = useState<string | null>(null);
-  if (!comskip) return null;
-  const what = isSeries ? "episode" : "file";
-  const find = async (redo: boolean) => {
-    setMsg(null);
-    try {
-      const r = await api<{ queued: number }>(`/api/items/${itemId}/commercials`, { method: "POST", json: { redo } });
-      setMsg(
-        r.queued
-          ? `Looking for commercials in ${r.queued} ${what}${r.queued === 1 ? "" : "s"}; progress is on the Activity page.`
-          : isSeries
-            ? "Every episode has already been checked for commercials."
-            : "This has already been checked for commercials.",
-      );
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
-    }
-  };
-  return (
-    <>
-      <MenuButton
-        label="More actions"
-        icon={<MoreHorizontal size={16} />}
-        items={[
-          {
-            id: "commercials",
-            label: isSeries ? "Find commercials in every episode" : "Find commercials",
-            detail: isSeries ? "Checks episodes that haven't been checked yet, in the background." : "Runs in the background if it hasn't been checked yet.",
-            onSelect: () => void find(false),
-          },
-          {
-            id: "commercials-redo",
-            label: isSeries ? "Check every episode again" : "Check for commercials again",
-            detail: isSeries ? "Also re-checks episodes already done." : "Replaces the breaks found before.",
-            onSelect: () => void find(true),
-          },
-        ]}
-      />
-      {msg && <JobNote msg={msg} />}
-    </>
-  );
-}
-
-/** A one-line result note; "Activity" becomes a link to the Activity page. */
-function JobNote({ msg }: { msg: string }) {
-  const [before, after] = msg.split("Activity");
-  return (
-    <span className="text-xs text-content-muted">
-      {after === undefined ? (
-        msg
-      ) : (
-        <>
-          {before}
-          <Link to="/activity" className="text-accent hover:underline">
-            Activity
-          </Link>
-          {after}
-        </>
-      )}
-    </span>
   );
 }
 
