@@ -121,16 +121,17 @@ type FileStamp struct {
 	PartNo      int
 	ExtraTitle  string
 	RolePinned  bool
+	Problem     string // unreadable | no-video | ""
 }
 
 func (d *DB) FileStamp(ctx context.Context, path string) (*FileStamp, error) {
 	var s FileStamp
 	err := d.sql.QueryRowContext(ctx, `SELECT f.id, f.size, f.mtime, m.parsed_title, m.parsed_year,
 		COALESCE(e.season, 0), COALESCE(e.episode, 0),
-		f.role, f.part_no, f.extra_title, f.role_pinned
+		f.role, f.part_no, f.extra_title, f.role_pinned, f.problem
 		FROM files f JOIN media_items m ON m.id = f.media_item_id LEFT JOIN episodes e ON e.id = f.episode_id
 		WHERE f.path = ?`, path).Scan(&s.ID, &s.Size, &s.Mtime, &s.ParsedTitle, &s.ParsedYear, &s.Season, &s.Episode,
-		&s.Role, &s.PartNo, &s.ExtraTitle, &s.RolePinned)
+		&s.Role, &s.PartNo, &s.ExtraTitle, &s.RolePinned, &s.Problem)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}

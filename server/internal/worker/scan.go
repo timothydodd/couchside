@@ -20,6 +20,10 @@ import (
 // Folders NAS boxes and download tools litter libraries with.
 var skipDirs = map[string]bool{"@eadir": true, "#recycle": true, "$recycle.bin": true, ".trash": true, "lost+found": true}
 
+// errProbeTimeout means ffprobe ran out of time on a file, which says more
+// about the share than the file.
+var errProbeTimeout = errors.New("ffprobe timed out")
+
 // reSample is a sample clip's name: "sample", or a "-sample" style suffix.
 // A word inside a title ("S02E05 - Free Sample") isn't one.
 var reSample = regexp.MustCompile(`(?i)(^|[-._])sample$`)
@@ -96,13 +100,25 @@ func (w *Worker) scan(ctx context.Context, libID int64) error {
 		if err != nil {
 			return err
 		}
-		if stamp != nil && stamp.Size == info.Size() && stamp.Mtime == info.ModTime().Unix() && !w.parseChanged(lib, path, stamp) {
+		// A file once unreadable is probed again: the failure may have been the share, not the file.
+		if stamp != nil && stamp.Size == info.Size() && stamp.Mtime == info.ModTime().Unix() && stamp.Problem != "unreadable" &&
+			!w.parseChanged(lib, path, stamp) {
 			if err := w.refreshRole(ctx, lib, path, stamp); err != nil {
 				return err
 			}
 			return w.db.TouchFile(ctx, stamp.ID, start)
 		}
 		ok, err := w.indexFile(ctx, lib, path, info, start)
+		if errors.Is(err, errProbeTimeout) {
+			// Slow, not broken: leave it for the next scan. A file already
+			// indexed keeps its row (and isn't pruned) until then.
+			slog.Warn("scan: ffprobe timed out; will try again next scan", "path", path)
+			skipped++
+			if stamp != nil {
+				return w.db.TouchFile(ctx, stamp.ID, start)
+			}
+			return nil
+		}
 		if err != nil {
 			return err
 		}
@@ -135,7 +151,32 @@ func (w *Worker) scan(ctx context.Context, libID int64) error {
 		return err
 	}
 	slog.Info("scan complete", "library", lib.Name, "added", added, "changed", changed, "removed", removed, "skipped", skipped)
+	if err := w.retryMatches(ctx, lib); err != nil {
+		return err
+	}
 	return w.db.MarkLibraryScanned(ctx, lib.ID, time.Now().Unix())
+}
+
+// retryMatches queues a match for items whose last one failed on the way to
+// the provider (network, rate limit, server error), so a TMDB outage during
+// the first scan doesn't leave them unmatched for good.
+func (w *Worker) retryMatches(ctx context.Context, lib db.Library) error {
+	if w.providers == nil || w.providers.Empty() {
+		return nil
+	}
+	items, err := w.db.PendingMatches(ctx, lib.ID)
+	if err != nil {
+		return err
+	}
+	for _, it := range items {
+		if err := w.Enqueue(ctx, KindMatch, it.ID, "Match "+it.Title); err != nil {
+			return err
+		}
+	}
+	if len(items) > 0 {
+		slog.Info("retrying matches that didn't finish", "library", lib.Name, "items", len(items))
+	}
+	return nil
 }
 
 func isSample(path string) bool {
@@ -242,6 +283,9 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 	if p, err := probe.Probe(ctx, w.cfg.FFprobe, path); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return false, err
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return false, errProbeTimeout
 		}
 		slog.Warn("scan: file is unreadable (corrupt or incomplete)", "path", path, "err", err)
 		f.Container = strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), ".")
