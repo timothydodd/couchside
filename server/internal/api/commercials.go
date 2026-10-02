@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/timothydodd/couchside/internal/worker"
 )
@@ -46,6 +47,10 @@ func (s *Server) commercials(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// broadcastContainers are the files the player offers detection for
+// (BROADCAST in web PlayerPage).
+var broadcastContainers = map[string]bool{"ts": true, "mpg": true, "mpeg": true, "wtv": true}
+
 // findCommercials queues commercial detection for a file (again).
 func (s *Server) findCommercials(w http.ResponseWriter, r *http.Request) {
 	id, err := idParam(r)
@@ -65,6 +70,21 @@ func (s *Server) findCommercials(w http.ResponseWriter, r *http.Request) {
 	if f.Problem != "" {
 		writeErr(w, badRequest("this file can't be read"))
 		return
+	}
+	if !currentUser(r.Context()).Admin {
+		// What the player offers: a first look at a broadcast recording.
+		// Running comskip again, or on anything else, is an admin's call.
+		if !broadcastContainers[strings.ToLower(f.Container)] {
+			writeErr(w, forbidden("commercial detection is for TV recordings"))
+			return
+		}
+		if _, done, err := s.db.Commercials(r.Context(), f.ID); err != nil {
+			writeErr(w, err)
+			return
+		} else if done {
+			writeErr(w, forbidden("only an admin can run detection again"))
+			return
+		}
 	}
 	if err := s.worker.EnqueueCommercials(r.Context(), f.ID, f.Path); err != nil {
 		writeErr(w, err)

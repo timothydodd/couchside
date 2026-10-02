@@ -67,6 +67,7 @@ func (s *Server) Run(ctx context.Context) {
 		defer t.Stop()
 		for {
 			s.pruneRemote()
+			s.pruneSubs()
 			select {
 			case <-ctx.Done():
 				return

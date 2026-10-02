@@ -2,7 +2,10 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -104,7 +107,12 @@ var (
 	// "s2.vtt" = whole embedded track, "s2.c5.vtt" = chunk 5 of it, "x0.vtt" = sidecar file
 	reSubKey = regexp.MustCompile(`^([sx])(\d+)(?:\.c(\d+))?\.vtt$`)
 	subLocks sync.Map // cache path → *sync.Mutex, so one conversion runs per track
+	// subSlots caps conversions running at once; others wait while their
+	// request lasts.
+	subSlots = make(chan struct{}, 3)
 )
+
+const subsKeep = 30 * 24 * time.Hour // converted subtitles unused this long are pruned
 
 // subtitleVTT converts a text subtitle track (embedded or sidecar) to WebVTT,
 // cached. Timestamps are file time, which is also the player's timeline for
@@ -137,6 +145,10 @@ func (s *Server) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 		// The end is an absolute output time (-to): with -copyts, an input -t
 		// is ignored and ffmpeg would read to the end of the file.
 		k, _ := strconv.Atoi(m[3])
+		if f.DurationSec != nil && float64(k*SubtitleChunk) >= *f.DurationSec {
+			http.NotFound(w, r) // past the end: no chunk, and no cache file
+			return
+		}
 		from := max(0, k*SubtitleChunk-10)
 		input = []string{"-ss", strconv.Itoa(from), "-copyts", "-start_at_zero",
 			"-i", f.Path, "-map", fmt.Sprintf("0:s:%d", n), "-to", strconv.Itoa((k + 1) * SubtitleChunk)}
@@ -150,15 +162,38 @@ func (s *Server) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		input = []string{"-i", sc[n]}
+		// Keyed by the sidecar itself, so an edited, added or removed one
+		// never serves another's cues.
+		st, err := os.Stat(sc[n])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		sum := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%d", filepath.Base(sc[n]), st.Size(), st.ModTime().UnixNano())))
+		chunkTag = "-" + hex.EncodeToString(sum[:6])
 	}
 	cache := filepath.Join(s.cfg.CacheDir, "subs", fmt.Sprintf("%d-%s%d-%d%s.vtt", id, m[1], n, f.Mtime, chunkTag))
 	lk, _ := subLocks.LoadOrStore(cache, &sync.Mutex{})
 	mu := lk.(*sync.Mutex)
 	mu.Lock()
-	defer mu.Unlock()
-	if _, err := os.Stat(cache); err != nil {
+	defer func() {
+		mu.Unlock()
+		subLocks.Delete(cache)
+	}()
+	if info, err := os.Stat(cache); err == nil {
+		if time.Since(info.ModTime()) > 24*time.Hour {
+			now := time.Now()
+			_ = os.Chtimes(cache, now, now) // still in use: keep it past the prune
+		}
+	} else {
 		if err := os.MkdirAll(filepath.Dir(cache), 0o755); err != nil {
 			writeErr(w, err)
+			return
+		}
+		select {
+		case subSlots <- struct{}{}:
+			defer func() { <-subSlots }()
+		case <-r.Context().Done():
 			return
 		}
 		// Embedded tracks mean reading through the whole file; give it time.
@@ -169,13 +204,12 @@ func (s *Server) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 		args = append(args, "-c:s", "webvtt", "-f", "webvtt", tmp)
 		if out, err := exec.CommandContext(ctx, s.cfg.FFmpeg, args...).CombinedOutput(); err != nil {
 			os.Remove(tmp)
-			msg := strings.TrimSpace(string(out))
+			slog.Warn("subtitle conversion failed", "file", id, "track", chunk(m), "err", err, "ffmpeg", tail(string(out), 400))
+			msg := "couldn't convert subtitles; see the server log"
 			if ctx.Err() != nil {
-				msg = "timed out reading the file"
-			} else if msg == "" {
-				msg = err.Error()
+				msg = "couldn't convert subtitles: timed out reading the file"
 			}
-			writeErr(w, httpError{http.StatusUnprocessableEntity, "couldn't convert subtitles: " + msg})
+			writeErr(w, httpError{http.StatusUnprocessableEntity, msg})
 			return
 		}
 		if err := os.Rename(tmp, cache); err != nil {
@@ -186,4 +220,31 @@ func (s *Server) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	http.ServeFile(w, r, cache)
+}
+
+func chunk(m []string) string { return m[1] + m[2] + m[3] }
+
+func tail(s string, n int) string {
+	s = strings.TrimSpace(s)
+	if len(s) > n {
+		return s[len(s)-n:]
+	}
+	return s
+}
+
+// pruneSubs deletes converted subtitles nobody has loaded in subsKeep.
+func (s *Server) pruneSubs() {
+	cutoff := time.Now().Add(-subsKeep)
+	removed := 0
+	entries, _ := os.ReadDir(filepath.Join(s.cfg.CacheDir, "subs"))
+	for _, e := range entries {
+		if info, err := e.Info(); err == nil && !e.IsDir() && info.ModTime().Before(cutoff) {
+			if os.Remove(filepath.Join(s.cfg.CacheDir, "subs", e.Name())) == nil {
+				removed++
+			}
+		}
+	}
+	if removed > 0 {
+		slog.Info("pruned converted subtitles", "count", removed)
+	}
 }

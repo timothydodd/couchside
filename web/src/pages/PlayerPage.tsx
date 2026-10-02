@@ -9,6 +9,7 @@ import { audioLabel, subtitleDetail, subtitleLabel, type AudioTrack, type Subtit
 import { parseVtt } from "../lib/vtt";
 import { PROBLEM_TEXT, type BreakMode, type Commercials, type HlsSession, type PlayInfo } from "../lib/types";
 import { BREAK_MODES, sameLanguage } from "../lib/prefs";
+import { useIsAdmin } from "../stores/auth";
 import { usePrefs, useProfile } from "../stores/profile";
 import { useRouter } from "../stores/router";
 
@@ -42,6 +43,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   const [breakPoll, setBreakPoll] = useState(false);
   const { data: comm, reload: reloadComm } = useApi<Commercials>(`/api/files/${fileId}/commercials`, { pollMs: breakPoll ? 5000 : undefined });
   const prefs = usePrefs();
+  const isAdmin = useIsAdmin();
   const breakMode = prefs.commercials ?? "auto";
   const { go, back } = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -485,7 +487,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
         switchTo(() => setSub({ kind: "burn", track: t }));
       },
     },
-    commercialsSection(comm, breakMode, !!info && BROADCAST.has(info.container), chooseBreakMode, findCommercials),
+    commercialsSection(comm, breakMode, !!info && BROADCAST.has(info.container), chooseBreakMode, findCommercials, isAdmin),
     {
       id: "speed",
       label: "Playback speed",
@@ -537,6 +539,7 @@ function commercialsSection(
   broadcast: boolean,
   onMode: (m: BreakMode) => void,
   onFind: () => void,
+  canRedo: boolean, // running detection again is for admins
 ): SettingSection {
   const hidden = !comm || (comm.status === "none" && !(broadcast && comm.available));
   if (comm?.status === "done") {
@@ -548,7 +551,7 @@ function commercialsSection(
       value: n === 0 ? "None found" : `${n} break${n === 1 ? "" : "s"} · ${BREAK_MODES.find((m) => m.id === mode)!.short}`,
       options: [
         ...BREAK_MODES.map((m) => ({ id: m.id, label: m.label, detail: m.detail, active: m.id === mode })),
-        ...(comm.available ? [{ id: "again", label: "Look again", detail: "Re-run detection on this file" }] : []),
+        ...(comm.available && canRedo ? [{ id: "again", label: "Look again", detail: "Re-run detection on this file" }] : []),
       ],
       onSelect: (id) => (id === "again" ? onFind() : onMode(id as BreakMode)),
     };
