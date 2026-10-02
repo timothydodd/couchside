@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { MobileTabBar, MobileTopBar } from "./components/MobileNav";
 import Sidebar from "./components/Sidebar";
 import StatusBar from "./components/StatusBar";
 import { EmptyState } from "./components/ui";
@@ -63,6 +64,7 @@ function Signed() {
 
   return (
     <div className="flex h-full flex-col">
+      <MobileTopBar />
       <div className="flex min-h-0 flex-1">
         <Sidebar />
         {/* Grid pages manage their own scroll (virtualised); the rest scroll here. */}
@@ -86,6 +88,7 @@ function Signed() {
         </main>
       </div>
       <StatusBar />
+      <MobileTabBar />
     </div>
   );
 }

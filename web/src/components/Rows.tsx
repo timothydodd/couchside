@@ -8,13 +8,13 @@ import type { ItemSummary, PlayInfo } from "../lib/types";
 
 export function Row({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <section className="px-6 py-3">
+    <section className="gutter py-3">
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="row-title">{title}</h2>
         {action}
       </div>
       {/* Inset to the page margin; the 4px of padding keeps hover shadows from being cut off. */}
-      <div className="row-scroll -mx-1 flex gap-5 overflow-x-auto px-1 pb-2 pt-1">{children}</div>
+      <div className="row-scroll -mx-1 flex gap-3 overflow-x-auto px-1 pb-2 pt-1 sm:gap-5">{children}</div>
     </section>
   );
 }
@@ -24,7 +24,7 @@ export function PosterRow({ title, items, action }: { title: string; items: Item
   return (
     <Row title={title} action={action}>
       {items.map((it) => (
-        <div key={it.id} className="w-40 shrink-0">
+        <div key={it.id} className="w-28 shrink-0 sm:w-40">
           <PosterCard item={it} />
         </div>
       ))}
@@ -40,7 +40,7 @@ export function ContinueCard({ p }: { p: PlayInfo }) {
   const img = p.hasStill ? stillUrl(p.fileId) : p.hasBackdrop ? backdropUrl({ id: p.itemId, updatedAt: p.updatedAt }) : null;
   const left = p.durationSec && p.positionSec > 0 ? Math.max(0, p.durationSec - p.positionSec) : 0;
   return (
-    <div className="w-72 shrink-0">
+    <div className="w-64 shrink-0 sm:w-72">
       <Link to={`/play/${p.fileId}`} className="still-link group block" aria-label={`${p.positionSec > 0 ? "Resume" : "Play"} ${p.title}`}>
         <div className="still">
           {img ? (

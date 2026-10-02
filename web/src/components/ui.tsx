@@ -72,19 +72,19 @@ export function StatTile({
 
 export function PageHeader({ title, subtitle, children }: { title: string; subtitle?: ReactNode; children?: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border-light px-6 pb-3 pt-5">
+    <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border-light gutter pb-3 pt-5">
       <div>
         <h1 className="text-lg font-semibold text-content">{title}</h1>
         {subtitle && <p className="mt-0.5 text-xs text-content-muted">{subtitle}</p>}
       </div>
-      {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
+      {children && <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{children}</div>}
     </div>
   );
 }
 
 export function EmptyState({ icon, title, children }: { icon?: ReactNode; title: string; children?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center">
+    <div className="flex flex-col items-center justify-center gap-2 gutter py-16 text-center">
       {icon && <div className="text-content-muted">{icon}</div>}
       <div className="text-sm font-medium text-content">{title}</div>
       {children && <div className="max-w-md text-xs text-content-muted">{children}</div>}
@@ -135,19 +135,31 @@ export function SearchInput({
   onChange,
   placeholder = "Filter…",
   className = "",
+  large = false,
   ...input
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   className?: string;
+  /** The page's main search: taller, bigger text. */
+  large?: boolean;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "placeholder" | "className"> & {
     ref?: Ref<HTMLInputElement>;
   }) {
   return (
     <div className={`relative ${className}`}>
-      <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-content-muted" />
-      <input {...input} className="field w-full pl-8" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+      <Search
+        size={large ? 18 : 14}
+        className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-content-muted ${large ? "left-3.5" : "left-2.5"}`}
+      />
+      <input
+        {...input}
+        className={`field w-full ${large ? "h-11 pl-10 text-base" : "pl-8"}`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
     </div>
   );
 }

@@ -25,12 +25,12 @@ export default function PersonPage({ id }: { id: number }) {
 
   return (
     <div className="pb-8">
-      <div className="px-6 pt-4">
+      <div className="gutter pt-4">
         <button className="btn-quiet" onClick={() => back("/")}>
           <ArrowLeft size={15} /> Back
         </button>
       </div>
-      <header className="flex items-end gap-5 px-6 pb-2 pt-4">
+      <header className="flex items-end gap-5 gutter pb-2 pt-4">
         <PersonPhoto person={person} className="w-32 shrink-0" />
         <div className="min-w-0 pb-1">
           <h1 className="text-3xl font-bold leading-tight text-content">{person.name}</h1>
@@ -40,7 +40,7 @@ export default function PersonPage({ id }: { id: number }) {
         </div>
       </header>
       {error && (
-        <div className="px-6 pt-4">
+        <div className="gutter pt-4">
           <ErrorNote>{error}</ErrorNote>
         </div>
       )}
@@ -50,9 +50,9 @@ export default function PersonPage({ id }: { id: number }) {
       ].map(
         (g) =>
           g.list.length > 0 && (
-            <section key={g.title} className="px-6 py-3">
+            <section key={g.title} className="gutter py-3">
               <h2 className="row-title mb-3">{g.title}</h2>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-5">
+              <div className="poster-wrap">
                 {g.list.map((it) => (
                   <div key={it.id}>
                     <PosterCard item={it} />

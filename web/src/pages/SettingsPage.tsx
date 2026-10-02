@@ -26,7 +26,7 @@ export default function SettingsPage() {
     return (
       <div>
         <PageHeader title="Settings" />
-        <div className="flex max-w-3xl flex-col gap-4 px-6 py-5">
+        <div className="flex max-w-3xl flex-col gap-4 gutter py-5">
           <ProfileSettings />
           <AccountSettings />
         </div>
@@ -36,7 +36,7 @@ export default function SettingsPage() {
   return (
     <div>
       <PageHeader title="Settings" />
-      <div className="flex max-w-3xl flex-col gap-4 px-6 py-5">
+      <div className="flex max-w-3xl flex-col gap-4 gutter py-5">
         <ServerNow />
         <ProfileSettings />
         <AccountSettings />
@@ -48,7 +48,7 @@ export default function SettingsPage() {
 
         <section className="card p-4">
           <div className="card-title mb-3">Transcoding</div>
-          <dl className="grid grid-cols-[160px_1fr] gap-y-1.5 text-sm">
+          <dl className="kv-grid text-sm">
             <dt className="text-content-muted">Encoder</dt>
             <dd>
               {status?.transcode ? (status.transcode.hwaccel === "none" ? "Software (CPU)" : `Hardware: ${status.transcode.hwaccel.toUpperCase()}`) : "–"}
@@ -91,7 +91,7 @@ export default function SettingsPage() {
 
         <section className="card p-4">
           <div className="card-title mb-3">Server</div>
-          <dl className="grid grid-cols-[160px_1fr] gap-y-1.5 text-sm">
+          <dl className="kv-grid text-sm">
             <dt className="text-content-muted">Version</dt>
             <dd className="mono">{status?.version ?? "–"}</dd>
             <dt className="text-content-muted">Media root</dt>
@@ -128,7 +128,7 @@ function ProfileSettings() {
           Switch profile
         </Link>
       </div>
-      <div className="grid grid-cols-[160px_1fr] items-center gap-x-4 gap-y-3 text-sm">
+      <div className="form-grid text-sm">
         <span className="text-content-muted">Next episode</span>
         <label className="flex items-center gap-2 text-content-secondary">
           <input type="checkbox" className="accent-brand" checked={p.autoplayNext !== false} onChange={(e) => setPrefs({ autoplayNext: e.target.checked })} />
@@ -259,7 +259,7 @@ function LiveTvSettings() {
           <span className="mono">COUCHSIDE_RECORDINGS_DIR</span>, then restart.
         </p>
       ) : (
-        <dl className="grid grid-cols-[160px_1fr] gap-y-1.5 text-sm">
+        <dl className="kv-grid text-sm">
           <dt className="text-content-muted">Tuner</dt>
           <dd>{st.device ? `${st.device.FriendlyName} (${st.device.DeviceID}), ${st.device.TunerCount} tuners` : <span className="text-critical">{st.error || "Not reachable"}</span>}</dd>
           <dt className="text-content-muted">In use now</dt>

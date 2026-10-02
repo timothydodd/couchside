@@ -3,10 +3,10 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import PosterCard from "./PosterCard";
 import type { ItemSummary } from "../lib/types";
 
-const MIN_CARD = 168; // px; columns are derived from the container width
-const GAP = 20;
-const PAD = 24; // matches px-6 page gutters
-const CAPTION = 48; // title + meta lines under the poster
+// Columns are derived from the container width. Phones (under md) get
+// smaller cards, gaps and margins (the .gutter widths), so three fit across.
+const sizes = (width: number) =>
+  width < 768 ? { minCard: 100, gap: 12, pad: 16, caption: 44 } : { minCard: 168, gap: 20, pad: 24, caption: 48 };
 
 // Scroll offsets per grid, so going back from a detail page lands where you were.
 const scrollMemory = new Map<string, number>();
@@ -25,6 +25,7 @@ export default function PosterGrid({ items, memoryKey }: { items: ItemSummary[];
     return () => ro.disconnect();
   }, []);
 
+  const { minCard: MIN_CARD, gap: GAP, pad: PAD, caption: CAPTION } = sizes(width);
   const inner = Math.max(0, width - PAD * 2);
   const cols = Math.max(2, Math.floor((inner + GAP) / (MIN_CARD + GAP)));
   const cardW = cols ? (inner - GAP * (cols - 1)) / cols : MIN_CARD;

@@ -32,8 +32,8 @@ export default function Channels({ filters, setFilters }: { filters: TvFilters; 
     );
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto px-6 pb-8">
-      <div className="-mx-6">
+    <div className="min-h-0 flex-1 overflow-auto gutter pb-8">
+      <div className="gutter-bleed">
         <FilterBar f={filters} set={setFilters} genres={genres} shown={list.length} total={data?.length ?? 0} />
       </div>
       {list.length === 0 && data && <EmptyState title="No channels match">Try another search or genre.</EmptyState>}

@@ -4,6 +4,7 @@ import Link from "../components/Link";
 import { ContinueCard, PosterRow, Row } from "../components/Rows";
 import ProgramDialog from "../components/livetv/ProgramDialog";
 import { EmptyState, ErrorNote, PageHeader, Spinner } from "../components/ui";
+import { SearchBox } from "../components/Sidebar";
 import { useApi } from "../lib/api";
 import { fmtSlot } from "../lib/format";
 import type { Program, SearchResult, TvChannel } from "../lib/types";
@@ -18,22 +19,33 @@ export default function SearchPage({ q }: { q: string }) {
   const res = term ? (data ?? last.current) : undefined;
   const [open, setOpen] = useState<{ p: Program; c: TvChannel | null } | null>(null);
 
+  // Phones have no sidebar, so the box lives on the page there.
+  const phoneBox = (
+    <div className="gutter pt-3 md:hidden">
+      <SearchBox hotkey={false} autoFocus={!term} className="" />
+    </div>
+  );
+
   if (!term)
     return (
-      <EmptyState icon={<Search size={36} strokeWidth={1.5} />} title="Search Couchside">
-        Find movies, shows and episodes by title, and with live TV, channels and what's on the guide.
-      </EmptyState>
+      <>
+        {phoneBox}
+        <EmptyState icon={<Search size={36} strokeWidth={1.5} />} title="Search Couchside">
+          Find movies, shows and episodes by title, and with live TV, channels and what's on the guide.
+        </EmptyState>
+      </>
     );
 
   const total = res ? res.movies.length + res.series.length + res.episodes.length + res.channels.length + res.programs.length : 0;
 
   return (
     <div className="pb-8">
+      {phoneBox}
       <PageHeader title={`Results for “${term}”`} subtitle={res && total ? `${total} found` : undefined}>
         {loading && <Spinner />}
       </PageHeader>
       {error && (
-        <div className="px-6 pt-4">
+        <div className="gutter pt-4">
           <ErrorNote>{error}</ErrorNote>
         </div>
       )}
@@ -99,7 +111,7 @@ export default function SearchPage({ q }: { q: string }) {
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="px-6 py-3">
+    <section className="gutter py-3">
       <h2 className="row-title mb-3">{title}</h2>
       {children}
     </section>

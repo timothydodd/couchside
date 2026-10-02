@@ -58,17 +58,18 @@ export default function ItemPage({ id }: { id: number }) {
           <div className="poster-placeholder absolute inset-0" />
         )}
         <div className="hero-fade absolute inset-0" />
-        <button onClick={() => back(isSeries ? "/tv" : "/movies")} className="btn-ghost absolute left-6 top-5 !bg-surface/60 backdrop-blur">
+        <button onClick={() => back(isSeries ? "/tv" : "/movies")} className="btn-ghost absolute left-4 top-4 !bg-surface/60 backdrop-blur md:left-6 md:top-5">
           <ArrowLeft size={15} /> Back
         </button>
       </section>
 
-      <div className="relative -mt-40 flex flex-col gap-6 px-6 md:flex-row">
-        <div className="poster w-44 shrink-0 self-start shadow-[var(--shadow-poster)] md:w-56">
+      <div className="relative -mt-24 flex flex-col gap-6 gutter sm:-mt-40 md:flex-row">
+        {/* On phones the backdrop above is the picture; the poster would push everything below the fold. */}
+        <div className="poster hidden w-44 shrink-0 self-start shadow-[var(--shadow-poster)] sm:block md:w-56">
           <PosterArt item={item} size="full" />
         </div>
         <div className="min-w-0 flex-1 md:pt-16">
-          <h1 className="text-3xl font-bold leading-tight text-content md:text-4xl">{item.title}</h1>
+          <h1 className="text-2xl font-bold leading-tight text-content sm:text-3xl md:text-4xl">{item.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-content-secondary">
             {item.year && <span>{item.year}</span>}
             {item.rated && <span className="chip">{item.rated}</span>}
@@ -141,7 +142,7 @@ export default function ItemPage({ id }: { id: number }) {
       {extras.length > 0 && <Extras title={item.title} files={extras} />}
       {!isSeries && files.length > extras.length && <FilesCard files={files.filter((f) => f.role !== "extra")} onChange={reload} />}
       {error && (
-        <div className="px-6 pt-4">
+        <div className="gutter pt-4">
           <ErrorNote>{error}</ErrorNote>
         </div>
       )}
@@ -222,7 +223,7 @@ function MatchPanel({ id, status, imdbId, parsed, onDone }: { id: number; status
           <div className="flex gap-2">
             <input
               id="imdb"
-              className="field flex-1"
+              className="field min-w-0 flex-1"
               placeholder="tt0133093, or an imdb.com or themoviedb.org link"
               value={value}
               onChange={(e) => setValue(e.target.value)}
@@ -254,7 +255,7 @@ function Seasons({ seasons }: { seasons: NonNullable<ItemDetail["seasons"]> }) {
   const current = seasons.find((s) => s.season === season) ?? seasons[0];
   if (!current) return null;
   return (
-    <section className="mt-10 px-6">
+    <section className="mt-10 gutter">
       <div className="flex gap-1 overflow-x-auto border-b border-border-light">
         {seasons.map((s) => (
           <button key={s.season} onClick={() => setSeason(s.season)} className={`navtab !text-sm ${s.season === current.season ? "navtab-active" : ""}`}>
@@ -299,7 +300,7 @@ function EpisodeItem({ e }: { e: EpisodeRow }) {
 /** A movie's bonus material, listed like episodes and titled "Movie - Extra". */
 function Extras({ title, files }: { title: string; files: MediaFile[] }) {
   return (
-    <section className="mt-10 px-6">
+    <section className="mt-10 gutter">
       <h2 className="row-title mb-1">Extras</h2>
       <ol className="flex flex-col">
         {files.map((f) => (
@@ -490,7 +491,7 @@ function FilesCard({ files, onChange }: { files: MediaFile[]; onChange: () => vo
     onChange();
   };
   return (
-    <section className="mt-10 px-6">
+    <section className="mt-10 gutter">
       <h2 className="row-title mb-3">{files.length === 1 ? "File" : `Files (${files.length})`}</h2>
       <div className="card overflow-x-auto">
         <table className="table">
@@ -498,9 +499,9 @@ function FilesCard({ files, onChange }: { files: MediaFile[]; onChange: () => vo
             <tr>
               <th>Name</th>
               <th>Quality</th>
-              <th>Video</th>
-              <th>Audio</th>
-              <th>Length</th>
+              <th className="hidden sm:table-cell">Video</th>
+              <th className="hidden sm:table-cell">Audio</th>
+              <th className="hidden sm:table-cell">Length</th>
               <th className="text-right">Size</th>
               <th>Playback</th>
               <th>Progress</th>
@@ -516,12 +517,12 @@ function FilesCard({ files, onChange }: { files: MediaFile[]; onChange: () => vo
                   </Link>
                 </td>
                 <td>{fmtResolution(f.width, f.height) && <span className="chip">{fmtResolution(f.width, f.height)}</span>}</td>
-                <td className="mono text-content-secondary">{f.videoCodec || "?"}</td>
-                <td className="mono text-content-secondary">
+                <td className="mono hidden text-content-secondary sm:table-cell">{f.videoCodec || "?"}</td>
+                <td className="mono hidden text-content-secondary sm:table-cell">
                   {f.audioCodec || "?"}
                   {f.audioTracks > 1 && <span className="text-content-muted"> +{f.audioTracks - 1}</span>}
                 </td>
-                <td className="tabular-nums text-content-secondary">{fmtRuntime(f.durationSec)}</td>
+                <td className="hidden tabular-nums text-content-secondary sm:table-cell">{fmtRuntime(f.durationSec)}</td>
                 <td className="text-right tabular-nums text-content-secondary">{fmtBytes(f.size)}</td>
                 <td>
                   <span className="inline-flex items-center gap-1">

@@ -4,6 +4,7 @@ import { PinButton, SignalBars } from "./ChannelBits";
 import FilterBar from "./FilterBar";
 import { channelNameMatches, channelPasses, genresOf, programFilterActive, programMatches, type TvFilters } from "./filters";
 import ProgramDialog from "./ProgramDialog";
+import { usePhone } from "../../lib/media";
 import { useRouter } from "../../stores/router";
 import { EmptyState, ErrorNote, Spinner } from "../ui";
 import { useApi } from "../../lib/api";
@@ -12,7 +13,6 @@ import type { GuideResponse, Program, TvChannel } from "../../lib/types";
 
 const PX_PER_MIN = 5; // 30 minutes = 150px
 const HOURS = 4;
-const CHANNEL_COL = 196;
 const ROW_H = 60;
 const HALF_HOUR = 1800;
 
@@ -25,6 +25,9 @@ export default function Guide({ filters, setFilters }: { filters: TvFilters; set
   const [open, setOpen] = useState<{ p: Program; c: TvChannel } | null>(null);
   const [now, setNow] = useState(() => Date.now() / 1000);
   const scroller = useRef<HTMLDivElement>(null);
+  // Phones get a narrow channel column: number and name, no logo.
+  const phone = usePhone();
+  const CHANNEL_COL = phone ? 104 : 196;
   const go = useRouter((s) => s.go);
 
   useEffect(() => {
@@ -62,7 +65,7 @@ export default function Guide({ filters, setFilters }: { filters: TvFilters; set
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center gap-2 px-6 py-3">
+      <div className="flex flex-wrap items-center gap-2 gutter py-3">
         <button className="btn-ghost" onClick={() => shift(-3)} aria-label="Earlier">
           <ChevronLeft size={15} />
         </button>
@@ -81,7 +84,7 @@ export default function Guide({ filters, setFilters }: { filters: TvFilters; set
         <FilterBar f={filters} set={setFilters} genres={genres} shown={rows.length} total={data?.channels.length ?? 0} />
       </div>
       {error && (
-        <div className="px-6 pb-3">
+        <div className="gutter pb-3">
           <ErrorNote>{error}</ErrorNote>
         </div>
       )}
@@ -112,12 +115,12 @@ export default function Guide({ filters, setFilters }: { filters: TvFilters; set
               <div key={c.number} className={`flex ${idx === lastPinned ? "border-b-2 border-b-warning/40" : "border-b border-border-light"}`} style={{ height: ROW_H }}>
                 <div className="group sticky left-0 z-10 flex shrink-0 items-center border-r border-border-light bg-surface pr-1 hover:bg-raised" style={{ width: CHANNEL_COL }}>
                   <button
-                    className="flex min-w-0 flex-1 items-center gap-2.5 self-stretch pl-3 text-left disabled:cursor-default"
+                    className="flex min-w-0 flex-1 items-center gap-2 self-stretch pl-2 text-left disabled:cursor-default md:gap-2.5 md:pl-3"
                     onClick={() => !c.drm && go(`/watch/${c.number}`)}
                     disabled={c.drm}
                     title={c.drm ? "Copy-protected channel" : `Watch ${c.name}`}
                   >
-                    <div className="flex h-8 w-12 shrink-0 items-center justify-center">
+                    <div className="hidden h-8 w-12 shrink-0 items-center justify-center sm:flex">
                       {c.logoUrl ? <img src={c.logoUrl} alt="" loading="lazy" className="channel-logo max-h-8 max-w-12" /> : null}
                     </div>
                     <div className="min-w-0 leading-tight">

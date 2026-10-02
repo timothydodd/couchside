@@ -45,7 +45,7 @@ export default function LibrariesPage() {
           </button>
         )}
       </PageHeader>
-      <div className="flex flex-col gap-4 px-6 py-5">
+      <div className="flex flex-col gap-4 gutter py-5">
         {error && <ErrorNote>{error}</ErrorNote>}
         {adding && (
           <LibraryForm
@@ -94,7 +94,7 @@ export default function LibrariesPage() {
                 </div>
                 <div className="text-content-muted">Scanned {fmtAgo(l.lastScanAt)}</div>
               </div>
-              <div className="flex gap-1.5">
+              <div className="flex flex-wrap gap-1.5 whitespace-nowrap">
                 <Link to={`/libraries/${l.id}`} className="btn-ghost" title="Sort by quality, find duplicates, fix matches, artwork and deletes">
                   <SlidersHorizontal size={15} /> Manage
                 </Link>

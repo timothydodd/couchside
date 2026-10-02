@@ -128,6 +128,71 @@ body {
    Reusable component classes (referenced by the React components).
 --------------------------------------------------------------------------- */
 @layer components {
+  /* Page side margins: 16px on phones, 24px from md up. -gutter-bleed undoes them. */
+  .gutter {
+    @apply px-4 md:px-6;
+  }
+  .gutter-bleed {
+    @apply -mx-4 md:-mx-6;
+  }
+  /* A label/control form: stacked on phones, a 160px label column from sm up. */
+  .form-grid {
+    @apply grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-[160px_1fr] sm:items-center sm:gap-y-3;
+  }
+  /* Read-only key/value lists (dl). */
+  .kv-grid {
+    @apply grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 sm:grid-cols-[160px_1fr] sm:gap-x-0;
+  }
+  /* Controls in a page header's toolbar: share a row on phones, natural width from sm up. */
+  .toolbar-field {
+    @apply min-w-0 flex-1 sm:flex-none;
+  }
+  /* FilterMenu's panel: a bottom sheet on phones, a dropdown under its button from md up. */
+  .filter-panel {
+    @apply fixed inset-x-0 bottom-0 z-50 max-h-[80vh] overflow-y-auto rounded-t-2xl border-t border-border-light bg-surface;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  @media (min-width: 48rem) {
+    .filter-panel {
+      @apply absolute inset-x-auto bottom-auto right-0 top-full mt-2 w-96 max-h-[70vh] rounded-xl border pb-0;
+      box-shadow: var(--shadow-md);
+    }
+  }
+  /* A selectable chip in a group of choices (aria-checked marks the chosen one). */
+  .choice {
+    @apply min-h-9 rounded-full border border-border-light px-3 text-sm text-content-secondary transition-colors hover:border-border hover:text-content;
+  }
+  .choice[aria-checked="true"],
+  .choice-on {
+    @apply border-accent bg-accent text-on-accent;
+  }
+  /* A wrapping poster grid (not virtualised): three across on phones. */
+  .poster-wrap {
+    @apply grid grid-cols-[repeat(auto-fill,minmax(6.25rem,1fr))] gap-3 sm:grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] sm:gap-5;
+  }
+  /* Phone layout: top bar, bottom tabs and the "More" sheet (components/MobileNav.tsx).
+     The safe-area insets keep them clear of notches and the home indicator. */
+  .mobile-bar {
+    @apply px-3;
+    min-height: 3.25rem;
+    padding-top: env(safe-area-inset-top);
+  }
+  .mobile-tabs {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .mobile-tab {
+    @apply flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors;
+  }
+  .touch-target {
+    @apply inline-flex min-h-11 min-w-11 items-center justify-center rounded-md;
+  }
+  .sheet {
+    @apply max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-border-light bg-surface;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .sheet-row {
+    @apply flex min-h-12 items-center gap-3 px-4 text-sm text-content hover:bg-muted;
+  }
   /* Each button variant inlines the shared base utilities — Tailwind v4
      `@apply` composes only real utilities, not other component classes. */
   .btn-primary {

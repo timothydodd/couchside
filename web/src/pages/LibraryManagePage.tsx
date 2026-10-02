@@ -89,10 +89,10 @@ export default function LibraryManagePage({ id }: { id: number }) {
           <ArrowLeft size={15} /> Libraries
         </Link>
       </PageHeader>
-      <div className="flex flex-col gap-3 px-6 py-4">
+      <div className="flex flex-col gap-3 gutter py-4">
         {error && <ErrorNote>{error}</ErrorNote>}
         <div className="flex flex-wrap items-center gap-2">
-          <SearchInput value={q} onChange={setQ} placeholder={movies ? "Find a movie…" : "Find a show…"} className="w-64" />
+          <SearchInput value={q} onChange={setQ} placeholder={movies ? "Find a movie…" : "Find a show…"} className="w-full sm:w-64" />
           <div className="inline-flex rounded-md border border-border p-0.5" role="radiogroup" aria-label="Show">
             {(
               [

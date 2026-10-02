@@ -31,16 +31,8 @@ export default function Sidebar() {
   const profile = useProfile((s) => s.current);
   const admin = useIsAdmin();
 
-  // Detail pages highlight the section they belong to.
   const liveTv = useStatus((s) => s.status?.livetv);
-  const current: NavName =
-    route.name === "item" || route.name === "play" || route.name === "person"
-      ? "home"
-      : route.name === "watch" || route.name === "recording"
-        ? "livetv"
-        : route.name === "manage"
-          ? "libraries"
-          : route.name;
+  const current = sectionOf(route);
 
   const badge = (name: NavName) => {
     if (name === "movies" && counts?.movies) return <Count n={counts.movies} />;
@@ -79,7 +71,7 @@ export default function Sidebar() {
   };
 
   return (
-    <nav className="flex w-52 shrink-0 flex-col border-r border-border-light bg-surface px-2 py-3">
+    <nav className="hidden w-52 shrink-0 flex-col md:flex border-r border-border-light bg-surface px-2 py-3">
       <Link to="/" className="mb-5 flex items-center gap-2 px-2.5">
         <img src="/icons/logo-64.png" alt="" className="h-7 w-7" />
         <div className="leading-tight">
@@ -111,12 +103,21 @@ export default function Sidebar() {
   );
 }
 
+/** The nav section a page belongs to: detail pages highlight their section. */
+export function sectionOf(route: Route): NavName {
+  if (route.name === "item" || route.name === "play" || route.name === "person") return "home";
+  if (route.name === "watch" || route.name === "recording") return "livetv";
+  if (route.name === "manage") return "libraries";
+  return route.name;
+}
+
 /**
  * Searches as you type: the first keystroke opens /search, later ones replace
  * its query so Back leaves the results instead of stepping through each letter.
- * "/" focuses it from anywhere.
+ * With hotkey, "/" focuses it from anywhere (the sidebar's; phones use the
+ * Search page's own box).
  */
-function SearchBox() {
+export function SearchBox({ hotkey = true, autoFocus = false, className = "mb-4" }: { hotkey?: boolean; autoFocus?: boolean; className?: string }) {
   const route = useRouter((s) => s.route);
   const go = useRouter((s) => s.go);
   const routeQ = route.name === "search" ? route.q : "";
@@ -142,6 +143,7 @@ function SearchBox() {
   }, [q]);
 
   useEffect(() => {
+    if (!hotkey) return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey || t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
@@ -150,7 +152,7 @@ function SearchBox() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [hotkey]);
 
   return (
     <SearchInput
@@ -160,7 +162,8 @@ function SearchBox() {
       onChange={setQ}
       placeholder="Search…"
       aria-label="Search"
-      className="mb-4"
+      autoFocus={autoFocus}
+      className={className}
       onKeyDown={(e) => {
         if (e.key === "Enter") submit(q);
         if (e.key === "Escape") {

@@ -162,7 +162,7 @@ function AccountForm({ account, onDone, onChanged }: { account?: Profile; onDone
       }}
     >
       {!account && <div className="text-sm font-medium text-content">New account</div>}
-      <div className="grid items-center gap-x-4 gap-y-3 text-sm sm:grid-cols-[140px_1fr]">
+      <div className="form-grid text-sm">
         <span className="text-content-muted">Name</span>
         <input className="field w-full max-w-xs" value={name} maxLength={30} autoFocus={!account} onChange={(e) => setName(e.target.value)} />
         <span className="text-content-muted">Colour</span>

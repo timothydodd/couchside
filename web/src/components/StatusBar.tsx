@@ -20,7 +20,7 @@ export default function StatusBar() {
         : ["bg-good", "Idle"];
 
   return (
-    <footer className="flex h-7 shrink-0 items-center gap-4 border-t border-border-light bg-surface px-3 text-[11px] text-content-muted">
+    <footer className="hidden h-7 shrink-0 md:flex items-center gap-4 border-t border-border-light bg-surface px-3 text-[11px] text-content-muted">
       {admin ? (
         <Link to="/activity" className="flex min-w-0 items-center gap-1.5 hover:text-content" title={error ?? undefined}>
           <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />

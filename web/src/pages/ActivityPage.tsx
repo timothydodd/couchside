@@ -53,18 +53,18 @@ export default function ActivityPage() {
           <Trash2 size={15} /> Clear finished
         </button>
       </PageHeader>
-      <div className="grid grid-cols-3 gap-3 px-6 py-4">
+      <div className="grid grid-cols-3 gap-3 gutter py-4">
         <StatTile label="Running" value={c?.running ?? "–"} sub={c?.current || undefined} />
         <StatTile label="Queued" value={c?.queued ?? "–"} />
         <StatTile label="Failed" value={c?.failed ?? "–"} tone={c?.failed ? "critical" : undefined} />
       </div>
       {error && (
-        <div className="px-6 pb-4">
+        <div className="gutter pb-4">
           <ErrorNote>{error}</ErrorNote>
         </div>
       )}
       <Streams />
-      <div className="px-6">
+      <div className="gutter">
         <h2 className="row-title mb-3">Background jobs</h2>
         {data && data.jobs.length === 0 ? (
           <div className="card">
@@ -143,7 +143,7 @@ function Streams() {
   if (!data) return null;
   const engine = data.hwaccel === "none" ? "software (CPU)" : data.hwaccel.toUpperCase();
   return (
-    <section className="px-6 pb-6">
+    <section className="gutter pb-6">
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="row-title">Streaming now</h2>
         <span className="text-xs text-content-muted">

@@ -75,6 +75,7 @@ Couchside is a self-hosted media server for k3s. Go backend in `server/`, React 
 - Colours: `docs/style.md` (tokens, contrast, rules). One dark theme, "seafoam as the primary": neutral dark grey surfaces, bright seafoam `--accent` as the only interactive colour, the logo's blue (`--good`) and sky (`--info`) for state, red (`--critical`) for recording, errors and favourites, amber warnings. There is no light theme (no theme store or toggle). Bright fills take `text-on-accent` (deep green), never `text-white`. Violet (`--secondary`), `--brand-pink` and `--brand-cyan` are avatar colours only.
 - `web/src/index.css` starts from Portside Lite's component classes (`.card`, `.btn-*`, `.field`, `.navtab`, `.table`, `.tint-*`). Media additions follow the same naming: `.poster`, `.still`, `.row-title`, `.art-badge`, `.chip`, `.hero-fade`, `.poster-placeholder`.
 - Put new reusable styles in `index.css` under `@layer components`. Don't hard-code colours; use the tokens.
+- **Phones** (below `md`, `usePhone()` in `lib/media.ts`): `Sidebar` and `StatusBar` hide, and `MobileNav` shows a top bar (logo, search, profile) and bottom tabs (Home, Movies, TV, Live TV, More); the More sheet holds Activity, Libraries, Settings, profile and sign-out. Page side margins use `.gutter` (16px, 24px from md); `PosterGrid` fits three across. List pages put search first, with the rest in `FilterMenu` (a bottom sheet on phones, a dropdown on desktop) and active filters as removable `.choice` chips.
 
 ## Next milestones
 

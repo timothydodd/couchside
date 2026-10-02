@@ -51,7 +51,7 @@ export default function Recordings() {
   };
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto px-6 pb-8">
+    <div className="min-h-0 flex-1 overflow-auto gutter pb-8">
       {error && (
         <div className="pt-3">
           <ErrorNote>{error}</ErrorNote>

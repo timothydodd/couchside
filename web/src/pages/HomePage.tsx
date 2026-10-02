@@ -45,12 +45,12 @@ export default function HomePage() {
     <div className="pb-8">
       {featured ? <Hero item={featured} /> : <div className="h-4" />}
       {error && (
-        <div className="px-6 pt-4">
+        <div className="gutter pt-4">
           <ErrorNote>{error}</ErrorNote>
         </div>
       )}
       {counts && (
-        <div className="grid grid-cols-2 gap-3 px-6 py-4 md:grid-cols-4">
+        <div className="hidden grid-cols-2 gap-3 gutter py-4 sm:grid md:grid-cols-4">
           <StatTile label="Movies" value={counts.movies.toLocaleString()} onClick={() => go("/movies")} />
           <StatTile label="TV shows" value={counts.series.toLocaleString()} onClick={() => go("/tv")} />
           <StatTile label="Episodes" value={counts.episodes.toLocaleString()} />
@@ -93,12 +93,12 @@ function Hero({ item }: { item: ItemSummary }) {
   const { data } = useApi<{ item: { plot: string } }>(`/api/items/${item.id}`);
   const plot = data?.item.plot;
   return (
-    <section className="relative h-[46vh] min-h-72 max-h-[520px] overflow-hidden">
+    <section className="relative h-[52vh] min-h-80 max-h-[520px] overflow-hidden md:h-[46vh] md:min-h-72">
       <img src={backdropUrl(item)} alt="" className="hero-art" />
       <div className="hero-fade absolute inset-0" />
-      <div className="absolute inset-x-0 bottom-0 max-w-2xl px-6 pb-6">
+      <div className="absolute inset-x-0 bottom-0 max-w-2xl gutter pb-6">
         <div className="text-[11px] font-semibold uppercase tracking-widest brand-text">Just added</div>
-        <h1 className="mt-1 text-3xl font-bold leading-tight text-content md:text-4xl">
+        <h1 className="mt-1 text-2xl font-bold leading-tight text-content sm:text-3xl md:text-4xl">
           <Link to={`/item/${item.id}`} className="title-link">
             {item.title}
           </Link>

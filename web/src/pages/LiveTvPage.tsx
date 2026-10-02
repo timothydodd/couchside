@@ -35,7 +35,7 @@ export default function LiveTvPage({ tab }: { tab: "guide" | "channels" | "recor
   return (
     <div className="flex h-full flex-col">
       <PageHeader title="Live TV" subtitle={<span className={st?.error ? "text-critical" : undefined}>{subtitle}</span>} />
-      <div className="flex gap-1 border-b border-border-light px-5">
+      <div className="gutter flex gap-1 overflow-x-auto border-b border-border-light">
         {TABS.map((t) => (
           <Link key={t.tab} to={t.to} className={`navtab !text-sm ${tab === t.tab ? "navtab-active" : ""}`}>
             {t.label}
