@@ -44,8 +44,10 @@ rules and server settings are shared. Switch profiles from the sidebar.
   hours on TVs, whose video players can't swap tokens mid-film. Signing a
   device out stops it at once either way.
 - Refresh tokens are random, stored only as hashes, and replaced on every use;
-  a replayed refresh token ends its session. Web sessions end after 30 days
-  unused, TV apps after 90. Changing a password signs out your other devices.
+  a replayed refresh token ends its session. A session ends after a year
+  unused (each use pushes that out again), so devices stay signed in. Signing
+  out, changing a password, or an admin signing a device out or disabling the
+  account ends sessions straight away.
 - Failed sign-ins are slowed per address and per account, then locked out for
   up to 15 minutes, and logged.
 - **Open without a session:** `/healthz`, the sign-in endpoints, and artwork

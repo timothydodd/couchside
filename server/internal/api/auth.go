@@ -29,8 +29,13 @@ const (
 	refreshPrefix = "couchside_refresh_"
 	refreshPath   = "/api/auth"
 
-	webIdle = 30 * 24 * time.Hour // a web session ends after this long unused
-	tvIdle  = 90 * 24 * time.Hour // TV apps: months on a remote without re-typing a password
+	// A session (its refresh token) ends after this long unused. Every refresh
+	// pushes it out again, so a device that's used now and then stays signed in.
+	// A year: Couchside is a home server, and nobody should be retyping a
+	// password on a TV remote. Signing out, a password change or an admin ends
+	// sessions sooner.
+	webIdle = 365 * 24 * time.Hour
+	tvIdle  = 365 * 24 * time.Hour
 
 	sessionRecheck = 30 * time.Second // how stale the cached session/role check may be
 )
