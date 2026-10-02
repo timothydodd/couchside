@@ -45,7 +45,8 @@
   .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--text-on-accent); }
   .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; padding-bottom: 48px; }
   /* The four goals: two across, so none is left alone on a row. */
-  .features.goals { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); padding-bottom: 16px; }
+  .features.goals { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); padding-bottom: 0; }
+  .also { margin: 16px 0 48px; color: var(--text-secondary); text-align: center; font-size: 0.95rem; }
   .card { background: var(--bg-surface); border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; }
   .card h2 { margin: 0 0 6px; font-size: 1rem; }
   .card p { margin: 0; color: var(--text-secondary); font-size: 0.95rem; }
@@ -67,7 +68,7 @@
 <header class="wrap">
   <img src="/icons/logo-256.png" alt="">
   <h1><span class="brand">Couchside</span></h1>
-  <p class="tagline">A fast, lightweight media server for your movies, shows and live TV. It stays on your network, records like a real DVR, and looks good doing it.</p>
+  <p class="tagline">A fast, lightweight media server for your movies, shows and live TV.</p>
   <div class="actions">
     <a class="btn btn-primary" href="https://github.com/timothydodd/couchside/releases/latest">Download</a>
     <a class="btn" href="https://github.com/timothydodd/couchside">Source on GitHub</a>
@@ -76,17 +77,12 @@
 
 <main class="wrap">
   <section class="features goals" aria-label="What it's for">
-    <div class="card"><h2>Fast and light</h2><p>One small binary with its database built in: a 7&nbsp;MB download that idles in tens of megabytes. Happy on a NAS, a Raspberry Pi or a corner of a k3s cluster, and every page opens instantly.</p></div>
-    <div class="card"><h2>Local only</h2><p>Runs on your network with no Couchside account, no telemetry and nothing phoning home. It only reaches TMDB and the HDHomeRun guide, and caches what it fetches, so your devices talk to nobody but your server.</p></div>
-    <div class="card"><h2>Live TV and a real DVR</h2><p>Guide, one-off and series recordings, padding, watch while recording, and automatic commercial skipping. Recordings survive restarts, and broadcasts your TV can decode play without transcoding.</p></div>
-    <div class="card"><h2>A UI worth using</h2><p>A clean dark web app that works as well on a phone as on a desktop, a Plex-style player with subtitles, audio tracks and quality presets, and a Roku app for the couch.</p></div>
+    <div class="card"><h2>Fast and light</h2><p>One 7&nbsp;MB binary with its database built in. Runs on a NAS, a Pi or k3s.</p></div>
+    <div class="card"><h2>Local only</h2><p>No cloud account, no telemetry. Everything it fetches is cached on your server.</p></div>
+    <div class="card"><h2>Live TV and DVR</h2><p>HDHomeRun guide, series recordings, commercial skipping, and channels made from your library.</p></div>
+    <div class="card"><h2>A good UI</h2><p>A dark web app that works on phones, a Plex-style player, and a Roku app.</p></div>
   </section>
-
-  <section class="features" aria-label="Also">
-    <div class="card"><h2>Your library, matched</h2><p>Point it at your folders: posters, backdrops, plots, cast and episode names, kept up to date as files come and go. A Manage view finds duplicates and low-quality copies.</p></div>
-    <div class="card"><h2>Plays anything</h2><p>Direct play when the device can, otherwise on-the-fly HLS on an Intel GPU, with HDR tone mapping.</p></div>
-    <div class="card"><h2>For the whole household</h2><p>Profiles keep their own progress, favourites and settings. Tap your profile to sign in at home, or set passwords. Admins decide who can record.</p></div>
-  </section>
+  <p class="also">Also: TMDB matching with cast and artwork, GPU transcoding, HDR tone mapping, and profiles for the whole household.</p>
 
   <section class="install">
     <h2 class="section">Run it</h2>
@@ -94,13 +90,13 @@
   -v couchside-data:/data -v couchside-cache:/cache \
   -v /path/to/media:/media \
   ghcr.io/timothydodd/couchside:latest</pre>
-    <p>Then open <code>http://localhost:8080</code> and add your libraries. Zips for Linux, macOS and Windows, a Helm chart for Kubernetes and the full setup guide are in the <a href="https://github.com/timothydodd/couchside/blob/main/docs/install.md">install guide</a>.</p>
+    <p>Open <code>http://localhost:8080</code> and add a library. Zips, Helm and more in the <a href="https://github.com/timothydodd/couchside/blob/main/docs/install.md">install guide</a>.</p>
   </section>
 </main>
 
 <footer>
   <div class="wrap">
-    <span class="credits">Couchside is free, open-source software under the <a href="https://github.com/timothydodd/couchside/blob/main/LICENSE">MIT License</a>. Metadata from <a href="https://www.themoviedb.org"><img src="/brand/tmdb.svg" alt="TMDB" height="22"></a>; this product uses the TMDB API but is not endorsed or certified by TMDB.</span>
+    <span class="credits">Free and open source (<a href="https://github.com/timothydodd/couchside/blob/main/LICENSE">MIT</a>). <a href="https://www.themoviedb.org"><img src="/brand/tmdb.svg" alt="TMDB" height="22"></a> This product uses the TMDB API but is not endorsed or certified by TMDB.</span>
     <span><a href="https://github.com/timothydodd/couchside">GitHub</a> · <a href="https://github.com/timothydodd/couchside/issues">Issues</a></span>
   </div>
 </footer>

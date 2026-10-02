@@ -36,6 +36,10 @@ cd web && npx tsc --noEmit && npx vite build
 
 CI (`.github/workflows/ci.yml`) runs both on pushes and pull requests.
 
+After adding, removing or updating a dependency, regenerate the license notices
+(`python3 scripts/third-party-notices.py`, with `web/node_modules` installed).
+CI fails while `THIRD_PARTY_NOTICES.txt` is out of date.
+
 ## Icons
 
 `python3 branding/make-icons.py` regenerates every icon size from
