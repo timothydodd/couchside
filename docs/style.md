@@ -65,6 +65,9 @@ it is grey.
 - **The gradient is a signature, not a background.** `.brand-text` for short
   brand labels only.
 - **The player is always on black** (`--player-bg`), whatever is behind it.
+- **Charts** use state colours, not the accent: the whole machine in muted grey
+  (`--text-muted`, with a faint fill), Couchside in blue (`--good`), its encoders
+  in sky (`--info`). Grid lines are `--border-light`.
 - **New reusable styles** go in `index.css` under `@layer components`, named
   like the existing ones (`.poster`, `.still`, `.chip`, `.badge`, `.card`).
 

@@ -239,6 +239,36 @@ export interface SystemInfo {
   jobs: JobCounts;
 }
 
+/** One reading in GET /api/system/history (5s apart, or 1-minute averages past an hour). */
+export interface HistoryPoint {
+  t: number; // unix seconds
+  cpu: number;
+  serverCpu: number;
+  encCpu: number;
+  mem: number;
+  serverMem: number;
+  encMem: number;
+  encoders: number;
+  streams: number;
+}
+
+export interface HistoryWindow {
+  every: number; // seconds between points
+  cores: number;
+  memTotal: number;
+  scope: string;
+  points: HistoryPoint[];
+}
+
+/** A line of the server log, from GET /api/system/logs. */
+export interface LogEntry {
+  seq: number;
+  t: number; // unix milliseconds
+  level: "DEBUG" | "INFO" | "WARN" | "ERROR";
+  msg: string;
+  attrs: string;
+}
+
 /** CPU percentages are of all the cores available (cores), so 100 = fully busy. */
 export interface SystemStats {
   available: boolean;
