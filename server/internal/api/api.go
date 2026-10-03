@@ -264,6 +264,7 @@ func (s *Server) adminRoutes(r chi.Router) {
 	r.Post("/items/{id}/match", s.rematch)
 	r.Post("/items/{id}/optimize", s.optimizeItem)
 	r.Post("/items/{id}/commercials", s.findItemCommercials)
+	r.Post("/files/{id}/commercials/dismissed", s.dismissCommercial)
 	r.Get("/items/{id}/files", s.itemFiles)
 	r.Get("/items/{id}/lookup", s.itemLookup)
 	r.Delete("/items/{id}", s.deleteItem)

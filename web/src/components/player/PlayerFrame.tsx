@@ -50,10 +50,14 @@ export interface PlayerFrameProps {
   /** Commercial breaks to mark and skip (vod only). */
   breaks?: Segment[];
   breakMode?: BreakMode;
+  /** Offered on a right-click on a break in the seek bar; omitted, there's no menu. */
+  onNotCommercial?: (b: Segment) => void;
   onBack: () => void;
   onKey?: (e: KeyboardEvent) => boolean; // return true when handled
   loading?: string | null;
   notice?: string | null;
+  /** A button in the notice, e.g. Undo. */
+  noticeAction?: { label: string; onClick: () => void } | null;
   error?: { title: string; message: string; actions?: ReactNode } | null;
   videoProps?: VideoHTMLAttributes<HTMLVideoElement>;
   children?: ReactNode; // e.g. <track> elements
@@ -75,6 +79,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
   const brk = useBreakSkip(videoRef, st.time, timeline.kind === "vod" ? p.breaks : undefined, p.breakMode ?? "off");
   const [chrome, setChrome] = useState(true);
   const [menu, setMenu] = useState(false);
+  const [breakMenu, setBreakMenu] = useState<{ b: Segment; x: number } | null>(null);
   const [full, setFull] = useState(false);
   const [volOpen, setVolOpen] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -331,6 +336,17 @@ export default function PlayerFrame(p: PlayerFrameProps) {
       {p.notice && !p.error && (
         <div className="tint-info pointer-events-none absolute left-1/2 top-20 max-w-md -translate-x-1/2 rounded-md px-3 py-2 text-center text-xs backdrop-blur">
           {p.notice}
+          {p.noticeAction && (
+            <button
+              className="pointer-events-auto ml-2 font-semibold underline"
+              onClick={(e) => {
+                e.stopPropagation();
+                p.noticeAction!.onClick();
+              }}
+            >
+              {p.noticeAction.label}
+            </button>
+          )}
         </div>
       )}
 
@@ -355,6 +371,17 @@ export default function PlayerFrame(p: PlayerFrameProps) {
         }`}
         onClick={(e) => e.stopPropagation()}
       >
+        <div className="relative">
+        {breakMenu && (
+          <BreakMenu
+            x={breakMenu.x}
+            onPick={() => {
+              p.onNotCommercial?.({ start: breakMenu.b.start - off, end: breakMenu.b.end - off });
+              setBreakMenu(null);
+            }}
+            onClose={() => setBreakMenu(null)}
+          />
+        )}
         <SeekBar
           min={min}
           max={max}
@@ -369,7 +396,9 @@ export default function PlayerFrame(p: PlayerFrameProps) {
             brk.allow(t - off);
             seekBar(t);
           }}
+          onBreakMenu={p.onNotCommercial ? (b, x) => setBreakMenu({ b, x }) : undefined}
         />
+        </div>
         <div className="mt-1 flex items-center gap-1">
           <CtlButton label={st.paused ? "Play (Space)" : "Pause (Space)"} onClick={toggle}>
             {st.paused ? <Play size={20} className="fill-current" /> : <Pause size={20} className="fill-current" />}
@@ -486,5 +515,31 @@ export function TopButton({ label, onClick, children, danger, disabled }: { labe
     >
       {children}
     </button>
+  );
+}
+
+/** The menu a right-click on a commercial break opens, just above the seek bar. */
+function BreakMenu({ x, onPick, onClose }: { x: number; onPick: () => void; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const away = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && onClose();
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation(); // close the menu, not the player
+      onClose();
+    };
+    window.addEventListener("pointerdown", away, true);
+    window.addEventListener("keydown", esc, true);
+    return () => {
+      window.removeEventListener("pointerdown", away, true);
+      window.removeEventListener("keydown", esc, true);
+    };
+  }, [onClose]);
+  return (
+    <div ref={ref} className="absolute bottom-6 z-30 -translate-x-1/2" style={{ left: x }} role="menu">
+      <button className="player-pill !py-1.5 !text-xs" role="menuitem" autoFocus onClick={onPick}>
+        Not a commercial
+      </button>
+    </div>
   );
 }

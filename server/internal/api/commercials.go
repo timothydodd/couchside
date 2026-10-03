@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/worker"
 )
 
@@ -39,12 +40,72 @@ func (s *Server) commercials(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	dismissed, err := s.db.CommercialDismissals(r.Context(), id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"available": s.worker.CommercialsAvailable(),
 		"status":    status,
 		"error":     msg,
-		"segments":  s.trimBreaks(r.Context(), segs), // what will actually be skipped
+		"segments":  withoutDismissed(s.trimBreaks(r.Context(), segs), dismissed), // what will actually be skipped
+		"dismissed": dismissed,
 	})
+}
+
+// withoutDismissed drops breaks marked "Not a commercial": any break that a
+// dismissal covers for at least half its length, so one survives detection
+// running again and moving the edges a little.
+func withoutDismissed(segs, dismissed []db.Segment) []db.Segment {
+	out := make([]db.Segment, 0, len(segs))
+next:
+	for _, g := range segs {
+		for _, d := range dismissed {
+			if overlap := min(g.End, d.End) - max(g.Start, d.Start); overlap >= (g.End-g.Start)/2 {
+				continue next
+			}
+		}
+		out = append(out, g)
+	}
+	return out
+}
+
+// dismissCommercial marks a break "Not a commercial", or with restore, undoes it.
+func (s *Server) dismissCommercial(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	var in struct {
+		Start   float64 `json:"start"`
+		End     float64 `json:"end"`
+		Restore bool    `json:"restore"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if in.Start < 0 || in.End <= in.Start {
+		writeErr(w, badRequest("a break needs a start before its end"))
+		return
+	}
+	if _, err := s.db.File(r.Context(), id); err != nil {
+		writeErr(w, err)
+		return
+	}
+	seg := db.Segment{Start: in.Start, End: in.End}
+	if in.Restore {
+		err = s.db.RestoreCommercial(r.Context(), id, seg)
+	} else {
+		err = s.db.DismissCommercial(r.Context(), id, seg)
+	}
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // broadcastContainers are the files the player offers detection for

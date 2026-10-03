@@ -3,11 +3,11 @@ import type HlsType from "hls.js";
 import PlayerFrame from "../components/player/PlayerFrame";
 import { InfoRows, type SettingSection } from "../components/player/SettingsMenu";
 import { ApiError, api, useApi } from "../lib/api";
-import { fmtResolution } from "../lib/format";
+import { fmtClock, fmtResolution } from "../lib/format";
 import { chooseSource, fmtMbps, hlsCopyCaps, nativeHls, presetById, presetSource, presetsFor, sourceKey, stepDown, type Quality, type Source } from "../lib/playback";
 import { audioLabel, subtitleDetail, subtitleLabel, type AudioTrack, type SubtitleTrack } from "../lib/tracks";
 import { parseVtt } from "../lib/vtt";
-import { PROBLEM_TEXT, type BreakMode, type Commercials, type HlsSession, type PlayInfo } from "../lib/types";
+import { PROBLEM_TEXT, type BreakMode, type Commercials, type HlsSession, type PlayInfo, type Segment } from "../lib/types";
 import { BREAK_MODES, sameLanguage } from "../lib/prefs";
 import { useIsAdmin } from "../stores/auth";
 import { usePrefs, useProfile } from "../stores/profile";
@@ -60,6 +60,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   const [session, setSession] = useState<HlsSession | null>(null);
   const [fatal, setFatal] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [noticeAction, setNoticeAction] = useState<{ label: string; onClick: () => void } | null>(null);
   const [loading, setLoading] = useState<string | null>("Loading…");
 
   const startAt = useRef<number | null>(null);
@@ -115,8 +116,9 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
     if (pick) setSub({ kind: "text", track: pick });
   }, [streams, subtitleLang]);
 
-  const flash = (msg: string) => {
+  const flash = (msg: string, action: { label: string; onClick: () => void } | null = null) => {
     setNotice(msg);
+    setNoticeAction(() => action);
     setTimeout(() => setNotice((n) => (n === msg ? null : n)), 7000);
   };
 
@@ -436,6 +438,22 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
     void api(`/api/files/${fileId}/commercials`, { method: "POST" })
       .then(reloadComm)
       .catch((e) => flash(`Couldn't start commercial detection: ${(e as Error).message}`));
+  // A detected break that's really show: hidden for everyone, until undone.
+  const notCommercial = (b: Segment) => {
+    const set = (restore: boolean) => api(`/api/files/${fileId}/commercials/dismissed`, { method: "POST", json: { ...b, restore } }).then(reloadComm);
+    const span = `${fmtClock(b.start)}–${fmtClock(b.end)}`;
+    void set(false)
+      .then(() =>
+        flash(`${span} is no longer marked as a commercial.`, {
+          label: "Undo",
+          onClick: () => {
+            setNotice(null);
+            void set(true).catch((e) => flash(`Couldn't undo: ${(e as Error).message}`));
+          },
+        }),
+      )
+      .catch((e) => flash(`Couldn't change the break: ${(e as Error).message}`));
+  };
   const chooseBreakMode = (m: BreakMode) => useProfile.getState().setPrefs({ commercials: m });
 
   // --- settings ------------------------------------------------------------------------
@@ -537,6 +555,8 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
       onBack={exit}
       loading={errorText ? null : loading}
       notice={notice}
+      noticeAction={notice ? noticeAction : null}
+      onNotCommercial={isAdmin && comm?.status === "done" ? notCommercial : undefined}
       error={errorText ? { title: "Can't play this right now", message: errorText, actions: <button className="btn-primary" onClick={() => switchTo(() => setNonce((n) => n + 1))}>Try again</button> } : null}
       videoProps={{ onError: onVideoError, onWaiting, onPlaying, onSeeking: () => (waitingSince.current = null), onEnded: () => void onEnded() }}
     />

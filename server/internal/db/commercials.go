@@ -45,6 +45,37 @@ func (d *DB) Commercials(ctx context.Context, fileID int64) (segs []Segment, ok 
 	return segs, true, nil
 }
 
+// CommercialDismissals lists the breaks marked "Not a commercial" in a file.
+func (d *DB) CommercialDismissals(ctx context.Context, fileID int64) ([]Segment, error) {
+	rows, err := d.sql.QueryContext(ctx, `SELECT start, "end" FROM commercial_dismissals WHERE file_id = ? ORDER BY start`, fileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Segment{}
+	for rows.Next() {
+		var s Segment
+		if err := rows.Scan(&s.Start, &s.End); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// DismissCommercial marks a break (as the player showed it) as not a commercial.
+func (d *DB) DismissCommercial(ctx context.Context, fileID int64, s Segment) error {
+	_, err := d.sql.ExecContext(ctx, `INSERT INTO commercial_dismissals (file_id, start, "end") VALUES (?, ?, ?)
+		ON CONFLICT (file_id, start) DO UPDATE SET "end" = excluded."end"`, fileID, s.Start, s.End)
+	return err
+}
+
+// RestoreCommercial undoes DismissCommercial for the dismissal starting near s.Start.
+func (d *DB) RestoreCommercial(ctx context.Context, fileID int64, s Segment) error {
+	_, err := d.sql.ExecContext(ctx, `DELETE FROM commercial_dismissals WHERE file_id = ? AND abs(start - ?) < 0.5`, fileID, s.Start)
+	return err
+}
+
 // IsRecording reports whether path is a finished DVR recording.
 func (d *DB) IsRecording(ctx context.Context, path string) (bool, error) {
 	var n int

@@ -20,6 +20,7 @@ export default function SeekBar({
   marks,
   label,
   onSeek,
+  onBreakMenu,
 }: {
   min: number;
   max: number;
@@ -31,6 +32,8 @@ export default function SeekBar({
   marks?: number[];
   label: (t: number) => string;
   onSeek: (t: number) => void;
+  /** Right-click (or long-press) on a break: x is the pointer's offset in the bar, in px. */
+  onBreakMenu?: (b: Segment, x: number) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -57,12 +60,23 @@ export default function SeekBar({
       }}
       onPointerLeave={() => setHover(null)}
       onPointerDown={(e) => {
+        if (e.button !== 0) return; // only the main button scrubs; a right-click may open the break menu
         e.currentTarget.setPointerCapture(e.pointerId);
         setDrag(at(e));
       }}
       onPointerUp={(e) => {
         if (drag !== null) onSeek(at(e));
         setDrag(null);
+      }}
+      onContextMenu={(e) => {
+        if (!onBreakMenu || !breaks) return;
+        const r = ref.current!.getBoundingClientRect();
+        const t = min + ((e.clientX - r.left) / r.width) * span;
+        const b = breaks.find((x) => t >= x.start && t < x.end);
+        if (!b) return;
+        e.preventDefault();
+        setDrag(null);
+        onBreakMenu(b, e.clientX - r.left);
       }}
       role="slider"
       aria-label="Seek"
