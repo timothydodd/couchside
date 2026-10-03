@@ -37,12 +37,25 @@ export default function PosterGrid({ items, memoryKey }: { items: ItemSummary[];
     getScrollElement: () => scrollRef.current,
     estimateSize: () => rowH,
     overscan: 3,
-    initialOffset: () => scrollMemory.get(memoryKey) ?? 0,
   });
 
   useEffect(() => {
     virtualizer.measure();
   }, [rowH, virtualizer]);
+
+  // Go back to where this grid was scrolled, once it has rows to scroll. This
+  // sets the element's own scrollTop, which the virtualizer follows; telling
+  // the virtualizer instead (initialOffset) drew the rows for that offset
+  // while the element was still at 0 (too short to scroll yet), so the grid
+  // stayed blank until the next scroll.
+  const restored = useRef(false);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (restored.current || !el || width === 0 || rows === 0) return;
+    restored.current = true;
+    const top = scrollMemory.get(memoryKey);
+    if (top) el.scrollTop = top;
+  }, [width, rows, memoryKey]);
 
   return (
     <div
