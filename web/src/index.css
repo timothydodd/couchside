@@ -530,6 +530,10 @@ video::cue {
     @apply pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-lg border border-critical/40 bg-raised px-4 py-3 text-sm text-content;
     box-shadow: var(--shadow-md);
   }
+  /* Something that worked, e.g. a job queued from a menu. */
+  .notice-info {
+    @apply border-info/40;
+  }
   /* Drawer that slides over the right edge of the page. */
   .side-panel {
     @apply fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col border-l border-border bg-surface shadow-[var(--shadow-md)];

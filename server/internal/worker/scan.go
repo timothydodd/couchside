@@ -15,6 +15,7 @@ import (
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/parse"
 	"github.com/timothydodd/couchside/internal/probe"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 // Folders NAS boxes and download tools litter libraries with.
@@ -317,10 +318,13 @@ func (w *Worker) refreshRole(ctx context.Context, lib db.Library, path string, s
 // that can't be placed (a TV file with no episode number).
 func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, info fs.FileInfo, seen int64) (bool, error) {
 	f := db.File{LibraryID: lib.ID, Path: path, Size: info.Size(), Mtime: info.ModTime().Unix()}
+	prev, err := w.db.FileStamp(ctx, path)
+	if err != nil {
+		return false, err
+	}
 	var (
 		itemID  int64
 		created bool
-		err     error
 		label   string
 		role    = parse.Role{Kind: "copy"}
 	)
@@ -380,9 +384,12 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 			return false, err
 		}
 	}
-	// A changed file makes its optimized copy stale; cleanupOptimized deletes it on disk.
-	if old, err := w.db.DeleteOptimized(ctx, fileID); err == nil && old != "" {
-		_ = os.Remove(old)
+	// A changed file makes its optimized copy stale. One re-indexed only
+	// because its name parses differently, or re-scanned by hand, keeps it.
+	if prev == nil || prev.Size != f.Size || prev.Mtime != f.Mtime {
+		if old, err := w.db.DeleteOptimized(ctx, fileID); err == nil && old != "" {
+			_ = os.Remove(old)
+		}
 	}
 	if created {
 		if err := w.Enqueue(ctx, KindMatch, itemID, "Match "+label); err != nil {
@@ -401,6 +408,39 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 		}
 	}
 	return true, nil
+}
+
+// RescanFile reads one file again the way a scan reads a new one (probe,
+// name, role, still), even though it hasn't changed. Errors meant for the
+// person who asked are usererr.
+func (w *Worker) RescanFile(ctx context.Context, fileID int64) error {
+	f, err := w.db.File(ctx, fileID)
+	if err != nil {
+		return err
+	}
+	lib, err := w.db.Library(ctx, f.LibraryID)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(f.Path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return usererr.New("the file isn't there any more; scan the library to remove it")
+	}
+	if err != nil {
+		return usererr.New("couldn't read the file: " + err.Error())
+	}
+	ok, err := w.indexFile(ctx, lib, f.Path, info, time.Now().Unix())
+	if errors.Is(err, errProbeTimeout) {
+		return usererr.New("reading the file timed out; try again")
+	}
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return usererr.New("the name no longer has a season and episode number, so it isn't an episode; the next library scan removes it")
+	}
+	w.Wake()
+	return nil
 }
 
 // autoCommercials queues commercial detection for a finished DVR recording

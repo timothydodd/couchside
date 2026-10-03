@@ -7,6 +7,7 @@ import { EmptyState, ErrorNote, Meter, Spinner } from "../components/ui";
 import { api, backdropUrl, posterUrl, stillUrl, useApi } from "../lib/api";
 import { fmtAirDate, fmtBytes, fmtClock, fmtResolution, fmtRuntime, titleLink } from "../lib/format";
 import { canDirectPlay } from "../lib/playback";
+import { EpisodeActions, TitleActions } from "../components/item/AdminMenus";
 import { PROBLEM_TEXT, type EpisodeRow, type ItemDetail, type MediaFile } from "../lib/types";
 import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
@@ -116,6 +117,7 @@ export default function ItemPage({ id }: { id: number }) {
               {allWatched ? <EyeOff size={15} /> : <Eye size={15} />}
               {allWatched ? "Mark unwatched" : "Mark watched"}
             </button>
+            {admin && <TitleActions item={item} onChange={reload} />}
           </div>
 
           {item.plot ? (
@@ -137,7 +139,7 @@ export default function ItemPage({ id }: { id: number }) {
       <div className="mt-6">
         <CastRow cast={data.cast ?? []} />
       </div>
-      {isSeries && seasons && <Seasons seasons={seasons} />}
+      {isSeries && seasons && <Seasons item={item} seasons={seasons} admin={admin} onChange={reload} />}
       {extras.length > 0 && <Extras title={item.title} files={extras} />}
       {!isSeries && files.length > extras.length && <FilesCard files={files.filter((f) => f.role !== "extra")} onChange={reload} />}
       {error && (
@@ -248,7 +250,17 @@ function MatchPanel({ id, status, imdbId, parsed, onDone }: { id: number; status
   );
 }
 
-function Seasons({ seasons }: { seasons: NonNullable<ItemDetail["seasons"]> }) {
+function Seasons({
+  item,
+  seasons,
+  admin,
+  onChange,
+}: {
+  item: ItemDetail["item"];
+  seasons: NonNullable<ItemDetail["seasons"]>;
+  admin: boolean;
+  onChange: () => void;
+}) {
   const firstUnwatched = seasons.find((s) => s.episodes.some((e) => !e.watched))?.season ?? seasons[0]?.season;
   const [season, setSeason] = useState(firstUnwatched);
   const current = seasons.find((s) => s.season === season) ?? seasons[0];
@@ -264,16 +276,16 @@ function Seasons({ seasons }: { seasons: NonNullable<ItemDetail["seasons"]> }) {
       </div>
       <ol className="mt-2 flex flex-col">
         {current.episodes.map((e) => (
-          <EpisodeItem key={e.id} e={e} />
+          <EpisodeItem key={e.id} e={e} actions={admin ? <EpisodeActions item={item} e={e} onChange={onChange} /> : undefined} />
         ))}
       </ol>
     </section>
   );
 }
 
-function EpisodeItem({ e }: { e: EpisodeRow }) {
+function EpisodeItem({ e, actions }: { e: EpisodeRow; actions?: React.ReactNode }) {
   return (
-    <StillRow file={e}>
+    <StillRow file={e} actions={actions}>
       <div className="flex items-baseline gap-2">
         {e.airDate ? (
           <span className="shrink-0 text-xs font-semibold tabular-nums text-content-muted">{fmtAirDate(e.airDate)}</span>
@@ -320,14 +332,17 @@ function Extras({ title, files }: { title: string; files: MediaFile[] }) {
 function StillRow({
   file: e,
   children,
+  actions,
 }: {
   file: Pick<EpisodeRow, "fileId" | "hasStill" | "durationSec" | "positionSec" | "watched" | "problem">;
   children: React.ReactNode;
+  /** Beside the row, outside its link (the admin's "⋯"). */
+  actions?: React.ReactNode;
 }) {
   const progress = e.durationSec && !e.watched ? (e.positionSec / e.durationSec) * 100 : 0;
   return (
-    <li>
-      <Link to={`/play/${e.fileId}`} className="still-link group flex items-center gap-4 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted">
+    <li className="flex items-center gap-1">
+      <Link to={`/play/${e.fileId}`} className="still-link group flex min-w-0 flex-1 items-center gap-4 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted">
         <div className="still w-44 shrink-0">
           {e.hasStill ? (
             <img src={stillUrl(e.fileId)} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
@@ -357,6 +372,7 @@ function StillRow({
           </span>
         )}
       </Link>
+      {actions}
     </li>
   );
 }

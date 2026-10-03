@@ -9,6 +9,7 @@ import (
 
 	"github.com/timothydodd/couchside/internal/config"
 	"github.com/timothydodd/couchside/internal/db"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 // scanFixture is a worker on a temp DB with one movie library. ffprobe is a
@@ -178,5 +179,39 @@ func TestScanPrunesDeletedFile(t *testing.T) {
 	}
 	if got := indexed(t, d, heat, alien); got[0] == 0 || got[1] != 0 {
 		t.Fatalf("after delete: heat %d, alien %d; want only alien pruned", got[0], got[1])
+	}
+}
+
+func TestRescanFileKeepsOptimizedCopyUnlessChanged(t *testing.T) {
+	w, d, lib, root := scanFixture(t)
+	ctx := context.Background()
+	heat := filepath.Join(root, "Heat (1995).mkv")
+	writeVideo(t, heat)
+	if err := w.scan(ctx, lib); err != nil {
+		t.Fatal(err)
+	}
+	id := indexed(t, d, heat)[0]
+	if err := d.SetOptimized(ctx, id, filepath.Join(root, "opt.mp4"), 1, 1080); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.RescanFile(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := d.OptimizedPath(ctx, id); p == "" {
+		t.Fatal("re-scanning an unchanged file dropped its optimized copy")
+	}
+	// The file changed: its copy is stale.
+	if err := os.WriteFile(heat, []byte("longer"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.RescanFile(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := d.OptimizedPath(ctx, id); p != "" {
+		t.Fatalf("changed file kept its optimized copy %q", p)
+	}
+	os.Remove(heat)
+	if err := w.RescanFile(ctx, id); err == nil || !usererr.Is(err) || !strings.Contains(err.Error(), "isn't there") {
+		t.Fatalf("re-scan of a missing file: %v", err)
 	}
 }
