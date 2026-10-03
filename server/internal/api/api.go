@@ -280,6 +280,8 @@ func (s *Server) adminRoutes(r chi.Router) {
 
 	r.Delete("/files/{id}/optimized", s.deleteOptimized)
 	r.Delete("/files/{id}", s.deleteFile)
+	r.Post("/files/{id}/rescan", s.rescanFile)
+	r.Post("/files/{id}/optimize", s.optimizeFile)
 	r.Put("/files/{id}/role", s.setFileRole)
 	r.Get("/transcode", s.transcodeSessions)
 

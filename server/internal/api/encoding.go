@@ -175,6 +175,26 @@ func (s *Server) optimizeLibrary(w http.ResponseWriter, r *http.Request) {
 	s.enqueueOptimize(w, r, files)
 }
 
+// optimizeFile queues an optimized copy of one file, whether or not it
+// already plays in the browser: the admin asked for this one.
+func (s *Server) optimizeFile(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	f, err := s.db.File(r.Context(), id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if f.Problem != "" {
+		writeErr(w, badRequest("this file can't be read"))
+		return
+	}
+	s.enqueueOptimize(w, r, []db.File{f})
+}
+
 func (s *Server) enqueueOptimize(w http.ResponseWriter, r *http.Request, files []db.File) {
 	for _, f := range files {
 		if err := s.db.Enqueue(r.Context(), worker.KindOptimize, f.ID, "Encode "+filepath.Base(f.Path)); err != nil {

@@ -4,6 +4,8 @@ import { create } from "zustand";
 export interface Notice {
   id: number;
   text: string;
+  /** "info" for something that worked (queued, done); the default is a failure. */
+  tone?: "info";
 }
 
 interface NoticeState {
@@ -19,9 +21,9 @@ export const useNotices = create<NoticeState>((set) => ({
 }));
 
 /** Shows text for 8 seconds (or until dismissed). */
-export function notify(text: string) {
+export function notify(text: string, tone?: Notice["tone"]) {
   const id = next++;
-  useNotices.setState((s) => ({ list: [...s.list.slice(-3), { id, text }] }));
+  useNotices.setState((s) => ({ list: [...s.list.slice(-3), { id, text, tone }] }));
   setTimeout(() => useNotices.getState().dismiss(id), 8000);
 }
 

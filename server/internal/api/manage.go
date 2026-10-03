@@ -116,6 +116,24 @@ func (s *Server) deleteFile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
+// rescanFile reads one file again (length, codecs, name and still).
+func (s *Server) rescanFile(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if _, err := s.db.File(r.Context(), id); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := s.worker.RescanFile(r.Context(), id); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // deleteItem removes a whole movie or series: every file on disk, then the item.
 func (s *Server) deleteItem(w http.ResponseWriter, r *http.Request) {
 	id, err := idParam(r)
