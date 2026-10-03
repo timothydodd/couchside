@@ -30,16 +30,56 @@ const KindCommercials = "commercials" // ref: file id
 // defaults; each change here says why.
 const defaultComskipINI = `; Written by Couchside. Set COUCHSIDE_COMSKIP_INI to use your own comskip.ini
 ; (keep output_edl=1, Couchside reads the .edl file).
+;
+; Detection is tuned for US broadcast recordings, with settings similar to
+; Plex's. On sitcoms that fade to black between scenes, comskip's defaults took
+; scenes for ads; these leave out silence cut points (detect_method 43 instead
+; of 107) and score anything over 250s as show.
 output_edl=1
 output_default=0
 verbose=0
 
-; A block counts as show (its commercial score is cut to 1%) when the channel
-; logo is on screen for more of it than this. comskip's default, 0.25, keeps
-; the network promos and station IDs at the end of a break, which show the
-; logo briefly, so skips ended early. Half the block is still easily met by
-; real show segments, where the logo is up throughout.
-logo_percentage_threshold=0.5
+detect_method=43
+validate_silence=1
+validate_uniform=1
+validate_scenechange=1
+max_brightness=60
+test_brightness=40
+max_avg_brightness=25
+max_commercialbreak=600
+min_commercialbreak=25
+max_commercial_size=125
+min_commercial_size=4
+min_show_segment_length=250
+non_uniformity=500
+max_volume=500
+min_silence=12
+ticker_tape=0
+logo_at_bottom=0
+punish=0
+punish_threshold=1.3
+punish_modifier=2
+intelligent_brightness=0
+logo_percentile=0.92
+logo_threshold=0.75
+punish_no_logo=1
+aggressive_logo_rejection=0
+connect_blocks_with_logo=1
+logo_filter=0
+cut_on_ar_change=1
+delete_show_after_last_commercial=0
+delete_show_before_or_after_current=0
+delete_block_after_commercial=0
+remove_before=0
+remove_after=0
+shrink_logo=5
+after_logo=0
+padding=0
+ms_audio_delay=5
+volume_slip=40
+skip_b_frames=0
+max_repair_size=200
+disable_heuristics=4
 `
 
 // detectComskip resolves the comskip binary, or returns "" when it isn't installed.
