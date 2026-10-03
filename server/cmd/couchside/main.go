@@ -22,11 +22,15 @@ import (
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/discovery"
 	"github.com/timothydodd/couchside/internal/livetv"
+	"github.com/timothydodd/couchside/internal/logbuf"
 	"github.com/timothydodd/couchside/internal/metadata"
 	"github.com/timothydodd/couchside/internal/transcode"
 	"github.com/timothydodd/couchside/internal/webui"
 	"github.com/timothydodd/couchside/internal/worker"
 )
+
+// logs keeps recent log lines for System → Console.
+var logs = logbuf.New(2000)
 
 // version is stamped at build time with -ldflags "-X main.version=...".
 var version = "dev"
@@ -36,7 +40,7 @@ func main() {
 	if os.Getenv("COUCHSIDE_DEBUG") != "" {
 		level = slog.LevelDebug
 	}
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})))
+	slog.SetDefault(slog.New(logs.Handler(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level}))))
 
 	if len(os.Args) > 1 && os.Args[1] == "reset-password" {
 		if err := resetPassword(os.Args[2:]); err != nil {
@@ -119,6 +123,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	apiServer.UseLogs(logs)
 	go apiServer.Run(ctx)
 	if cfg.Discovery {
 		go runDiscovery(ctx, cfg, version, apiServer)

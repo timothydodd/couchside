@@ -25,6 +25,7 @@ import (
 	"github.com/timothydodd/couchside/internal/config"
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/livetv"
+	"github.com/timothydodd/couchside/internal/logbuf"
 	"github.com/timothydodd/couchside/internal/metadata"
 	"github.com/timothydodd/couchside/internal/sysstat"
 	"github.com/timothydodd/couchside/internal/transcode"
@@ -43,6 +44,8 @@ type Server struct {
 	version   string
 	presence  *presence
 	sys       sysstat.Sampler
+	history   *sysstat.History // CPU and memory over time, for System
+	logs      *logbuf.Buffer   // recent log lines, for System → Console; nil without one
 	index     searchIndex
 	auth      *authState
 	proxies   []netip.Prefix // COUCHSIDE_TRUSTED_PROXIES
@@ -55,6 +58,7 @@ func init() {
 
 func New(d *db.DB, cfg config.Config, w *worker.Worker, providers *metadata.Chain, tc *transcode.Manager, tv *livetv.Service, version string) (*Server, error) {
 	s := &Server{db: d, cfg: cfg, worker: w, providers: providers, tc: tc, tv: tv, version: version, presence: newPresence()}
+	s.history = sysstat.NewHistory(s.streamCount)
 	key, err := auth.LoadKey(filepath.Join(cfg.DataDir, "auth.key"))
 	if err != nil {
 		return nil, fmt.Errorf("auth key: %w", err)
@@ -68,6 +72,7 @@ func New(d *db.DB, cfg config.Config, w *worker.Worker, providers *metadata.Chai
 
 // Run does the server's background upkeep until ctx ends.
 func (s *Server) Run(ctx context.Context) {
+	go s.history.Run(ctx)
 	go func() {
 		t := time.NewTicker(24 * time.Hour)
 		defer t.Stop()
@@ -234,6 +239,8 @@ func (s *Server) recorderRoutes(r chi.Router) {
 // adminRoutes are settings, libraries, file management, jobs and accounts.
 func (s *Server) adminRoutes(r chi.Router) {
 	r.Get("/system", s.system)
+	r.Get("/system/history", s.systemHistory)
+	r.Get("/system/logs", s.systemLogs)
 
 	r.Get("/accounts", s.listAccounts)
 	r.Put("/settings/passwordless", s.setPasswordless)

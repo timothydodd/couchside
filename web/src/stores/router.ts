@@ -1,5 +1,9 @@
 import { create } from "zustand";
 
+/** Settings pages: "you" (/settings) is everyone's own; the rest are admin-only. */
+export const SETTINGS_SECTIONS = ["you", "system", "console", "accounts", "metadata", "livetv", "advanced"] as const;
+export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
+
 export type Route =
   | { name: "home" }
   | { name: "movies" }
@@ -12,7 +16,7 @@ export type Route =
   | { name: "activity" }
   | { name: "libraries" }
   | { name: "manage"; id: number }
-  | { name: "settings" }
+  | { name: "settings"; section: SettingsSection }
   | { name: "profiles" }
   | { name: "search"; q: string }
   | { name: "person"; id: number }
@@ -31,9 +35,11 @@ export function parseRoute(path: string): Route {
   if (p === "/livetv/channels") return { name: "livetv", tab: "channels" };
   if (p === "/livetv/recordings") return { name: "livetv", tab: "recordings" };
   if (p === "/libraries") return { name: "libraries" };
-  if (p === "/settings") return { name: "settings" };
+  if (p === "/settings") return { name: "settings", section: "you" };
   if (p === "/profiles") return { name: "profiles" };
-  let m = p.match(/^\/item\/(\d+)$/);
+  let m = p.match(/^\/settings\/([a-z]+)$/);
+  if (m && (SETTINGS_SECTIONS as readonly string[]).includes(m[1]) && m[1] !== "you") return { name: "settings", section: m[1] as SettingsSection };
+  m = p.match(/^\/item\/(\d+)$/);
   if (m) return { name: "item", id: Number(m[1]) };
   m = p.match(/^\/person\/(\d+)$/);
   if (m) return { name: "person", id: Number(m[1]) };

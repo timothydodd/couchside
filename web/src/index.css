@@ -538,3 +538,72 @@ video::cue {
     @apply border-t border-border-light px-4 py-4;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Settings: the sidebar's sub-items, System charts and the Console.
+--------------------------------------------------------------------------- */
+@layer components {
+  /* Settings' sections, indented under it in the sidebar while it's open. */
+  .subnav {
+    @apply ml-[1.1rem] mt-0.5 flex flex-col gap-0.5 border-l border-border-light pl-2;
+  }
+  .subnav-item {
+    @apply flex w-full items-center gap-2 rounded-md px-2 py-1 text-[13px] text-content-muted transition-colors hover:bg-muted hover:text-content;
+  }
+  .subnav-item[aria-current="page"] {
+    @apply bg-muted font-medium text-content;
+  }
+
+  /* LineChart. Series colours come from the tokens (see docs/style.md). */
+  .chart {
+    @apply relative w-full select-none;
+  }
+  .chart-grid {
+    stroke: var(--border-light);
+  }
+  .chart-axis {
+    @apply text-[10px] tabular-nums;
+    fill: var(--text-muted);
+    color: var(--text-muted);
+  }
+  .chart-tip {
+    @apply pointer-events-none absolute z-10 -translate-x-1/2 rounded-md border border-border-light bg-raised px-2.5 py-1.5 text-xs;
+    box-shadow: var(--shadow-md);
+  }
+  .chart-key {
+    @apply inline-flex items-center gap-1.5;
+  }
+  .chart-swatch {
+    @apply inline-block h-2 w-2 shrink-0 rounded-full;
+  }
+
+  /* Settings → Console: the server log. */
+  .console {
+    @apply h-[60vh] min-h-72 overflow-auto bg-page px-3 py-2 font-mono text-xs leading-5;
+  }
+  .console-line {
+    @apply whitespace-pre-wrap break-words text-content-secondary;
+  }
+  .console-time {
+    @apply mr-2 text-content-muted;
+  }
+  .console-level {
+    @apply mr-2 inline-block w-11 font-semibold text-content-muted;
+  }
+  .console-msg {
+    @apply text-content;
+  }
+  .console-attrs {
+    @apply text-content-muted;
+  }
+  .console-warn .console-level {
+    @apply text-warning;
+  }
+  .console-error .console-level,
+  .console-error .console-msg {
+    @apply text-critical;
+  }
+  .console-gap {
+    @apply my-1 border-y border-dashed border-border-light py-1 text-center text-content-muted;
+  }
+}

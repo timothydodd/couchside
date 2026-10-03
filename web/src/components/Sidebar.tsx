@@ -1,7 +1,8 @@
-import { Activity, Clapperboard, FolderOpen, Home, RadioTower, Settings, Tv, type LucideIcon } from "lucide-react";
+import { Activity, ChevronDown, ChevronRight, Clapperboard, FolderOpen, Home, RadioTower, Settings, Tv, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import Link from "./Link";
 import ProfileAvatar from "./ProfileAvatar";
+import { SECTIONS } from "./settings/sections";
 import { SearchInput } from "./ui";
 import { useRouter, type Route } from "../stores/router";
 import { useStatus } from "../stores/status";
@@ -52,8 +53,13 @@ export default function Sidebar() {
     return null;
   };
 
+  // Settings opens into its sections (admins only: users have just their own).
+  const settingsOpen = admin && route.name === "settings";
+  const section = route.name === "settings" ? route.section : null;
+
   const item = ({ name, to, label, Icon }: (typeof ITEMS)[number]) => {
-    const active = current === name;
+    // While Settings is open, the parent is "current" only on your own settings.
+    const active = name === "settings" && settingsOpen ? section === "you" : current === name;
     return (
       <Link
         key={name}
@@ -66,6 +72,7 @@ export default function Sidebar() {
         <Icon size={16} className={active ? "text-accent" : "text-content-muted group-hover:text-content-secondary"} />
         <span className="flex-1 text-left">{label}</span>
         {badge(name)}
+        {name === "settings" && admin && (settingsOpen ? <ChevronDown size={14} className="text-content-muted" /> : <ChevronRight size={14} className="text-content-muted" />)}
       </Link>
     );
   };
@@ -86,7 +93,19 @@ export default function Sidebar() {
       </div>
       <div className="mb-1 mt-5 px-2.5 text-[10px] font-semibold uppercase tracking-widest text-content-muted">Manage</div>
       {/* Users only have their own settings to manage. */}
-      <div className="flex flex-col gap-0.5">{MANAGE.filter((m) => admin || m.name === "settings").map(item)}</div>
+      <div className="flex flex-col gap-0.5">
+        {MANAGE.filter((m) => admin || m.name === "settings").map(item)}
+        {settingsOpen && (
+          <div className="subnav" aria-label="Settings sections">
+            {SECTIONS.filter((s) => s.id !== "you").map(({ id, to, label, Icon }) => (
+              <Link key={id} to={to} aria-current={section === id ? "page" : undefined} className="subnav-item">
+                <Icon size={14} className={section === id ? "text-accent" : ""} />
+                {label}
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="mt-auto flex flex-col gap-0.5 border-t border-border-light pt-2">
         {profile && (
           <Link
