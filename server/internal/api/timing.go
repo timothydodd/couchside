@@ -22,6 +22,7 @@ const (
 	// show (a network promo, a station ID). Breaks this close are joined.
 	settingMergeGap = "commercials.merge_gap" // seconds of "show" between breaks that still counts as one break
 	defaultMergeGap = 60.0
+	leadInBreak     = 5.0 // a break starting this close to the start is the recording's lead-in
 	maxMergeGap     = 300.0
 	maxPadding      = 30 * 60
 )
@@ -56,7 +57,10 @@ func (s *Server) trimBreaks(ctx context.Context, segs []db.Segment) []db.Segment
 func mergeBreaks(segs []db.Segment, gap float64) []db.Segment {
 	out := make([]db.Segment, 0, len(segs))
 	for _, g := range segs {
-		if n := len(out); n > 0 && g.Start-out[n-1].End < gap {
+		// A break at the very start is the recording's lead-in (the end of
+		// the previous programme, ads before the show), so what follows it
+		// is the cold open, however short, not a promo between ads.
+		if n := len(out); n > 0 && g.Start-out[n-1].End < gap && out[n-1].Start > leadInBreak {
 			out[n-1].End = max(out[n-1].End, g.End)
 			continue
 		}
