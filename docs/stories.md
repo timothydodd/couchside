@@ -25,7 +25,7 @@ from the start.
 | ID  | Story                                                  | Kind      | Finding   | Done |
 | --- | ------------------------------------------------------ | --------- | --------- | ---- |
 | B1  | Turning passwords on ends passwordless sessions        | Security  | Confirmed |      |
-| B2  | Sign-in hardening, second pass                         | Security  | Reported  |      |
+| B2  | Sign-in hardening, second pass                         | Security  | Reported  | PR #46|
 | B3  | Remote image cache can't be filled between prunes      | Security  | Reported  |      |
 | B4  | Internal error text stays on the server                | Security  | Reported  |      |
 | B5  | A provider outage doesn't wipe cast and backdrops      | Data loss | Confirmed |      |
@@ -105,6 +105,8 @@ for a year. This was A7's item 4.
 **Done when** the test passes.
 
 ## B2 · Sign-in hardening, second pass
+
+**Done** (PR #46).
 
 **Scope**
 - **The throttle is check-then-act.** `throttled` (`api/auth.go:389`) reads
