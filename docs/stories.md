@@ -61,7 +61,7 @@ from the start.
 | F6  | Per-profile libraries and rating limit                 | Feature   | M         | Done |
 | F7  | Versions and editions                                  | Feature   | S to M    | Done |
 | F8  | Surround sound passthrough                             | Feature   | S to M    | Done |
-| F9  | Sign in with OIDC                                      | Feature   | M         |      |
+| F9  | Sign in with OIDC                                      | Feature   | M         | Done |
 | F10 | Two-factor sign-in                                     | Feature   | S to M    |      |
 
 **How to read these.** "Confirmed" means the defect was read in the code and
@@ -753,19 +753,30 @@ stereo AAC.
 
 ## F9 · Sign in with OIDC
 
-**Why.** Jellyfin about 1,200 votes.
+**Done.** The whole flow is tested against a fake provider (sign-in,
+unknown people, auto-created profiles, the admin group, a replayed token, a
+made-up callback), and the TV code flow was run for real through the `/link`
+page. It hasn't met a real provider (Authelia, Authentik, Keycloak) yet.
 
-**Scope**
-- Settings: issuer, client id and secret, the claim that maps to a profile
-  name, whether to create profiles on first sign-in, and an admin group.
-- The callback creates the same session `login` does, so everything after
-  sign-in is unchanged. Local passwords keep working; `reset-password` stays
-  the recovery path.
-- TV clients: a device-code screen ("go to /link and enter ABCD"), which
-  also gives the Roku a way to sign in to password accounts without typing.
+- **OIDC for the web** (`api/oidc.go`): authorization-code flow with PKCE,
+  state and nonce. Settings → Accounts → Single sign-on holds the provider's
+  address, client id and secret, the claim that names the profile, whether
+  to make profiles for new people, an admin group, and the button's text.
+  The sign-in page gets the button; a failure comes back there as a message.
+  Local passwords and `reset-password` keep working.
+- **TVs** (`api/device.go`): `POST /api/auth/device` gives a TV a code to
+  show; a signed-in person enters it at `/link` (also under Your account →
+  Sign in a TV); `POST /api/auth/device/token` then gives the TV its tokens.
+  That signs a TV in to any account without typing a password, including
+  ones that sign in through the provider. The Roku side is R18.
 
-**Done when** a profile can sign in on the web through an OIDC provider, and
-on a Roku with a code.
+**Know before turning it on**
+- A profile made by single sign-on has no password and is locked from
+  setting one. With passwordless sign-in on, anyone could pick it without
+  going through the provider, so use single sign-on with passwordless off.
+- The ID token's signature isn't checked: it's read from the token endpoint
+  over TLS with the client secret, which the spec allows. Issuer, audience,
+  expiry and nonce are checked.
 
 ## F10 · Two-factor sign-in
 

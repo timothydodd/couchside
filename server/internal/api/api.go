@@ -51,6 +51,9 @@ type Server struct {
 	index     searchIndex
 	auth      *authState
 
+	oidc   oidcState   // sign-ins through an identity provider, in progress
+	device deviceState // codes TVs are showing
+
 	remoteSize    atomic.Int64 // bytes in the remote image cache, as of the last prune plus fetches since
 	remotePruning sync.Mutex
 	proxies       []netip.Prefix // COUCHSIDE_TRUSTED_PROXIES
@@ -153,12 +156,17 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/refresh", s.refresh)
 		r.Post("/auth/setup", s.setup)
 		r.Post("/auth/pick", s.pick)
+		r.Get("/auth/oidc/start", s.oidcStart)
+		r.Get("/auth/oidc/callback", s.oidcCallback)
+		r.Post("/auth/device", s.deviceStart)
+		r.Post("/auth/device/token", s.deviceToken)
 
 		r.Group(func(r chi.Router) {
 			r.Use(s.authenticate, s.presence.track)
 			// Your own account; reachable while a temporary password still has to be changed.
 			r.Post("/auth/logout", s.logout)
 			r.Post("/auth/password", s.changePassword)
+			r.Post("/auth/device/approve", s.deviceApprove)
 			r.Get("/auth/sessions", s.mySessions)
 			r.Post("/auth/sessions/others/end", s.endOtherSessions)
 			r.Delete("/auth/sessions/{sid}", s.endSession)
@@ -273,6 +281,8 @@ func (s *Server) adminRoutes(r chi.Router) {
 
 	r.Get("/accounts", s.listAccounts)
 	r.Put("/settings/passwordless", s.setPasswordless)
+	r.Get("/settings/oidc", s.getOIDC)
+	r.Put("/settings/oidc", s.setOIDC)
 	r.Post("/accounts", s.createAccount)
 	r.Put("/accounts/{id}", s.updateAccount)
 	r.Post("/accounts/{id}/password", s.resetPassword)

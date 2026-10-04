@@ -25,6 +25,8 @@ interface AuthState {
   signedIn: AuthInfo["signedIn"];
   /** Signing in here sends passwords unencrypted across the internet. */
   insecure: boolean;
+  /** The label of the single sign-on button; "" when there's none. */
+  oidc: string;
   load: () => Promise<void>;
   login: (name: string, password: string) => Promise<void>;
   /** Passwordless sign-in to a profile without a password. */
@@ -46,6 +48,7 @@ export const useAuth = create<AuthState>((set, get) => ({
   user: null,
   signedIn: [],
   insecure: false,
+  oidc: "",
   load: async () => {
     try {
       const info = await api<AuthInfo>("/api/auth");
@@ -57,6 +60,7 @@ export const useAuth = create<AuthState>((set, get) => ({
         user: info.user,
         signedIn: info.signedIn,
         insecure: !!info.insecure,
+        oidc: info.oidc ?? "",
         error: null,
       });
       if (info.user && info.accessExpiresAt) schedule(info);

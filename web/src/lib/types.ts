@@ -659,6 +659,8 @@ export interface AuthInfo {
   signedIn: ProfileStub[];
   /** This connection is plain HTTP from an internet address. */
   insecure?: boolean;
+  /** The label of the "sign in through a provider" button, when single sign-on is set up. */
+  oidc?: string;
 }
 
 export type ProfileStub = Pick<Profile, "id" | "name" | "color" | "hasPassword">;

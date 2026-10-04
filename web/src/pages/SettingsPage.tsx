@@ -1,5 +1,6 @@
 import Link from "../components/Link";
 import AccountManager from "../components/settings/AccountManager";
+import SingleSignOn from "../components/settings/SingleSignOn";
 import AccountSettings from "../components/settings/AccountSettings";
 import Console from "../components/settings/Console";
 import LiveTvSettings from "../components/settings/LiveTvSettings";
@@ -60,7 +61,12 @@ export default function SettingsPage() {
           </>
         )}
         {id === "console" && <Console />}
-        {id === "accounts" && <AccountManager />}
+        {id === "accounts" && (
+          <>
+            <AccountManager />
+            <SingleSignOn />
+          </>
+        )}
         {id === "metadata" && <MetadataSettings />}
         {id === "livetv" && (
           <>

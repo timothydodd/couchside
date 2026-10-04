@@ -7,6 +7,7 @@ import { lazyPage } from "./lib/lazyPage";
 import HomePage from "./pages/HomePage";
 import ItemPage from "./pages/ItemPage";
 import LibraryPage from "./pages/LibraryPage";
+import LinkPage from "./pages/LinkPage";
 import PersonPage from "./pages/PersonPage";
 import SearchPage from "./pages/SearchPage";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
@@ -100,6 +101,7 @@ function Signed() {
           {route.name === "settings" && <SettingsPage />}
           {route.name === "search" && <SearchPage q={route.q} />}
           {route.name === "person" && <PersonPage id={route.id} />}
+          {route.name === "link" && <LinkPage />}
           {route.name === "notfound" && <EmptyState title="Nothing here">That page doesn't exist.</EmptyState>}
           </Suspense>
         </main>

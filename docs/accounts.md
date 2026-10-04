@@ -96,3 +96,33 @@ Read `GET /api/auth`, sign in with `POST /api/auth/pick`
 (`{"profileId", "client": "tv"}`, passwordless) or `POST /api/auth/login`
 (`"client": "tv"`), send `Authorization: Bearer <accessToken>`, and renew with
 `POST /api/auth/refresh` (`{"refreshToken": …}`).
+
+## Single sign-on
+
+If you already run an OpenID Connect provider (Authelia, Authentik, Keycloak,
+or a hosted one), Couchside can use it for signing in on the web.
+
+1. In the provider, register a client for Couchside. Its redirect (callback)
+   address is shown in Settings → Accounts → Single sign-on; it's
+   `https://<your couchside>/api/auth/oidc/callback`.
+2. In that card, enter the provider's address, the client id and the secret.
+   Saving checks the provider can be reached.
+3. Choose which claim holds the profile name (`preferred_username` by
+   default; `email` or `name` also work). Someone is signed in to the profile
+   with that name. Tick "Make a profile…" to create one for people who don't
+   have one; give an admin group to make people in it admins when their
+   profile is created.
+
+The sign-in page then has a button for it. Passwords set here keep working,
+and `couchside reset-password` is still the way back in if the provider is
+down.
+
+Use it with passwordless sign-in **off**: a profile created by single sign-on
+has no password, and with passwordless on anyone could pick it.
+
+## Signing in a TV with a code
+
+A TV app can show a short code instead of asking for a password. On a phone
+or computer where you're signed in, open `/link` (or Settings → Your account
+→ Sign in a TV), enter the code, and the TV is signed in as you. It works for
+every kind of account, including ones that use single sign-on.

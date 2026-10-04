@@ -48,6 +48,8 @@ type authInfo struct {
 	ExpiresIn          int64         `json:"expiresIn,omitempty"` // seconds until then, for clients whose clock is off
 	SignedIn           []profileStub `json:"signedIn"`            // web: profiles this browser holds a session for
 	Insecure           bool          `json:"insecure"`            // this request is plain HTTP from an internet address
+	// OIDC is the label of the "sign in with a provider" button, when there is one.
+	OIDC string `json:"oidc,omitempty"`
 }
 
 type profileStub struct {
@@ -71,6 +73,9 @@ func (s *Server) authStatus(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, err)
 			return
 		}
+	}
+	if c := s.oidcConfig(ctx); c.enabled() {
+		out.OIDC = c.Label
 	}
 	if out.SetupRequired, err = s.setupNeeded(ctx); err != nil {
 		writeErr(w, err)
@@ -230,14 +235,25 @@ func loginFailed(w http.ResponseWriter, r *http.Request, ip, name string) {
 	writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "wrong name or password", "code": "bad_credentials"})
 }
 
-// startSession creates a session and hands out its tokens.
+// startSession creates a session and answers with its tokens.
 func (s *Server) startSession(w http.ResponseWriter, r *http.Request, p db.Profile, client, device string) {
+	out, err := s.openSession(w, r, p, client, device)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// openSession creates a session for p. For the web it sets the cookies on w;
+// a TV app's tokens are in what it returns. Nothing is written to the body,
+// so a caller can redirect instead (sign-in through an identity provider).
+func (s *Server) openSession(w http.ResponseWriter, r *http.Request, p db.Profile, client, device string) (tokens, error) {
 	refresh := auth.NewToken()
 	sess := db.Session{ID: auth.NewToken(), ProfileID: p.ID, Client: client, Device: clip(device, 60),
 		UserAgent: clip(r.UserAgent(), 300), IP: clientIP(r), ExpiresAt: time.Now().Add(sessionIdle).Unix()}
 	if err := s.db.CreateSession(r.Context(), sess, auth.HashToken(refresh)); err != nil {
-		writeErr(w, err)
-		return
+		return tokens{}, err
 	}
 	if err := s.db.TrimSessions(r.Context(), p.ID, maxSessions); err != nil {
 		slog.Warn("trim sessions", "err", err)
@@ -247,11 +263,17 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, p db.Profi
 		slog.Warn("sign-in over plain HTTP from the internet: passwords and tokens travel unencrypted; serve Couchside over HTTPS (docs/install.md)",
 			"profile", p.Name, "ip", sess.IP)
 	}
-	s.issue(w, r, p, sess, refresh)
+	return s.grant(w, r, p, sess, refresh), nil
 }
 
 // issue sends a fresh access token with the session's (new) refresh token.
 func (s *Server) issue(w http.ResponseWriter, r *http.Request, p db.Profile, sess db.Session, refresh string) {
+	writeJSON(w, http.StatusOK, s.grant(w, r, p, sess, refresh))
+}
+
+// grant makes an access token for the session: cookies for the web, values
+// in the result for a TV app.
+func (s *Server) grant(w http.ResponseWriter, r *http.Request, p db.Profile, sess db.Session, refresh string) tokens {
 	ttl := auth.AccessTTL
 	if sess.Client == "tv" {
 		ttl = auth.TVAccessTTL
@@ -271,7 +293,7 @@ func (s *Server) issue(w http.ResponseWriter, r *http.Request, p db.Profile, ses
 		http.SetCookie(w, &http.Cookie{Name: profileCookie, Value: strconv.FormatInt(p.ID, 10), Path: "/",
 			MaxAge: 365 * 24 * 3600, HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode})
 	}
-	writeJSON(w, http.StatusOK, out)
+	return out
 }
 
 func refreshCookie(profileID int64) string { return refreshPrefix + strconv.FormatInt(profileID, 10) }

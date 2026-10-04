@@ -15,7 +15,13 @@ import { useRouter } from "../stores/router";
  * sidebar.
  */
 export default function SignInPage({ switching = false }: { switching?: boolean }) {
-  const { passwordless, profiles, signedIn, user, insecure, login, pick, switchTo } = useAuth();
+  const { passwordless, profiles, signedIn, user, insecure, oidc, login, pick, switchTo } = useAuth();
+  // What the provider's sign-in came back with, when it failed (shown once).
+  const [ssoError] = useState(() => {
+    const e = new URLSearchParams(location.search).get("signin_error");
+    if (e) history.replaceState(null, "", location.pathname);
+    return e;
+  });
   const back = useRouter((s) => s.back);
   const tiles = passwordless ? profiles : signedIn;
   const [asking, setAsking] = useState<ProfileStub | null>(null); // the profile whose password we want
@@ -76,6 +82,17 @@ export default function SignInPage({ switching = false }: { switching?: boolean 
             Couchside should serve it over HTTPS.
           </WarningNote>
         </div>
+      )}
+      {ssoError && (
+        <div className="mt-6 w-full max-w-sm">
+          <ErrorNote>{ssoError}</ErrorNote>
+        </div>
+      )}
+      {oidc && !switching && !asking && (
+        // A full navigation: the provider's pages take over, then send the browser back signed in.
+        <a className="btn-primary mt-6 justify-center" href="/api/auth/oidc/start">
+          <LogIn size={15} /> {oidc}
+        </a>
       )}
       {tiles.length > 0 && !asking && (
         <div className="mt-8 flex flex-wrap justify-center gap-6">

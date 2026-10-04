@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { KeyRound, LogOut } from "lucide-react";
+import { KeyRound, LogOut, Tv } from "lucide-react";
+import Link from "../Link";
 import NewPassword from "../auth/NewPassword";
 import SessionList from "./SessionList";
 import { ErrorNote } from "../ui";
@@ -57,6 +58,9 @@ export default function AccountSettings() {
             {user?.role === "admin" ? " (admin)" : ""}.
           </div>
         </div>
+        <Link to="/link" className="btn-ghost !text-xs" title="Enter the code a TV app is showing to sign it in as you">
+          <Tv size={13} /> Sign in a TV
+        </Link>
         <button className="btn-ghost !text-xs" onClick={attempt("Couldn't sign out", () => logout())}>
           <LogOut size={13} /> Sign out
         </button>
