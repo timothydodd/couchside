@@ -386,7 +386,6 @@ func (s *Service) applyRules(ctx context.Context) {
 	s.wake()
 }
 
-// afterRecording enforces keep-last-N for the rule that made a recording.
 // newestEpisodesFirst orders recordings by season and episode, newest first,
 // when every one has them, so a re-recorded rerun of an old episode doesn't
 // push out a newer one. Otherwise they stay in recording order.
@@ -453,6 +452,7 @@ func peakOverlap(wins [][2]int64, from, to int64) int {
 	return peak
 }
 
+// afterRecording enforces keep-last-N for the rule that made a recording.
 func (s *Service) afterRecording(ctx context.Context, rec db.Recording) {
 	if rec.RuleID == nil {
 		return

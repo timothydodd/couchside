@@ -358,7 +358,7 @@ func (m *Manager) Segment(ctx context.Context, id string, n int) (string, error)
 		errMsg := ""
 		cleanEOF := false
 		if exited && s.stderr != nil {
-			errMsg = tail(s.stderr.String(), 400)
+			errMsg = Tail(s.stderr.String(), 400)
 			cleanEOF = s.exitErr == nil && s.cmd != nil
 		}
 		s.mu.Unlock()

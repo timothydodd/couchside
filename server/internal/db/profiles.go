@@ -10,9 +10,8 @@ import (
 )
 
 // Profile is one person using Couchside: profiles keep watch history,
-// favourite channels and preferences apart. With accounts on (COUCHSIDE_AUTH),
-// a profile is also the user that signs in; the account fields mean nothing
-// otherwise.
+// favourite channels and preferences apart. A profile is also the account
+// that signs in, with or without a password.
 type Profile struct {
 	ID        int64           `json:"id"`
 	Name      string          `json:"name"`

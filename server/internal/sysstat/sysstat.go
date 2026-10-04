@@ -37,10 +37,10 @@ type Procs struct {
 }
 
 const (
-	cgroup  = "/sys/fs/cgroup"
-	clkTck  = 100 // USER_HZ: /proc CPU times are in 1/100 s on every Linux we run on
-	minGap  = 200 * time.Millisecond
-	maxGap  = 10 * time.Second
+	cgroup = "/sys/fs/cgroup"
+	clkTck = 100 // USER_HZ: /proc CPU times are in 1/100 s on every Linux we run on
+	minGap = 200 * time.Millisecond
+	maxGap = 10 * time.Second
 )
 
 // encoders are the child processes counted as transcoding work.

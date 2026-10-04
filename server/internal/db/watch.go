@@ -11,6 +11,7 @@ import (
 // watchedAt is the fraction of a file after which it counts as watched.
 const watchedAt = 0.92
 
+// SaveProgress and SetWatched write the watch state of the profile in ctx.
 func (d *DB) SaveProgress(ctx context.Context, fileID int64, position, duration float64) error {
 	watched := duration > 0 && position/duration >= watchedAt
 	_, err := d.sql.ExecContext(ctx, `INSERT INTO watch_state (profile_id, file_id, position_sec, duration_sec, watched, updated_at)
@@ -20,8 +21,6 @@ func (d *DB) SaveProgress(ctx context.Context, fileID int64, position, duration 
 		ProfileID(ctx), fileID, position, duration, watched)
 	return err
 }
-
-// SaveProgress and SetWatched write the watch state of the profile in ctx.
 
 // SetWatched marks files watched (position cleared) or unwatched (state removed).
 func (d *DB) SetWatched(ctx context.Context, fileIDs []int64, watched bool) error {

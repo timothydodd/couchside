@@ -500,13 +500,6 @@ func (s *Server) playInfo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, p)
 }
 
-func truncate(s string, n int) string {
-	if len(s) > n {
-		return s[:n]
-	}
-	return s
-}
-
 func (s *Server) saveProgress(w http.ResponseWriter, r *http.Request) {
 	id, err := idParam(r)
 	if err != nil {
@@ -530,7 +523,7 @@ func (s *Server) saveProgress(w http.ResponseWriter, r *http.Request) {
 		s.presence.setPlaying(r, nil)
 	} else {
 		s.presence.setPlaying(r, &playing{Kind: "file", FileID: id, Position: in.Position, Duration: in.Duration,
-			Mode: truncate(in.Mode, 60), Paused: in.State == "paused"})
+			Mode: clip(in.Mode, 60), Paused: in.State == "paused"})
 	}
 	if err := s.db.SaveProgress(r.Context(), id, in.Position, in.Duration); err != nil {
 		writeErr(w, err)

@@ -1,16 +1,16 @@
 package livetv
 
 import (
-	"net/url"
 	"context"
 	"log/slog"
+	"net/url"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/timothydodd/couchside/internal/db"
-	"github.com/timothydodd/couchside/internal/probe"
 	"github.com/timothydodd/couchside/internal/metadata"
+	"github.com/timothydodd/couchside/internal/probe"
 	"github.com/timothydodd/couchside/internal/transcode"
 	"github.com/timothydodd/couchside/internal/usererr"
 )
@@ -62,7 +62,7 @@ type Service struct {
 
 // HasTuner reports whether an HDHomeRun is configured. Without one, Live TV
 // is just Couchside's own virtual channels (if any).
-func (s *Service) HasTuner() bool { return s.hdhr != nil }
+func (s *Service) HasTuner() bool { return s != nil && s.hdhr != nil }
 
 // configured is whether Live TV has anything to show. Called with mu held.
 func (s *Service) configured() bool { return s.hdhr != nil || s.virtualCount > 0 }

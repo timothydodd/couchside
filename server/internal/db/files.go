@@ -27,7 +27,7 @@ type File struct {
 	Watched        bool     `json:"watched"`
 	Optimized      bool     `json:"optimized"`
 	Problem        string   `json:"problem"` // '' | unreadable | no-video
-	Role           string   `json:"role"`      // copy | part | extra (movies)
+	Role           string   `json:"role"`    // copy | part | extra (movies)
 	PartNo         int      `json:"partNo"`
 	ExtraTitle     string   `json:"extraTitle"`
 	RolePinned     bool     `json:"rolePinned"`

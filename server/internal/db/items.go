@@ -22,7 +22,7 @@ type ItemSummary struct {
 	MatchStatus  string   `json:"matchStatus"`
 	AddedAt      int64    `json:"addedAt"`
 	UpdatedAt    int64    `json:"updatedAt"`
-	FileCount    int      `json:"fileCount"`    // extras aren't counted
+	FileCount    int      `json:"fileCount"` // extras aren't counted
 	WatchedCount int      `json:"watchedCount"`
 	InWatchlist  bool     `json:"inWatchlist"` // on the profile's "My list"
 	LastAddedAt  int64    `json:"lastAddedAt"`
@@ -206,11 +206,6 @@ func (d *DB) ClearMatch(ctx context.Context, id int64) error {
 		runtime_min = NULL, total_seasons = NULL, poster_url = '', backdrop_url = '', has_poster = custom_poster, match_provider = '',
 		imdb_id = CASE WHEN imdb_pinned = 1 THEN imdb_id ELSE '' END, updated_at = unixepoch()
 		WHERE id = ?`, SortTitle(parsed), id)
-	return err
-}
-
-func (d *DB) SetMatchStatus(ctx context.Context, id int64, status string) error {
-	_, err := d.sql.ExecContext(ctx, `UPDATE media_items SET match_status = ?, updated_at = unixepoch() WHERE id = ?`, status, id)
 	return err
 }
 

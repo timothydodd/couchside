@@ -325,13 +325,6 @@ var httpClient = remoteimg.NewClient(30 * time.Second)
 // errGone means the remote image doesn't exist (404/410).
 var errGone = errors.New("remote image not found")
 
-func abs(n int) int {
-	if n < 0 {
-		return -n
-	}
-	return n
-}
-
 func download(ctx context.Context, url, dst string) error {
 	if u, err := neturl.Parse(url); err != nil || !remoteimg.Allowed(u) {
 		return fmt.Errorf("not an image host Couchside fetches from: %s", url)

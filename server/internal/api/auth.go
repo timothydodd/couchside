@@ -18,7 +18,7 @@ import (
 	"github.com/timothydodd/couchside/internal/db"
 )
 
-// Accounts (COUCHSIDE_AUTH). Every /api request then carries a short-lived
+// Accounts. Every /api request carries a short-lived
 // signed access token: a cookie for the web (<video>, <img> and hls.js can't
 // send headers) or "Authorization: Bearer" for TV apps. Long-lived refresh
 // tokens are random, stored hashed, and replaced on every use; a replayed one
@@ -35,21 +35,13 @@ const (
 	// A year: Couchside is a home server, and nobody should be retyping a
 	// password on a TV remote. Signing out, a password change or an admin ends
 	// sessions sooner.
-	webIdle = 365 * 24 * time.Hour
-	tvIdle  = 365 * 24 * time.Hour
+	sessionIdle = 365 * 24 * time.Hour
 
 	maxSessions    = 50               // per profile; signing in again drops the least recently used
 	sessionRecheck = 30 * time.Second // how stale the cached session/role check may be
 )
 
-func idleFor(client string) time.Duration {
-	if client == "tv" {
-		return tvIdle
-	}
-	return webIdle
-}
-
-// authState is the server's accounts machinery; unused when accounts are off.
+// authState is the server's accounts machinery.
 type authState struct {
 	signer   *auth.Signer
 	byIP     *auth.Limiter
@@ -123,15 +115,14 @@ func (c *sessionCache) forgetAll() {
 
 // --- the signed-in user ---------------------------------------------------------
 
-// user is who a request acts as. With accounts off it's the chosen profile,
-// allowed everything.
+// user is who a request acts as: the signed-in profile and what it may do.
 type user struct {
 	ID         int64
 	Admin      bool
 	CanRecord  bool
 	MustChange bool
-	Session    string // "" with accounts off
-	Cookie     bool   // authenticated by cookie (the web) rather than a bearer token
+	Session    string
+	Cookie     bool // authenticated by cookie (the web) rather than a bearer token
 }
 
 type userKey struct{}
@@ -483,7 +474,7 @@ func loginFailed(w http.ResponseWriter, r *http.Request, ip, name string) {
 func (s *Server) startSession(w http.ResponseWriter, r *http.Request, p db.Profile, client, device string) {
 	refresh := auth.NewToken()
 	sess := db.Session{ID: auth.NewToken(), ProfileID: p.ID, Client: client, Device: clip(device, 60),
-		UserAgent: clip(r.UserAgent(), 300), IP: clientIP(r), ExpiresAt: time.Now().Add(idleFor(client)).Unix()}
+		UserAgent: clip(r.UserAgent(), 300), IP: clientIP(r), ExpiresAt: time.Now().Add(sessionIdle).Unix()}
 	if err := s.db.CreateSession(r.Context(), sess, auth.HashToken(refresh)); err != nil {
 		writeErr(w, err)
 		return
@@ -530,11 +521,15 @@ func isHTTPS(r *http.Request) bool {
 	return r.TLS != nil || viaHTTPS(r)
 }
 
+// clip cuts s to at most n bytes, at a character boundary.
 func clip(s string, n int) string {
-	if len(s) > n {
-		return s[:n]
+	if len(s) <= n {
+		return s
 	}
-	return s
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }
 
 type refreshInput struct {
@@ -578,7 +573,7 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	next := auth.NewToken()
-	idle := func(client string) int64 { return int64(idleFor(client) / time.Second) }
+	idle := func(string) int64 { return int64(sessionIdle / time.Second) }
 	sess, res, err := s.db.RotateRefresh(ctx, auth.HashToken(tok), auth.HashToken(next), time.Now().Unix(), idle, clientIP(r))
 	if err != nil {
 		writeErr(w, err)

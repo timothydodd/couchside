@@ -20,6 +20,7 @@ import (
 	"github.com/timothydodd/couchside/internal/keylock"
 	"github.com/timothydodd/couchside/internal/parse"
 	"github.com/timothydodd/couchside/internal/probe"
+	"github.com/timothydodd/couchside/internal/transcode"
 )
 
 // subtitleTrack is one choice in the player's Subtitles menu.
@@ -251,7 +252,7 @@ func (s *Server) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 		args = append(args, "-c:s", "webvtt", "-f", "webvtt", tmp)
 		if out, err := exec.CommandContext(ctx, s.cfg.FFmpeg, args...).CombinedOutput(); err != nil {
 			os.Remove(tmp)
-			slog.Warn("subtitle conversion failed", "file", id, "track", chunk(m), "err", err, "ffmpeg", tail(string(out), 400))
+			slog.Warn("subtitle conversion failed", "file", id, "track", chunk(m), "err", err, "ffmpeg", transcode.Tail(string(out), 400))
 			msg := "couldn't convert subtitles; see the server log"
 			if ctx.Err() != nil {
 				msg = "couldn't convert subtitles: timed out reading the file"
@@ -270,14 +271,6 @@ func (s *Server) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 }
 
 func chunk(m []string) string { return m[1] + m[2] + m[3] }
-
-func tail(s string, n int) string {
-	s = strings.TrimSpace(s)
-	if len(s) > n {
-		return s[len(s)-n:]
-	}
-	return s
-}
 
 // pruneSubs deletes converted subtitles nobody has loaded in subsKeep.
 func (s *Server) pruneSubs() {

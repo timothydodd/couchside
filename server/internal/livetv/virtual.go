@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/timothydodd/couchside/internal/db"
+	"github.com/timothydodd/couchside/internal/parse"
 	"github.com/timothydodd/couchside/internal/probe"
 	"github.com/timothydodd/couchside/internal/usererr"
 )
@@ -297,9 +298,6 @@ func (p *picker) next() vprogram {
 
 // --- filler --------------------------------------------------------------------
 
-var videoExts = map[string]bool{".mp4": true, ".m4v": true, ".mkv": true, ".mov": true, ".avi": true, ".ts": true,
-	".mpg": true, ".mpeg": true, ".webm": true, ".wmv": true, ".flv": true}
-
 // fillerClips lists the clips in a folder (and below), probing any it hasn't seen.
 func (s *Service) fillerClips(ctx context.Context, folder string) ([]db.FillerClip, error) {
 	known, err := s.db.FillerClips(ctx)
@@ -308,7 +306,7 @@ func (s *Service) fillerClips(ctx context.Context, folder string) ([]db.FillerCl
 	}
 	var out []db.FillerClip
 	err = filepath.WalkDir(folder, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !videoExts[strings.ToLower(filepath.Ext(p))] {
+		if err != nil || d.IsDir() || !parse.IsVideo(p) {
 			return nil
 		}
 		info, err := d.Info()

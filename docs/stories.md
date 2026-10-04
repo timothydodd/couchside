@@ -47,7 +47,7 @@ from the start.
 | B21 | CI and release                                         | Packaging | Reported  | Done |
 | B22 | Docs and site catch up                                 | Docs      | Reported  | Done |
 | B23 | Demo media script                                      | Hygiene   | Reported  | Done |
-| C1  | Server dead code and stale comments                    | Cleanup   |           |      |
+| C1  | Server dead code and stale comments                    | Cleanup   |           | Done |
 | C2  | One builder for ffmpeg's HLS arguments                 | Cleanup   |           |      |
 | C3  | Split `api/auth.go` and `api/handlers.go`              | Cleanup   |           |      |
 | C4  | One HLS hook for the three players                     | Cleanup   |           |      |
@@ -540,21 +540,20 @@ header says it avoids.
 
 ## C1 · Server dead code and stale comments
 
-- `s.tv` is never nil now: remove the 19 `s.tv == nil` checks in
-  `api/livetv.go`, `handlers.go`, `system.go`, `search.go`, and the constant
-  `searchIndex.tv` / `withTV`. Use `HasTuner()` where a tuner is meant.
-- Unused: `db.SetMatchStatus` and `worker.abs` (`worker/match.go:325`).
-  `db.CreateProfile` is only called from tests: move it to a test helper.
-  `webIdle == tvIdle` makes `idleFor` a constant.
-- `truncate` (`api/handlers.go:457`) and `clip` (`api/auth.go:503`) are the
-  same and both cut mid-rune; `tail` exists in `api` and `transcode`.
-- `livetv/virtual.go:300` `videoExts` duplicates `parse.IsVideo` and lacks
-  `.m2ts`.
-- Stale comments: `api/api.go:43`; `api/auth.go:21,52,126,133`
-  ("COUCHSIDE_AUTH", "accounts off"); `db/profiles.go` `Profile`;
-  `db/watch.go:23`; `config/config.go:15`; the doubled doc comments on
-  `Record` (`livetv/recorder.go:117`) and at `livetv/rules.go:389`.
-- `livetv/service.go:4`: gofmt the imports.
+**Done.**
+
+- DVR handlers ask `s.tv.HasTuner()` (now nil-safe) instead of `s.tv == nil`,
+  so a server with only virtual channels answers "Live TV isn't set up" for
+  recordings rather than failing further in. The nil checks on the routes
+  virtual channels also use stay: tests build a server with no service.
+- Removed `db.SetMatchStatus`, `worker.abs`, `idleFor` (both idle times were
+  the same), `truncate` (now `clip`, which cuts at a character boundary), the
+  second `tail` (now `transcode.Tail`) and `livetv`'s own list of video
+  extensions (now `parse.IsVideo`, which also knows `.m2ts`).
+- Stale comments fixed; the whole server is gofmt-clean.
+
+**Left as it is:** `db.CreateProfile` is only called from tests, but from
+three packages' tests, so it stays in `db`.
 
 ## C2 · One builder for ffmpeg's HLS arguments
 

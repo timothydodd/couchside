@@ -42,7 +42,7 @@ type Server struct {
 	worker    *worker.Worker
 	providers *metadata.Chain
 	tc        *transcode.Manager
-	tv        *livetv.Service // nil when no tuner is configured
+	tv        *livetv.Service // always set by main (its virtual channels need no tuner; HasTuner gates DVR); nil only in tests
 	version   string
 	presence  *presence
 	sys       sysstat.Sampler

@@ -65,7 +65,7 @@ func Detect(ctx context.Context, ffmpeg, want, vaapiDevice string) Encoder {
 	args = append(args, out...)
 	args = append(args, "-f", "null", "-")
 	if msg, err := exec.CommandContext(ctx, ffmpeg, args...).CombinedOutput(); err != nil {
-		slog.Warn("hardware encoder test failed, using software", "hwaccel", want, "err", err, "ffmpeg", tail(string(msg), 300))
+		slog.Warn("hardware encoder test failed, using software", "hwaccel", want, "err", err, "ffmpeg", Tail(string(msg), 300))
 		return e
 	}
 	e.HW = want
@@ -95,7 +95,7 @@ func testHWDecode(ctx context.Context, e Encoder, filters string) bool {
 	args = append(args, out...)
 	args = append(args, "-y", clip)
 	if msg, err := exec.CommandContext(ctx, e.FFmpeg, args...).CombinedOutput(); err != nil {
-		slog.Warn("vaapi decode test: couldn't make a test clip", "err", err, "ffmpeg", tail(string(msg), 300))
+		slog.Warn("vaapi decode test: couldn't make a test clip", "err", err, "ffmpeg", Tail(string(msg), 300))
 		return false
 	}
 	full := e
@@ -106,7 +106,7 @@ func testHWDecode(ctx context.Context, e Encoder, filters string) bool {
 	args = append(args, out...)
 	args = append(args, "-f", "null", "-")
 	if msg, err := exec.CommandContext(ctx, e.FFmpeg, args...).CombinedOutput(); err != nil {
-		slog.Warn("vaapi decode test failed: the GPU will only encode", "err", err, "ffmpeg", tail(string(msg), 300))
+		slog.Warn("vaapi decode test failed: the GPU will only encode", "err", err, "ffmpeg", Tail(string(msg), 300))
 		return false
 	}
 	return true
@@ -258,7 +258,9 @@ func OutputHeight(requested, src int) int {
 	return h
 }
 
-func tail(s string, n int) string {
+// Tail is the last n bytes of s, trimmed: the end of ffmpeg's output, where
+// the error is.
+func Tail(s string, n int) string {
 	s = strings.TrimSpace(s)
 	if len(s) > n {
 		return s[len(s)-n:]

@@ -114,11 +114,10 @@ func (s *Service) LiveFile(id, name string) (string, error) { return s.live.file
 func (s *Service) LeaveLive(id string)                      { s.live.leave(id) }
 func (s *Service) LiveSessions() []*LiveSession             { return s.live.sessionsList() }
 
-// Record schedules a guide program. Returns the recording id and how many
-// other recordings overlap it (more than the tuner count means a conflict).
-// Record schedules a guide program for owner (see db.ScheduleRecording).
-// existing is true when the airing was already set to record, in which case
-// nothing changed.
+// Record schedules a guide program for owner (see db.ScheduleRecording). It
+// returns the recording id and how many other recordings overlap it (more
+// than the tuner count means a conflict). existing is true when the airing
+// was already set to record, in which case nothing changed.
 func (s *Service) Record(ctx context.Context, programID, owner int64) (id int64, overlap int, existing bool, err error) {
 	p, err := s.db.Program(ctx, programID)
 	if err != nil {
