@@ -28,7 +28,7 @@ from the start.
 | B2  | Sign-in hardening, second pass                         | Security  | Reported  | PR #46|
 | B3  | Remote image cache can't be filled between prunes      | Security  | Reported  | PR #47|
 | B4  | Internal error text stays on the server                | Security  | Reported  | PR #48|
-| B5  | A provider outage doesn't wipe cast and backdrops      | Data loss | Confirmed |      |
+| B5  | A provider outage doesn't wipe cast and backdrops      | Data loss | Confirmed | PR #49|
 | B6  | Virtual channels stay on their schedule                | Bug       | Confirmed |      |
 | B7  | Virtual and tuner streams use the right picture path   | Bug       | Reported  |      |
 | B8  | A recording watched from the start outlives recording  | Bug       | Confirmed |      |
@@ -178,6 +178,8 @@ but several handlers still wrap anything.
 error for a non-admin, with a test for `hlsSegment` and `dvrDelete`.
 
 ## B5 · A provider outage doesn't wipe cast and backdrops
+
+**Done** (PR #49).
 
 **Why.** `Chain.Lookup` (`metadata/metadata.go:77`) moves on to the next
 provider when one errors and returns that answer with a nil error. When TMDB
