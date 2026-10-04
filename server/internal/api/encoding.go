@@ -34,6 +34,8 @@ func (s *Server) createHLS(w http.ResponseWriter, r *http.Request) {
 		CopyAudio    bool `json:"copyAudio"`
 		AudioIndex   int  `json:"audioIndex"`
 		BurnSubtitle *int `json:"burnSubtitle"`
+		// Codecs (ffprobe names) the client plays as is, beyond 8-bit H.264.
+		VideoCodecs []string `json:"videoCodecs"`
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, err)
@@ -68,7 +70,7 @@ func (s *Server) createHLS(w http.ResponseWriter, r *http.Request) {
 	sess, err := s.tc.Create(r.Context(), transcode.Request{
 		FileID: id, Title: title, Path: f.Path, Duration: dur,
 		Height: in.Height, BitrateK: in.BitrateK, AllowCopyVideo: in.CopyVideo, AllowCopyAudio: in.CopyAudio,
-		AudioIndex: max(0, in.AudioIndex), BurnSubtitle: burn,
+		AudioIndex: max(0, in.AudioIndex), BurnSubtitle: burn, VideoCodecs: in.VideoCodecs,
 	})
 	if err != nil {
 		if errors.Is(err, transcode.ErrBusy) {

@@ -501,6 +501,22 @@ video::cue {
   .seek-break {
     @apply absolute inset-y-0 bg-warning/85;
   }
+  /* The player's top bar and controls: clear of the notch and the home indicator
+     (phones in landscape put the notch where the side buttons are). */
+  .player-top {
+    padding-left: max(1.25rem, env(safe-area-inset-left));
+    padding-right: max(1.25rem, env(safe-area-inset-right));
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+  .player-controls {
+    padding-left: max(1.25rem, env(safe-area-inset-left));
+    padding-right: max(1.25rem, env(safe-area-inset-right));
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+  /* A control-bar button: a full 44px target on touch screens. */
+  .player-btn {
+    @apply flex items-center justify-center gap-1.5 rounded-md py-1.5 text-white/85 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent pointer-coarse:min-h-11 pointer-coarse:min-w-11;
+  }
   /* Where the next part of a split movie begins. */
   .seek-mark {
     @apply absolute inset-y-0 w-0.5 -translate-x-1/2 bg-black/70;

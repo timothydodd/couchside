@@ -227,3 +227,29 @@ func TestSeekIsNotAGPUFailure(t *testing.T) {
 		t.Fatalf("after a real failure: gpu=%v, restarted=%v", hw, cur != seek && cur != nil)
 	}
 }
+
+func TestVideoCodecsCopyTenBitHEVC(t *testing.T) {
+	m, _ := newTestManager(t, 4)
+	req := Request{FileID: 1, Path: "/x.mkv", Duration: 600, Height: 1080, AllowCopyVideo: true, BurnSubtitle: -1}
+	s, err := m.Create(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.CopyVideo {
+		t.Fatal("10-bit HEVC copied for a client that only asked for H.264")
+	}
+	req.VideoCodecs = []string{"hevc"}
+	if s, err = m.Create(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	if !s.CopyVideo || s.Mode != "remux" || s.HDR {
+		t.Fatalf("HEVC not copied for a client that plays it: %+v", s)
+	}
+	req.Height = 720 // smaller than the source: has to be encoded
+	if s, err = m.Create(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	if s.CopyVideo {
+		t.Fatal("copied a 1080p source for a 720p request")
+	}
+}

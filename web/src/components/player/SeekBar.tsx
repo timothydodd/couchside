@@ -1,6 +1,8 @@
 import { useRef, useState, type PointerEvent } from "react";
 import type { Segment } from "../../lib/types";
 
+const SLIDE = 10; // px a touch must move along the bar before it scrubs
+
 /**
  * Scrubber. [min, max] is the whole bar; buffered and recorded ranges are
  * drawn inside it. When recordedEnd is set (a recording still in progress),
@@ -8,6 +10,10 @@ import type { Segment } from "../../lib/types";
  * Likewise before availableStart (live TV from before the stream started).
  * Commercial breaks are marked over the track, and marks (where a movie's
  * next part begins) as ticks.
+ *
+ * On a touch screen a tap does nothing: the finger has to slide along the bar
+ * first, so reaching for the buttons below (or swiping up from the bottom
+ * edge) doesn't jump the video.
  */
 export default function SeekBar({
   min,
@@ -38,6 +44,7 @@ export default function SeekBar({
   const ref = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<number | null>(null);
   const [drag, setDrag] = useState<number | null>(null);
+  const touch = useRef<{ x: number; y: number } | null>(null); // a touch that hasn't started scrubbing
   const span = Math.max(0.001, max - min);
   const limit = recordedEnd ?? max;
   const first = Math.max(min, availableStart ?? min);
@@ -53,20 +60,37 @@ export default function SeekBar({
   return (
     <div
       ref={ref}
-      className="group/seek relative h-5 cursor-pointer touch-none select-none"
+      className="group/seek relative h-5 cursor-pointer touch-none select-none pointer-coarse:h-8"
       onPointerMove={(e) => {
-        setHover(at(e));
+        const t = touch.current;
+        if (t) {
+          const dx = Math.abs(e.clientX - t.x);
+          const dy = Math.abs(e.clientY - t.y);
+          if (dx < SLIDE && dy < SLIDE) return;
+          touch.current = null;
+          if (dy > dx) return; // a vertical swipe, not a scrub
+          setDrag(at(e));
+        }
+        if (e.pointerType !== "touch" || drag !== null) setHover(at(e));
         if (drag !== null) setDrag(at(e));
       }}
       onPointerLeave={() => setHover(null)}
       onPointerDown={(e) => {
         if (e.button !== 0) return; // only the main button scrubs; a right-click may open the break menu
         e.currentTarget.setPointerCapture(e.pointerId);
-        setDrag(at(e));
+        if (e.pointerType === "touch") touch.current = { x: e.clientX, y: e.clientY };
+        else setDrag(at(e));
       }}
       onPointerUp={(e) => {
         if (drag !== null) onSeek(at(e));
+        touch.current = null;
         setDrag(null);
+        if (e.pointerType === "touch") setHover(null);
+      }}
+      onPointerCancel={() => {
+        touch.current = null;
+        setDrag(null);
+        setHover(null);
       }}
       onContextMenu={(e) => {
         if (!onBreakMenu || !breaks) return;
@@ -107,7 +131,7 @@ export default function SeekBar({
         <div className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 rounded bg-critical" style={{ left: pct(limit) }} title="Recorded so far" />
       )}
       <div
-        className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 scale-0 rounded-full bg-white shadow transition-transform group-hover/seek:scale-100"
+        className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 scale-0 rounded-full bg-white shadow transition-transform group-hover/seek:scale-100 pointer-coarse:scale-100"
         style={{ left: pct(shown), transform: drag !== null ? "translate(-50%,-50%) scale(1)" : undefined }}
       />
       {hover !== null && (

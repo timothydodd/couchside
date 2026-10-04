@@ -83,6 +83,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
   const [full, setFull] = useState(false);
   const [volOpen, setVolOpen] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const tap = useRef<{ touch: boolean; shown: boolean }>({ touch: false, shown: true });
 
   const v = () => videoRef.current;
   const isLive = timeline.kind !== "vod";
@@ -163,10 +164,13 @@ export default function PlayerFrame(p: PlayerFrameProps) {
       /* ignore */
     }
   };
+  // iPhone Safari can't make an element full screen, only the video itself
+  // (its own player, without these controls).
   const toggleFull = useCallback(() => {
     if (document.fullscreenElement) void document.exitFullscreen();
-    else void root.current?.requestFullscreen().catch(() => {});
-  }, []);
+    else if (root.current?.requestFullscreen) void root.current.requestFullscreen().catch(() => {});
+    else (videoRef.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null)?.webkitEnterFullscreen?.();
+  }, [videoRef]);
 
   useEffect(() => {
     const onFs = () => setFull(!!document.fullscreenElement);
@@ -292,14 +296,24 @@ export default function PlayerFrame(p: PlayerFrameProps) {
       data-theme="dark"
       className="fixed inset-0 z-50 select-none bg-[var(--player-bg)] text-white"
       style={{ cursor: show ? "auto" : "none" }}
-      onMouseMove={poke}
+      onPointerMove={poke}
+      onPointerDown={poke}
     >
       <video
         ref={videoRef}
         className="h-full w-full"
         autoPlay
         playsInline
-        onClick={() => (menu ? setMenu(false) : toggle())}
+        onPointerDown={(e) => (tap.current = { touch: e.pointerType === "touch", shown: show })}
+        onClick={() => {
+          if (menu) setMenu(false);
+          else if (!tap.current.touch) toggle();
+          // On a touch screen a tap shows or hides the controls; it doesn't pause.
+          else if (tap.current.shown && !st.paused) {
+            clearTimeout(hideTimer.current);
+            setChrome(false);
+          }
+        }}
         onDoubleClick={toggleFull}
         {...p.videoProps}
       >
@@ -325,11 +339,11 @@ export default function PlayerFrame(p: PlayerFrameProps) {
 
       {/* top bar */}
       <div
-        className={`absolute inset-x-0 top-0 flex items-start gap-3 bg-gradient-to-b from-black/85 via-black/45 to-transparent px-5 pb-14 pt-4 transition-opacity duration-300 ${
+        className={`absolute inset-x-0 top-0 flex items-start gap-3 bg-gradient-to-b from-black/85 via-black/45 to-transparent player-top pb-14 transition-opacity duration-300 ${
           show ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
-        <button onClick={p.onBack} className="mt-0.5 rounded-md p-1.5 text-white/85 hover:bg-white/10 hover:text-white" aria-label="Back">
+        <button onClick={p.onBack} className="mt-0.5 rounded-md p-1.5 text-white/85 hover:bg-white/10 hover:text-white pointer-coarse:p-2.5" aria-label="Back">
           <ArrowLeft size={19} />
         </button>
         {p.logo && <img src={p.logo} alt="" className="channel-logo mt-0.5 max-h-9 max-w-16" />}
@@ -374,7 +388,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
 
       {/* bottom controls */}
       <div
-        className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/55 to-transparent px-5 pb-3 pt-16 transition-opacity duration-300 ${
+        className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/55 to-transparent player-controls pt-16 transition-opacity duration-300 ${
           show ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -407,7 +421,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           onBreakMenu={p.onNotCommercial ? (b, x) => setBreakMenu({ b, x }) : undefined}
         />
         </div>
-        <div className="mt-1 flex items-center gap-1">
+        <div className="mt-1 flex items-center gap-1 pointer-coarse:mt-3">
           <CtlButton label={st.paused ? "Play (Space)" : "Pause (Space)"} onClick={toggle}>
             {st.paused ? <Play size={20} className="fill-current" /> : <Pause size={20} className="fill-current" />}
           </CtlButton>
@@ -417,7 +431,8 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           <CtlButton label="Forward 30 seconds (L)" onClick={() => skip(30)} disabled={atLive}>
             <RotateCw size={18} />
           </CtlButton>
-          <div className="relative flex items-center" onMouseEnter={() => setVolOpen(true)} onMouseLeave={() => setVolOpen(false)}>
+          {/* phones have volume buttons, and iOS ignores the page's volume */}
+          <div className="relative flex items-center max-md:hidden" onMouseEnter={() => setVolOpen(true)} onMouseLeave={() => setVolOpen(false)}>
             <CtlButton label="Mute (M)" onClick={() => { const el = v(); if (el) el.muted = !el.muted; }}>
               <VolIcon size={19} />
             </CtlButton>
@@ -432,7 +447,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
               aria-label="Volume"
             />
           </div>
-          <span className="ml-2 whitespace-nowrap text-xs tabular-nums text-white/80">{timeText}</span>
+          <span className="ml-2 min-w-0 truncate text-xs tabular-nums text-white/80">{timeText}</span>
           <div className="flex-1" />
           {timeline.kind === "recording" && (
             <CtlButton label="Start over" onClick={() => seekTo(0)} wide>
@@ -501,7 +516,7 @@ function CtlButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className={`flex items-center gap-1.5 rounded-md ${wide ? "px-2.5" : "px-2"} py-1.5 text-white/85 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent ${
+      className={`player-btn ${wide ? "px-2.5" : "px-2"} ${
         active ? "bg-white/10 text-white" : ""
       }`}
     >

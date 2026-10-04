@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -55,6 +56,10 @@ type Request struct {
 	Height         int  // 0 = best available (source height, capped at 1080p)
 	BitrateK       int  // video bitrate in kbit/s; 0 = the default for the height
 	AllowCopyVideo bool // client can play the source's H.264 as is
+	// VideoCodecs are further codecs (ffprobe names, e.g. "hevc") the client
+	// plays as is at any bit depth and HDR, so they're copied too: a Roku
+	// that can't play a film's TrueHD still plays its 4K HEVC.
+	VideoCodecs    []string
 	AllowCopyAudio bool // client can play the source's AAC/MP3 as is
 	AudioIndex     int  // which audio track (0:a:N)
 	BurnSubtitle   int  // image subtitle track to burn into the video, -1 for none
@@ -157,7 +162,8 @@ func (m *Manager) Create(ctx context.Context, r Request) (*Session, error) {
 		}
 	}
 	burn := r.BurnSubtitle >= 0
-	copyVideo := r.AllowCopyVideo && !burn && info.VideoCodec == "h264" && info.EightBit420() && !info.HDR() &&
+	plainH264 := info.VideoCodec == "h264" && info.EightBit420() && !info.HDR()
+	copyVideo := r.AllowCopyVideo && !burn && (plainH264 || slices.Contains(r.VideoCodecs, info.VideoCodec)) &&
 		(r.Height == 0 || (srcH > 0 && srcH <= r.Height))
 	copyAudio := r.AllowCopyAudio && (audioCodec == "aac" || audioCodec == "mp3") && audioCh <= 6
 
