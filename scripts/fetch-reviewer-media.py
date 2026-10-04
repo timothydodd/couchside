@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Download the media for the demo server that store reviewers sign in to.
 
-A small, family-safe set (about 15 GB) that still exercises everything a
+A small, family-safe set (about 6 GB) that still exercises everything a
 reviewer tries: 1080p and SD, subtitles inside the file and beside it, a series
-with seasons, a shelf of shorts, and filler for a virtual channel.
+with a few episodes, a shelf of shorts, and filler for a virtual channel.
 
 Everything is either Creative Commons Attribution (the Blender open movies:
 credit "Blender Foundation | www.blender.org" and keep the films' own credits)
@@ -65,10 +65,12 @@ SUBTITLES = [
 
 # TV: the public-domain Beverly Hillbillies episodes (the copyrights weren't
 # renewed; these copies don't carry the theme song, which is still in copyright). Episodes are found by
-# their sNNeNN file names.
+# their sNNeNN file names; only the first few are fetched, which is enough to
+# show a season.
 TV = [
     ("The Beverly Hillbillies (1962)", "The Beverly Hillbillies", "bevhill-s01e01-36"),
 ]
+TV_EPISODES = 6  # per show
 
 # Filler for virtual channels: public-domain single-product adverts from the
 # Prelinger Archives (cereal and cars; no tobacco or alcohol).
@@ -210,11 +212,13 @@ RE_EP = re.compile(r"s(\d+)e(\d+)[-_ ]*(.*)\.mp4$", re.I)
 
 def plan_tv(root):
     for folder, show, item in TV:
+        found = []
         for f in ia_files(item):
             m = RE_EP.search(f["name"])
-            if not m or f["name"].lower().endswith("_512kb.mp4"):
-                continue
-            season, ep, rest = int(m[1]), int(m[2]), m[3].replace("_", " ").replace("-", " ").strip()
+            if m and not f["name"].lower().endswith("_512kb.mp4"):
+                found.append((int(m[1]), int(m[2]), m[3], f))
+        for season, ep, rest, f in sorted(found, key=lambda e: e[:2])[:TV_EPISODES]:
+            rest = rest.replace("_", " ").replace("-", " ").strip()
             name = f"{show} - S{season:02d}E{ep:02d}" + (f" - {safe(rest)}" if rest else "") + ".mp4"
             yield ia_url(item, f["name"]), os.path.join(root, "TV", folder, f"Season {season:02d}", name), None
 
