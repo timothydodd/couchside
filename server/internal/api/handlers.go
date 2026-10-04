@@ -66,7 +66,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	cont, err := s.db.ContinueWatching(ctx, 12)
+	cont, err := s.db.ContinueWatching(ctx, 20)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -82,6 +82,25 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"continueWatching": cont, "recentMovies": movies, "recentSeries": series})
+}
+
+// hideFromHome takes a title off the profile's Continue Watching row until
+// they watch it again.
+func (s *Server) hideFromHome(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if _, err := s.db.Item(r.Context(), id); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := s.db.HideFromHome(r.Context(), id); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // --- libraries ---------------------------------------------------------------

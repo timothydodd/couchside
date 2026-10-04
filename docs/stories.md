@@ -53,7 +53,7 @@ from the start.
 | C4  | One HLS hook for the three players                     | Cleanup   |           |      |
 | C5  | Web duplication, dead CSS, player colour tokens        | Cleanup   |           |      |
 | C6  | Load pages on demand                                   | Cleanup   |           |      |
-| F1  | Next Up, and remove from Continue Watching             | Feature   | S         |      |
+| F1  | Next Up, and remove from Continue Watching             | Feature   | S         | Done |
 | F2  | Watchlist                                              | Feature   | S         |      |
 | F3  | Database backup and restore                            | Feature   | S         |      |
 | F4  | Seek-bar preview thumbnails                            | Feature   | M         |      |
@@ -614,22 +614,17 @@ Each feature names its Roku follow-up; those are collected in R18.
 
 ## F1 · Next Up, and remove from Continue Watching
 
-**Why.** "Remove from Continue Watching" is the second most wanted item on
-Jellyfin's board (about 1,700 votes). Home has Continue Watching and Recently
-Added but no Next Up, so finishing an episode drops the series off Home.
+**Done.** Server tested; the web is typechecked and built, not yet seen in a
+browser. The Roku gets the row from the same `/api/home`; its side is in R18.
 
-**Scope**
-- `db.ContinueWatching` (`db/watch.go`) is `watched=0 AND position>30`. Add
-  Next Up: per series with a watched episode, the next unwatched episode
-  that has a file (`nextFileId` already works this out for the player).
-  Show the two as one row, most recent activity first.
-- A hide action: `DELETE /api/home/continue/{fileId}` zeroes the position
-  (or sets a hidden flag for Next Up, cleared when the series is watched
-  again). A button on the tile, and in its context menu.
-- `/api/home` carries it, so the Roku gets it from the same call.
-
-**Done when** finishing an episode puts the next one on Home, and a tile can
-be removed.
+- Home's Continue Watching row now also holds, for each series whose last
+  finished episode has an unwatched one after it, that next episode
+  (`nextUp` on the entry, a "Next up" badge on the card). A series with an
+  episode in progress shows that one only. Most recent activity first, up to
+  20.
+- `DELETE /api/home/continue/{itemId}` (the X on a card) takes a title off
+  the row until the profile watches it again. The resume point is kept
+  (table `home_hidden`, migration 0023).
 
 ## F2 · Watchlist
 

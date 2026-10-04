@@ -295,8 +295,8 @@ type authInfo struct {
 	User               *db.Profile   `json:"user"`
 	AccessExpiresAt    int64         `json:"accessExpiresAt,omitempty"`
 	ExpiresIn          int64         `json:"expiresIn,omitempty"` // seconds until then, for clients whose clock is off
-	SignedIn           []profileStub `json:"signedIn"` // web: profiles this browser holds a session for
-	Insecure           bool          `json:"insecure"` // this request is plain HTTP from an internet address
+	SignedIn           []profileStub `json:"signedIn"`            // web: profiles this browser holds a session for
+	Insecure           bool          `json:"insecure"`            // this request is plain HTTP from an internet address
 }
 
 type profileStub struct {
@@ -365,8 +365,8 @@ type tokens struct {
 	// ExpiresIn is seconds until the access token runs out. Clients schedule
 	// their renewal from this, not from AccessExpiresAt against their own
 	// clock, which may be minutes off.
-	ExpiresIn int64 `json:"expiresIn"`
-	SessionID       string     `json:"sessionId"`
+	ExpiresIn int64  `json:"expiresIn"`
+	SessionID string `json:"sessionId"`
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {

@@ -115,6 +115,8 @@ export interface PlayInfo {
   hasBackdrop: boolean;
   updatedAt: number;
   nextFileId: number | null;
+  /** On Home because the episode before it was finished, not because this one was started. */
+  nextUp?: boolean;
   progress: number;
   container: string;
   videoCodec: string;

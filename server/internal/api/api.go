@@ -201,6 +201,7 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) userRoutes(r chi.Router) {
 	r.Get("/status", s.status)
 	r.Get("/home", s.home)
+	r.Delete("/home/continue/{id}", s.hideFromHome)
 	r.Get("/search", s.search)
 
 	r.Get("/profiles", s.listProfiles)

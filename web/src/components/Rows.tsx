@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Play } from "lucide-react";
+import { Play, X } from "lucide-react";
 import Link from "./Link";
 import PosterCard from "./PosterCard";
 import { backdropUrl, stillUrl } from "../lib/api";
@@ -36,11 +36,22 @@ export function PosterRow({ title, items, action }: { title: string; items: Item
  * 16:9 resume card: episode still (or the show's backdrop) with a progress
  * strip. The picture resumes playback; the title opens the title's page.
  */
-export function ContinueCard({ p }: { p: PlayInfo }) {
+export function ContinueCard({ p, onRemove }: { p: PlayInfo; onRemove?: () => void }) {
   const img = p.hasStill ? stillUrl(p.fileId) : p.hasBackdrop ? backdropUrl({ id: p.itemId, updatedAt: p.updatedAt }) : null;
   const left = p.durationSec && p.positionSec > 0 ? Math.max(0, p.durationSec - p.positionSec) : 0;
   return (
-    <div className="w-64 shrink-0 sm:w-72">
+    <div className="group/card relative w-64 shrink-0 sm:w-72">
+      {onRemove && (
+        <button
+          type="button"
+          className="card-remove"
+          aria-label={`Remove ${p.title} from Continue watching`}
+          title="Remove from this row (it comes back when you watch it again)"
+          onClick={onRemove}
+        >
+          <X size={14} />
+        </button>
+      )}
       <Link to={`/play/${p.fileId}`} className="still-link group block" aria-label={`${p.positionSec > 0 ? "Resume" : "Play"} ${p.title}`}>
         <div className="still">
           {img ? (
@@ -53,9 +64,13 @@ export function ContinueCard({ p }: { p: PlayInfo }) {
               <Play size={20} className="translate-x-px fill-current" />
             </span>
           </div>
-          <div className="art-progress">
-            <span style={{ width: `${p.progress * 100}%` }} />
-          </div>
+          {p.nextUp ? (
+            <span className="art-badge scrim absolute bottom-1.5 left-1.5">Next up</span>
+          ) : (
+            <div className="art-progress">
+              <span style={{ width: `${p.progress * 100}%` }} />
+            </div>
+          )}
         </div>
       </Link>
       <Link to={`/item/${p.itemId}`} className="poster-title title-link block">
