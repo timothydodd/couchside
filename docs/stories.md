@@ -24,7 +24,7 @@ from the start.
 
 | ID  | Story                                                  | Kind      | Finding   | Done |
 | --- | ------------------------------------------------------ | --------- | --------- | ---- |
-| B1  | Turning passwords on ends passwordless sessions        | Security  | Confirmed |      |
+| B1  | Turning passwords on ends passwordless sessions        | Security  | Confirmed | PR #45|
 | B2  | Sign-in hardening, second pass                         | Security  | Reported  |      |
 | B3  | Remote image cache can't be filled between prunes      | Security  | Reported  |      |
 | B4  | Internal error text stays on the server                | Security  | Reported  |      |
@@ -89,6 +89,8 @@ names are the stable reference.
 # Fixes
 
 ## B1 · Turning passwords on ends passwordless sessions
+
+**Done** (PR #45).
 
 **Why.** `Server.Run` (`api/api.go:74`) calls `s.pruneSessions(ctx)`, which
 loops on a 6-hour ticker until shutdown. The `if s.cfg.Auth {
