@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -182,5 +184,81 @@ func TestRunEndsPasswordlessSessionsAtStart(t *testing.T) {
 			t.Fatal("the passwordless session still worked while the server ran")
 		}
 		time.Sleep(20 * time.Millisecond)
+// Parallel wrong passwords for one account get the checks a serial run
+// would, not one each.
+func TestLoginBurstIsThrottled(t *testing.T) {
+	_, ts, admin := passwordlessServer(t)
+	if code := admin.do("POST", "/api/accounts", map[string]any{"name": "Kid", "password": "kid password"}, nil); code != 201 {
+		t.Fatalf("create = %d", code)
+	}
+	var wg sync.WaitGroup
+	var checked atomic.Int32
+	for range 40 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c := newClient(t, ts.URL)
+			if c.do("POST", "/api/auth/login", map[string]string{"name": "Kid", "password": "a wrong guess"}, nil) == 401 {
+				checked.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	// Five free failures and the one that locks the name.
+	if n := checked.Load(); n > 6 {
+		t.Fatalf("%d of 40 parallel guesses were checked, want at most 6", n)
+	}
+}
+
+// A page on another site can't sign this browser in.
+func TestLoginRefusesCrossSite(t *testing.T) {
+	_, ts, admin := passwordlessServer(t)
+	if code := admin.do("POST", "/api/accounts", map[string]any{"name": "Kid", "password": "kid password"}, nil); code != 201 {
+		t.Fatalf("create = %d", code)
+	}
+	login := map[string]string{"name": "Kid", "password": "kid password"}
+	c := newClient(t, ts.URL)
+	c.header = map[string]string{"Sec-Fetch-Site": "cross-site"}
+	if code := c.do("POST", "/api/auth/login", login, nil); code != 403 {
+		t.Fatalf("cross-site login = %d, want 403", code)
+	}
+	c.header = nil
+	c.origin = "https://evil.example"
+	if code := c.do("POST", "/api/auth/login", login, nil); code != 403 {
+		t.Fatalf("login from another origin = %d, want 403", code)
+	}
+	// A TV app sends no Origin and gets tokens, not cookies.
+	tv := newClient(t, ts.URL)
+	if code := tv.do("POST", "/api/auth/login", map[string]string{"name": "Kid", "password": "kid password", "client": "tv"}, nil); code != 200 {
+		t.Fatalf("tv login = %d", code)
+	}
+	c.origin = ""
+	c.header = map[string]string{"Sec-Fetch-Site": "same-origin"}
+	if code := c.do("POST", "/api/auth/login", login, nil); code != 200 {
+		t.Fatalf("same-origin login = %d", code)
+	}
+}
+
+// A TV app whose refresh answer was lost repeats it and keeps its session.
+func TestTVRefreshCanBeRepeated(t *testing.T) {
+	_, ts, _ := passwordlessServer(t)
+	tv := newClient(t, ts.URL)
+	var first, lost, again tokens
+	if code := tv.do("POST", "/api/auth/pick", map[string]any{"profileId": 1, "client": "tv"}, &first); code != 200 {
+		t.Fatalf("pick = %d", code)
+	}
+	if code := tv.do("POST", "/api/auth/refresh", map[string]string{"refreshToken": first.RefreshToken}, &lost); code != 200 {
+		t.Fatalf("refresh = %d", code)
+	}
+	if code := tv.do("POST", "/api/auth/refresh", map[string]string{"refreshToken": first.RefreshToken}, &again); code != 200 {
+		t.Fatalf("repeated refresh = %d, want 200", code)
+	}
+	tv.bearer = again.AccessToken
+	if code := tv.do("GET", "/api/auth/sessions", nil, nil); code != 200 {
+		t.Fatalf("session after a repeated refresh = %d", code)
+	}
+	// The tokens from the lost answer no longer refresh.
+	if code := tv.do("POST", "/api/auth/refresh", map[string]string{"refreshToken": lost.RefreshToken}, nil); code == 200 {
+		t.Fatal("the undelivered refresh token still worked")
 	}
 }

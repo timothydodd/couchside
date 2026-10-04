@@ -183,15 +183,34 @@ const staleGrace = 60
 // RotateRefresh swaps a refresh token for a new one and extends the session
 // by idle(client) seconds from now. Presenting a token that was already
 // swapped ends the session, unless it was swapped in the last minute.
+//
+// A TV app's previous token keeps working until the one that replaced it is
+// used: the app holds one token and no cookie jar, so when the answer to a
+// refresh is lost it can only ask again with the token it has. Each such
+// retry retires the token whose answer was lost.
 func (d *DB) RotateRefresh(ctx context.Context, oldHash, newHash string, now int64, idle func(client string) int64, ip string) (Session, RefreshResult, error) {
 	tx, err := d.sql.BeginTx(ctx, nil)
 	if err != nil {
 		return Session{}, RefreshUnknown, err
 	}
 	defer tx.Rollback()
-	s, err := scanSession(tx.QueryRowContext(ctx, `SELECT `+prefixed("s.", sessionCols)+`
-		FROM sessions s JOIN profiles p ON p.id = s.profile_id
-		WHERE s.refresh_hash = ? AND s.expires_at > ? AND p.disabled = 0`, oldHash, now))
+	const live = ` AND s.expires_at > ? AND p.disabled = 0`
+	var current, prev string
+	find := func(where string) (Session, error) {
+		s, err := scanSession(tx.QueryRowContext(ctx, `SELECT `+prefixed("s.", sessionCols)+`
+			FROM sessions s JOIN profiles p ON p.id = s.profile_id WHERE `+where+live, oldHash, now))
+		if err == nil {
+			err = tx.QueryRowContext(ctx, `SELECT refresh_hash, prev_refresh_hash FROM sessions WHERE id = ?`, s.ID).
+				Scan(&current, &prev)
+		}
+		return s, err
+	}
+	s, err := find(`s.refresh_hash = ?`)
+	retry := false
+	if errors.Is(err, sql.ErrNoRows) {
+		s, err = find(`s.client = 'tv' AND s.prev_refresh_hash = ?`)
+		retry = err == nil
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		var sid string
 		var usedAt int64
@@ -215,13 +234,24 @@ func (d *DB) RotateRefresh(ctx context.Context, oldHash, newHash string, now int
 	if err != nil {
 		return s, RefreshUnknown, err
 	}
-	expiresAt := now + idle(s.Client)
-	if _, err := tx.ExecContext(ctx, `INSERT INTO session_used_tokens (hash, session_id, used_at) VALUES (?, ?, ?)`,
-		oldHash, s.ID, now); err != nil {
-		return s, RefreshUnknown, err
+	// What stops working now: the presented token for a browser; for a TV
+	// app, the token before it (or, on a retry, the one that never arrived).
+	retire, keep := oldHash, ""
+	if s.Client == "tv" {
+		retire, keep = prev, oldHash
+		if retry {
+			retire = current
+		}
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE sessions SET refresh_hash = ?, last_used_at = ?, expires_at = ?, ip = ? WHERE id = ?`,
-		newHash, now, expiresAt, ip, s.ID); err != nil {
+	if retire != "" {
+		if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO session_used_tokens (hash, session_id, used_at) VALUES (?, ?, ?)`,
+			retire, s.ID, now); err != nil {
+			return s, RefreshUnknown, err
+		}
+	}
+	expiresAt := now + idle(s.Client)
+	if _, err := tx.ExecContext(ctx, `UPDATE sessions SET refresh_hash = ?, prev_refresh_hash = ?, last_used_at = ?, expires_at = ?, ip = ? WHERE id = ?`,
+		newHash, keep, now, expiresAt, ip, s.ID); err != nil {
 		return s, RefreshUnknown, err
 	}
 	s.LastUsedAt, s.ExpiresAt, s.IP = now, expiresAt, ip

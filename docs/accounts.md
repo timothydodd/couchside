@@ -45,7 +45,9 @@ rules and server settings are shared. Switch profiles from the sidebar.
   hours on TVs, whose video players can't swap tokens mid-film. Signing a
   device out stops it at once either way.
 - Refresh tokens are random, stored only as hashes, and replaced on every use;
-  a replayed refresh token ends its session. A session ends after a year
+  a replayed refresh token ends its session. A TV app may repeat its last
+  refresh when the answer didn't arrive; the token it never received stops
+  working. A session ends after a year
   unused (each use pushes that out again), so devices stay signed in. Signing
   out, changing a password, or an admin signing a device out or disabling the
   account ends sessions straight away. So does turning passwordless sign-in

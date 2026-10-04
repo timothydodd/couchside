@@ -165,15 +165,19 @@ func TestAccountsFlow(t *testing.T) {
 		t.Fatalf("editing someone else's prefs = %d", c)
 	}
 
-	// Refresh tokens rotate, and the old one stops working.
+	// Refresh tokens rotate. A TV app may repeat a refresh whose answer it
+	// didn't get; that retires the token it never received.
 	old := tk.RefreshToken
-	var tk2 tokens
+	var lost, tk2 tokens
 	tv.bearer = ""
-	if c := tv.do("POST", "/api/auth/refresh", map[string]string{"refreshToken": old}, &tk2); c != 200 || tk2.RefreshToken == old {
-		t.Fatalf("refresh = %d %+v", c, tk2)
+	if c := tv.do("POST", "/api/auth/refresh", map[string]string{"refreshToken": old}, &lost); c != 200 || lost.RefreshToken == old {
+		t.Fatalf("refresh = %d %+v", c, lost)
 	}
-	if c := tv.do("POST", "/api/auth/refresh", map[string]string{"refreshToken": old}, nil); c != 409 {
-		t.Fatalf("immediate replay = %d, want 409 (stale race)", c)
+	if c := tv.do("POST", "/api/auth/refresh", map[string]string{"refreshToken": old}, &tk2); c != 200 || tk2.RefreshToken == lost.RefreshToken {
+		t.Fatalf("repeated refresh = %d %+v", c, tk2)
+	}
+	if c := tv.do("POST", "/api/auth/refresh", map[string]string{"refreshToken": lost.RefreshToken}, nil); c != 409 {
+		t.Fatalf("immediate replay of a replaced token = %d, want 409 (stale race)", c)
 	}
 	// (A replay after the grace minute ends the session: see db.TestRefreshRotation.)
 	tv.bearer = tk2.AccessToken

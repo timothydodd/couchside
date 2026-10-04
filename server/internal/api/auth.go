@@ -382,34 +382,46 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	if utf8.RuneCountInString(nameKey) > maxProfileName {
 		// No account has a name this long. Refuse it before it becomes a
 		// limiter key or a log line.
-		slog.Warn("sign-in failed", "ip", ip, "name", clip(nameKey, 64)+"…", "ua", clip(r.UserAgent(), 200))
+		slog.Warn("sign-in failed", "ip", ip, "name", unknownName, "ua", clip(r.UserAgent(), 200))
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "wrong name or password", "code": "bad_credentials"})
 		return
 	}
-	if s.throttled(w, ip, nameKey) {
+	// A sign-in sets cookies, so a page on another site mustn't be able to
+	// sign this browser in to a profile of its choosing.
+	if in.Client == "web" && !sameOrigin(r) {
+		writeErr(w, forbidden("cross-site request refused"))
+		return
+	}
+	done, ok := s.attempt(w, ip, nameKey)
+	if !ok {
 		return
 	}
 	// Too long to be anyone's password. Refused here, before the lookup, so a
 	// known name and an unknown one answer the same way in the same time
 	// (VerifyPassword returns at once for these; DummyVerify doesn't).
 	if len(in.Password) > auth.MaxPassword {
-		s.loginFailed(w, r, ip, nameKey)
+		done(true)
+		loginFailed(w, r, ip, unknownName)
 		return
 	}
 	p, hash, err := s.db.ProfileForLogin(ctx, in.Name)
 	if errors.Is(err, db.ErrNotFound) {
 		auth.DummyVerify(in.Password)
 	} else if err != nil {
+		done(false)
 		writeErr(w, err)
 		return
 	}
-	ok := false
+	ok = false
 	rehash := false
+	logName := unknownName // what was typed may be a password in the wrong box
 	if err == nil {
 		ok, rehash = auth.VerifyPassword(hash, in.Password)
+		logName = nameKey
 	}
+	done(!ok)
 	if !ok {
-		s.loginFailed(w, r, ip, nameKey)
+		loginFailed(w, r, ip, logName)
 		return
 	}
 	s.auth.byName.Success(nameKey)
@@ -425,14 +437,28 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	s.startSession(w, r, p, in.Client, in.Device)
 }
 
-// throttled answers 429 when this address or account must wait.
-func (s *Server) throttled(w http.ResponseWriter, ip, nameKey string) bool {
-	wait := max(s.auth.byIP.Wait(ip), s.auth.byName.Wait(nameKey))
+// unknownName stands in the log for a name that isn't a profile's.
+const unknownName = "(not an account)"
+
+// attempt claims one password check for this address and account, or answers
+// 429 when either must wait. Call done with whether the check failed. The
+// claim is made before the check, so parallel requests can't all get in
+// ahead of the first failure.
+func (s *Server) attempt(w http.ResponseWriter, ip, nameKey string) (done func(failed bool), ok bool) {
+	wait := s.auth.byIP.Begin(ip)
 	if wait == 0 {
-		return false
+		if wait = s.auth.byName.Begin(nameKey); wait > 0 {
+			s.auth.byIP.End(ip, false)
+		}
 	}
-	retryLater(w, wait)
-	return true
+	if wait > 0 {
+		retryLater(w, wait)
+		return nil, false
+	}
+	return func(failed bool) {
+		s.auth.byIP.End(ip, failed)
+		s.auth.byName.End(nameKey, failed)
+	}, true
 }
 
 func retryLater(w http.ResponseWriter, wait time.Duration) {
@@ -442,10 +468,8 @@ func retryLater(w http.ResponseWriter, wait time.Duration) {
 		"error": "too many attempts; try again in " + wait.Round(time.Second).String(), "retryAfter": max(1, secs)})
 }
 
-func (s *Server) loginFailed(w http.ResponseWriter, r *http.Request, ip, nameKey string) {
-	s.auth.byIP.Fail(ip)
-	s.auth.byName.Fail(nameKey)
-	slog.Warn("sign-in failed", "ip", ip, "name", nameKey, "ua", clip(r.UserAgent(), 200))
+func loginFailed(w http.ResponseWriter, r *http.Request, ip, name string) {
+	slog.Warn("sign-in failed", "ip", ip, "name", name, "ua", clip(r.UserAgent(), 200))
 	writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "wrong name or password", "code": "bad_credentials"})
 }
 
@@ -607,16 +631,21 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	if !sameOrigin(r) {
+		writeErr(w, forbidden("cross-site request refused"))
+		return
+	}
 	ip := clientIP(r)
-	if s.throttled(w, ip, "setup") {
+	done, ok := s.attempt(w, ip, "setup")
+	if !ok {
 		return
 	}
 	s.auth.mu.Lock()
 	code := s.auth.setupCode
 	s.auth.mu.Unlock()
-	if !auth.SameCode(in.Code, code) {
-		s.auth.byIP.Fail(ip)
-		s.auth.byName.Fail("setup")
+	wrong := !auth.SameCode(in.Code, code)
+	done(wrong)
+	if wrong {
 		slog.Warn("wrong setup code", "ip", ip)
 		writeErr(w, httpError{http.StatusUnauthorized, "that setup code isn't right; it's in the server log"})
 		return
@@ -706,18 +735,21 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	ip := clientIP(r)
 	nameKey := strings.ToLower(p.Name)
-	if s.throttled(w, ip, nameKey) {
+	done, ok := s.attempt(w, ip, nameKey)
+	if !ok {
 		return
 	}
 	hash, err := s.db.PasswordHash(ctx, u.ID)
 	if err != nil {
+		done(false)
 		writeErr(w, err)
 		return
 	}
 	// A profile without a password (passwordless sign-in) sets its first one.
-	if ok, _ := auth.VerifyPassword(hash, in.Current); hash != "" && !ok {
-		s.auth.byIP.Fail(ip)
-		s.auth.byName.Fail(nameKey)
+	ok, _ = auth.VerifyPassword(hash, in.Current)
+	wrong := hash != "" && !ok
+	done(wrong)
+	if wrong {
 		slog.Warn("password change: wrong current password", "ip", ip, "name", nameKey)
 		writeErr(w, badRequest("your current password isn't right"))
 		return
