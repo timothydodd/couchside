@@ -41,7 +41,7 @@ from the start.
 | B15 | `useApi`: late answers, stale errors, cache size       | Bug       | Reported  | Done |
 | B16 | Console polling and token renewal                      | Bug       | Confirmed | Done |
 | B17 | Load failures and failed actions are shown             | Bug       | Reported  | Done |
-| B18 | Keyboard and screen-reader gaps                        | A11y      | Reported  |      |
+| B18 | Keyboard and screen-reader gaps                        | A11y      | Reported  | Done |
 | B19 | Docker and compose                                     | Packaging | Reported  |      |
 | B20 | Helm chart hardening                                   | Packaging | Reported  |      |
 | B21 | CI and release                                         | Packaging | Reported  |      |
@@ -437,19 +437,20 @@ stopped.
 
 ## B18 · Keyboard and screen-reader gaps
 
-**Scope**
-- `LibraryManagePage.tsx:173`: rows are `<tr onClick>` with no way in by
-  keyboard. Make the title cell a button; add `aria-sort` to the headers.
-- The same table renders the whole library and refetches every 3s while
-  anything is `pending`. Virtualise it as `PosterGrid` does.
-- `FilterMenu.tsx:43` and the More sheet (`MobileNav.tsx:109`, left open by
-  A15) are modal sheets without `useDialog`.
-- `MenuButton` (`components/ui.tsx:188`) and the player's `SettingsMenu` use
-  `role="menu"` without moving focus in or arrow keys; `MenuButton`'s Escape
-  also closes the `ItemPanel` behind it. Stop propagation; add arrow keys.
+**Done**, except virtualising. Typechecked and built; try each with the
+keyboard in a browser.
 
-**Done when** the Manage view, both sheets and both menus work with the
-keyboard alone.
+- Manage: each title is a button that opens its panel; sort headers carry
+  `aria-sort`.
+- The Filters panel and the More sheet use `useDialog` (focus in, Tab kept
+  inside, Escape, focus back).
+- Menus (`MenuButton`, the player's settings): focus moves in on open, the
+  arrow keys, Home and End move between items (`menuKeys` in `lib/dialog.ts`),
+  and Escape closes only the menu.
+
+**Not done:** virtualising the Manage table. Rows are memoised on their
+content instead, so the 3-second refetch during a re-match only renders rows
+that changed. Virtualising a `<table>` needs trying in a browser.
 
 ## B19 · Docker and compose
 

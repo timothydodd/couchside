@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { menuKeys } from "../../lib/dialog";
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 
 export interface SettingOption {
@@ -24,18 +25,26 @@ export default function SettingsMenu({ sections, onClose }: { sections: SettingS
   const [page, setPage] = useState<string | null>(null);
   const visible = sections.filter((s) => !s.hidden);
   const current = visible.find((s) => s.id === page);
+  // Focus follows the page shown, so the arrow keys work from the first press.
+  const menu = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    menu.current?.querySelector<HTMLElement>("button")?.focus();
+  }, [page]);
 
   return (
     <div
       className="card absolute bottom-16 right-3 z-30 max-h-[70vh] w-80 overflow-y-auto p-1.5 text-sm shadow-[var(--shadow-md)]"
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
+      onKeyDown={menuKeys}
+      ref={menu}
       role="menu"
     >
       {!current ? (
         visible.map((s) => (
           <button
             key={s.id}
+            role="menuitem"
             className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-content hover:bg-muted"
             onClick={() => setPage(s.id)}
           >
@@ -55,6 +64,8 @@ export default function SettingsMenu({ sections, onClose }: { sections: SettingS
             current.options?.map((o) => (
               <button
                 key={o.id}
+                role="menuitemradio"
+                aria-checked={!!o.active}
                 className="flex w-full items-start gap-2 rounded px-3 py-2 text-left hover:bg-muted"
                 onClick={() => {
                   current.onSelect?.(o.id);

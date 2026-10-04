@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { SlidersHorizontal, X } from "lucide-react";
+import { useDialog } from "../lib/dialog";
+import { usePhone } from "../lib/media";
 
 /**
  * A "Filters" button that opens a panel of choices: a dropdown under the
@@ -8,24 +10,10 @@ import { SlidersHorizontal, X } from "lucide-react";
  */
 export default function FilterMenu({ active, onReset, children }: { active: number; onReset?: () => void; children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const button = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOpen(false);
-        button.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
 
   return (
     <div className="relative shrink-0">
       <button
-        ref={button}
         type="button"
         className={`btn-ghost h-11 ${active ? "!border-accent text-accent" : ""}`}
         onClick={() => setOpen((o) => !o)}
@@ -38,27 +26,39 @@ export default function FilterMenu({ active, onReset, children }: { active: numb
         {active > 0 && <span className="rounded-full bg-accent px-1.5 text-[11px] font-semibold text-on-accent">{active}</span>}
       </button>
       {open && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/55 md:bg-transparent" onClick={() => setOpen(false)} />
-          <div role="dialog" aria-label="Filters" className="filter-panel">
-            <div className="flex items-center justify-between gap-2 px-4 pt-4">
-              <div className="card-title">Filters</div>
-              <div className="flex items-center gap-1">
-                {onReset && active > 0 && (
-                  <button type="button" className="btn-quiet !text-xs" onClick={onReset}>
-                    Reset
-                  </button>
-                )}
-                <button type="button" className="touch-target text-content-muted md:hidden" onClick={() => setOpen(false)} aria-label="Close">
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
-            <div className="flex flex-col gap-4 p-4">{children}</div>
-          </div>
-        </>
+        <Panel active={active} onReset={onReset} onClose={() => setOpen(false)}>
+          {children}
+        </Panel>
       )}
     </div>
+  );
+}
+
+/** The open panel. Its own component so the dialog behaviour lasts exactly as long as it's open. */
+function Panel({ active, onReset, onClose, children }: { active: number; onReset?: () => void; onClose: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useDialog(ref, onClose); // focus in, Tab kept inside, Escape, focus back to the button
+  const phone = usePhone();
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/55 md:bg-transparent" onClick={onClose} />
+      <div ref={ref} role="dialog" aria-modal={phone || undefined} aria-label="Filters" className="filter-panel">
+        <div className="flex items-center justify-between gap-2 px-4 pt-4">
+          <div className="card-title">Filters</div>
+          <div className="flex items-center gap-1">
+            {onReset && active > 0 && (
+              <button type="button" className="btn-quiet !text-xs" onClick={onReset}>
+                Reset
+              </button>
+            )}
+            <button type="button" className="touch-target text-content-muted md:hidden" onClick={onClose} aria-label="Close">
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+        <div className="flex flex-col gap-4 p-4">{children}</div>
+      </div>
+    </>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowUp, Copy, Cpu, ImageUp } from "lucide-react";
 import Link from "../components/Link";
 import ItemPanel from "../components/manage/ItemPanel";
@@ -77,7 +77,7 @@ export default function LibraryManagePage({ id }: { id: number }) {
   const movies = lib?.kind === "movies";
 
   const header = (key: SortKey, label: string, className = "") => (
-    <th className={className}>
+    <th className={className} aria-sort={sort.key === key ? (sort.desc ? "descending" : "ascending") : undefined}>
       <button
         className="inline-flex items-center gap-1 hover:text-content"
         onClick={() => setSort((s) => ({ key, desc: s.key === key ? !s.desc : key !== "title" }))}
@@ -166,7 +166,12 @@ export default function LibraryManagePage({ id }: { id: number }) {
   );
 }
 
-function Row({ r, active, onOpen }: { r: ManageRow; active: boolean; onOpen: () => void }) {
+// Memoised on the row's content: the list is fetched again every few
+// seconds while anything is matching, and only rows that changed should
+// render again. (onOpen is a new function each time but always opens r.)
+const Row = memo(RowView, (a, b) => a.active === b.active && JSON.stringify(a.r) === JSON.stringify(b.r));
+
+function RowView({ r, active, onOpen }: { r: ManageRow; active: boolean; onOpen: () => void }) {
   const extra = extraFiles(r);
   const range = r.kind === "series" && r.minHeight && qualityTier(r.minHeight) !== qualityTier(r.maxHeight);
   return (
@@ -178,7 +183,18 @@ function Row({ r, active, onOpen }: { r: ManageRow; active: boolean; onOpen: () 
       </td>
       <td className="max-w-md">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-medium text-content">{r.title}</span>
+          {/* A real button, so the row can be opened from the keyboard. */}
+          <button
+            type="button"
+            className="truncate text-left font-medium text-content hover:text-accent"
+            aria-haspopup="dialog"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen();
+            }}
+          >
+            {r.title}
+          </button>
           {r.year && <span className="text-content-muted">{r.year}</span>}
           {r.matchStatus === "unmatched" && <span className="badge tint-warning">Unmatched</span>}
           {r.matchStatus === "pending" && <span className="badge tint-info">Matching…</span>}

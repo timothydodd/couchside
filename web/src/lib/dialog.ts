@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -49,4 +49,21 @@ export function useDialog(ref: RefObject<HTMLElement | null>, onClose: () => voi
       opener?.focus?.({ preventScroll: true });
     };
   }, [ref]);
+}
+
+/**
+ * onKeyDown for a role="menu" container: the arrow keys, Home and End move
+ * between its buttons. The keys stop here, so a menu inside the player
+ * doesn't also seek or change the volume.
+ */
+export function menuKeys(e: ReactKeyboardEvent<HTMLElement>) {
+  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
+  const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>("button:not([disabled])"));
+  if (!items.length) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const at = items.indexOf(document.activeElement as HTMLElement);
+  const down = e.key === "ArrowDown";
+  const next = e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : at < 0 ? (down ? 0 : items.length - 1) : (at + (down ? 1 : -1) + items.length) % items.length;
+  items[next].focus();
 }
