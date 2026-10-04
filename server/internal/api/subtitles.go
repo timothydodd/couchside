@@ -121,7 +121,8 @@ func (s *Server) fileStreams(w http.ResponseWriter, r *http.Request) {
 	}
 	st, err := probe.ListStreams(r.Context(), s.cfg.FFprobe, f.Path)
 	if err != nil {
-		writeErr(w, httpError{http.StatusBadGateway, err.Error()})
+		slog.Warn("list streams", "file", f.Path, "err", err)
+		writeErr(w, httpError{http.StatusBadGateway, "couldn't read this file's audio and subtitle tracks"})
 		return
 	}
 	subs := []subtitleTrack{}
