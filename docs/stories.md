@@ -27,7 +27,7 @@ from the start.
 | B1  | Turning passwords on ends passwordless sessions        | Security  | Confirmed | PR #45|
 | B2  | Sign-in hardening, second pass                         | Security  | Reported  | PR #46|
 | B3  | Remote image cache can't be filled between prunes      | Security  | Reported  | PR #47|
-| B4  | Internal error text stays on the server                | Security  | Reported  |      |
+| B4  | Internal error text stays on the server                | Security  | Reported  | PR #48|
 | B5  | A provider outage doesn't wipe cast and backdrops      | Data loss | Confirmed |      |
 | B6  | Virtual channels stay on their schedule                | Bug       | Confirmed |      |
 | B7  | Virtual and tuner streams use the right picture path   | Bug       | Reported  |      |
@@ -154,6 +154,8 @@ volume in between. A6 left this.
 **Done when** the test passes.
 
 ## B4 · Internal error text stays on the server
+
+**Done** (PR #48).
 
 **Why.** A7 made 500s say "internal error" unless the message is a `usererr`,
 but several handlers still wrap anything.
