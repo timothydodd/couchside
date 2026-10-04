@@ -11,10 +11,14 @@ import (
 )
 
 const (
-	identifyTimeout = 8 * time.Second     // when a recording starts and nothing is stored yet
-	identifyRetry   = 10 * time.Minute    // after a failed lookup, record under the plain name until then
-	recheckUnknown  = 7 * 24 * time.Hour  // a series that couldn't be identified
-	recheckKnown    = 30 * 24 * time.Hour // a new same-titled series may have appeared
+	identifyTimeout = 8 * time.Second  // when a recording starts and nothing is stored yet
+	identifyRetry   = 10 * time.Minute // after a failed lookup, use what's stored (or the plain name) until then
+)
+
+// How long a stored answer is used before asking again. Tests shorten them.
+var (
+	recheckUnknown = 7 * 24 * time.Hour  // a series that couldn't be identified
+	recheckKnown   = 30 * 24 * time.Hour // a new same-titled series may have appeared
 )
 
 // showYear is the premiere year to put in a recording's show folder, or 0.
@@ -25,6 +29,10 @@ const (
 //
 // Results are stored per guide SeriesID. lookup=false only reads what's stored.
 func (s *Service) showYear(ctx context.Context, r db.Recording, lookup bool) int {
+	// known is the stored answer, used as it is while fresh and as the
+	// fallback when it's due a recheck and the provider can't be reached: a
+	// show that needed its year yesterday still needs it during an outage.
+	known := 0
 	if r.SeriesID != "" {
 		if m, err := s.db.SeriesMatchFor(ctx, r.SeriesID); err == nil && m != nil {
 			age, ttl := time.Since(time.Unix(m.CheckedAt, 0)), recheckKnown
@@ -34,10 +42,11 @@ func (s *Service) showYear(ctx context.Context, r db.Recording, lookup bool) int
 			if !lookup || age < ttl {
 				return m.Year
 			}
+			known = m.Year
 		}
 	}
 	if !lookup || s.cfg.Metadata.Empty() {
-		return 0
+		return known
 	}
 	failKey := r.SeriesID
 	if failKey == "" {
@@ -51,7 +60,7 @@ func (s *Service) showYear(ctx context.Context, r db.Recording, lookup bool) int
 	}
 	s.mu.Unlock()
 	if ok {
-		return 0
+		return known
 	}
 	h := metadata.EpisodeHint{Title: r.Title, EpisodeTitle: r.EpisodeTitle}
 	if m := reEpisode.FindStringSubmatch(r.EpisodeNum); m != nil {
@@ -70,7 +79,7 @@ func (s *Service) showYear(ctx context.Context, r db.Recording, lookup bool) int
 		s.mu.Lock()
 		s.lookupErr[failKey] = time.Now()
 		s.mu.Unlock()
-		return 0
+		return known
 	}
 	imdb, year := "", 0
 	if m != nil {

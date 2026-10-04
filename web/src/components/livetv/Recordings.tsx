@@ -1,4 +1,4 @@
-import { CalendarClock, Film, Pause, Play, RadioTower, Repeat, Square, Trash2, X } from "lucide-react";
+import { CalendarClock, Film, Pause, Play, RadioTower, Repeat, RotateCcw, Square, Trash2, X } from "lucide-react";
 import Link from "../Link";
 import { EmptyState, ErrorNote, Spinner } from "../ui";
 import { api, useApi } from "../../lib/api";
@@ -276,9 +276,20 @@ export default function Recordings() {
                     </td>
                     <td className="text-right">
                       {may(r.ownerId) && (
-                        <button className="btn-chip" onClick={() => void act(`/api/dvr/recordings/${r.id}`, "DELETE")}>
-                          <X size={11} /> Dismiss
-                        </button>
+                        <span className="inline-flex gap-2">
+                          {r.recoverable && (
+                            <button
+                              className="btn-chip"
+                              title="What was recorded is still on disk in pieces. Join them into the recording."
+                              onClick={() => void act(`/api/dvr/recordings/${r.id}/recover`, "POST")}
+                            >
+                              <RotateCcw size={11} /> Recover
+                            </button>
+                          )}
+                          <button className="btn-chip" onClick={() => void act(`/api/dvr/recordings/${r.id}`, "DELETE")}>
+                            <X size={11} /> Dismiss
+                          </button>
+                        </span>
                       )}
                     </td>
                   </tr>

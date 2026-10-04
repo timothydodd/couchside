@@ -33,7 +33,7 @@ from the start.
 | B7  | Virtual and tuner streams use the right picture path   | Bug       | Reported  | Done |
 | B8  | A recording watched from the start outlives recording  | Bug       | Confirmed | Done |
 | B9  | Commercial detection: custom ini and the job lookup    | Bug       | Confirmed | Done |
-| B10 | DVR: stale series matches and failed joins             | Bug       | Reported  |      |
+| B10 | DVR: stale series matches and failed joins             | Bug       | Reported  | Done |
 | B11 | Transcode: false GPU fallback, copied HEVC             | Bug       | Reported  |      |
 | B12 | Server odds and ends                                   | Bug       | Mixed     |      |
 | B13 | Player: subtitles, audio track, retry                  | Bug       | Confirmed |      |
@@ -286,6 +286,8 @@ and tone maps HDR films, and decodes on the GPU when the start-up test passed
 migration applies.
 
 ## B10 · DVR: stale series matches and failed joins
+
+**Done.**
 
 **Scope**
 - `showYear` (`livetv/identify.go`): once a stored match is past its TTL, a

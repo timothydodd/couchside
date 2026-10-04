@@ -236,6 +236,7 @@ func (s *Server) recorderRoutes(r chi.Router) {
 	r.Post("/dvr/recordings", s.dvrRecord)
 	r.Post("/dvr/recordings/{id}/cancel", s.dvrCancel)
 	r.Delete("/dvr/recordings/{id}", s.dvrDelete)
+	r.Post("/dvr/recordings/{id}/recover", s.dvrRecover)
 	r.Post("/dvr/rules", s.ruleCreate)
 	r.Put("/dvr/rules/{id}", s.ruleUpdate)
 	r.Delete("/dvr/rules/{id}", s.ruleDelete)

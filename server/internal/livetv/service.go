@@ -56,6 +56,7 @@ type Service struct {
 	virtualErr   map[int64]string // why a virtual channel has no schedule
 	wakeVirtual  chan struct{}
 	virtualCount int        // how many virtual channels there are
+	recoverMu    sync.Mutex // joining a failed recording's pieces (Recover)
 	virtualMu    sync.Mutex // one schedule extension at a time (loop, saves and tune-ins race)
 }
 

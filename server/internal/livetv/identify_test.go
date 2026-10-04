@@ -2,6 +2,7 @@ package livetv
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -101,5 +102,36 @@ func TestRecordingAvoidsOtherSeriesFolder(t *testing.T) {
 	}
 	if got := s.pathInDir(dir, recordingName(rec, 2016)); filepath.Dir(got) != filepath.Join(dir, "MacGyver (2016)", "Season 02") {
 		t.Errorf("existing 2016 folder: got %s", got)
+	}
+}
+
+// downOMDb can't be reached.
+type downOMDb struct{ fakeOMDb }
+
+func (f *downOMDb) SearchSeries(context.Context, string) ([]metadata.SeriesMatch, error) {
+	f.searches++
+	return nil, errors.New("omdb: request limit reached")
+}
+
+// A stored match that's due a recheck is still the answer when the recheck
+// can't reach the provider: the 2016 MacGyver keeps its year.
+func TestShowYearKeepsAStaleMatchWhenTheProviderIsDown(t *testing.T) {
+	s, d, _ := newTestService(t)
+	ctx := context.Background()
+	if err := d.SetSeriesMatch(ctx, "SH-NEW", "tt4786824", 2016); err != nil {
+		t.Fatal(err)
+	}
+	old := recheckKnown
+	recheckKnown = -time.Second // every stored match is due a recheck
+	t.Cleanup(func() { recheckKnown = old })
+	down := &downOMDb{}
+	s.cfg.Metadata = &metadata.Chain{Providers: []metadata.Provider{down}}
+	mac := db.Recording{Channel: "2.1", StartAt: time.Now().Unix(), Title: "MacGyver", EpisodeNum: "S02E05", SeriesID: "SH-NEW"}
+	if y := s.showYear(ctx, mac, true); y != 2016 || down.searches != 1 {
+		t.Fatalf("year = %d after %d lookups, want the stored 2016 after one failed lookup", y, down.searches)
+	}
+	// And while the failure is remembered (no second lookup straight away).
+	if y := s.showYear(ctx, mac, true); y != 2016 || down.searches != 1 {
+		t.Fatalf("second call: year %d, lookups %d", y, down.searches)
 	}
 }

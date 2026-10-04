@@ -226,7 +226,32 @@ func (s *Server) dvrList(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	for i := range recs {
+		recs[i].Recoverable = s.tv.Recoverable(recs[i])
+	}
 	writeJSON(w, http.StatusOK, recs)
+}
+
+// dvrRecover joins the pieces of a recording whose file couldn't be finished.
+func (s *Server) dvrRecover(w http.ResponseWriter, r *http.Request) {
+	if s.tv == nil {
+		writeErr(w, errNoTuner)
+		return
+	}
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := s.ownRecording(r, id); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := s.tv.Recover(r.Context(), id); err != nil {
+		writeErr(w, userFault(err))
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) dvrRecord(w http.ResponseWriter, r *http.Request) {

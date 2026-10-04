@@ -149,10 +149,11 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 		if !parse.IsVideo(name) || strings.HasPrefix(name, ".") {
 			return nil
 		}
-		// A recording in progress isn't an episode yet; its parts are joined
-		// into the final file, which the scan after it finishes picks up.
+		// A recording's parts aren't episodes: they're joined into the final
+		// file, which the scan after it finishes picks up. That holds for a
+		// recording whose join failed too (its parts wait for Recover).
 		if m := rePartFile.FindStringIndex(path); m != nil {
-			if active, err := w.db.RecordingPathActive(ctx, path[:m[0]]+".ts"); err != nil || active {
+			if owned, err := w.db.RecordingOwnsPath(ctx, path[:m[0]]+".ts"); err != nil || owned {
 				return err
 			}
 		}

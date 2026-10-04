@@ -481,6 +481,8 @@ export interface Recording {
   error: string;
   startedAt: number | null;
   finishedAt: number | null;
+  /** Failed, but its pieces are still on disk and can be joined. */
+  recoverable?: boolean;
   fileId: number | null;
   ruleId: number | null;
   /** Profile that scheduled it (or owns its series rule); 0 = admins only. */
