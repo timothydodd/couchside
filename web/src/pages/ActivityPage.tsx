@@ -147,8 +147,13 @@ export default function ActivityPage() {
 
 /** Live transcode sessions: who's watching what, and how hard the server is working. */
 function Streams() {
-  const { data } = useApi<{ hwaccel: string; maxSessions: number; sessions: TranscodeSession[] }>("/api/transcode", { pollMs: 2500 });
-  if (!data) return null;
+  const { data, error } = useApi<{ hwaccel: string; maxSessions: number; sessions: TranscodeSession[] }>("/api/transcode", { pollMs: 2500 });
+  if (!data)
+    return error ? (
+      <section className="gutter pb-6">
+        <ErrorNote>Couldn't load what's streaming: {error}</ErrorNote>
+      </section>
+    ) : null;
   const engine = data.hwaccel === "none" ? "software (CPU)" : data.hwaccel.toUpperCase();
   return (
     <section className="gutter pb-6">

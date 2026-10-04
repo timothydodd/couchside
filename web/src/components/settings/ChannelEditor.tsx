@@ -48,7 +48,8 @@ const KINDS: { id: "" | "movie" | "series"; label: string }[] = [
  * the next few hours. Shown in the side drawer from Settings.
  */
 export default function ChannelEditor({ channel, onClose, onSaved }: { channel?: VirtualChannel; onClose: () => void; onSaved: () => void }) {
-  const { data: opts } = useApi<VirtualOptions>("/api/livetv/virtual/options");
+  // Fresh: the next free number changes every time a channel is made.
+  const { data: opts, error: optsError } = useApi<VirtualOptions>("/api/livetv/virtual/options", { fresh: true });
   const { data: libraries } = useApi<Library[]>("/api/libraries");
   const [number, setNumber] = useState(channel?.number ?? "");
   const [name, setName] = useState(channel?.name ?? "");
@@ -58,9 +59,14 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Suggest a number once. After that the field is the user's: emptying it
+  // to type another mustn't fill it in again.
+  const suggested = useRef(false);
   useEffect(() => {
-    if (!channel && opts && !number) setNumber(opts.nextNumber);
-  }, [opts, channel, number]);
+    if (channel || !opts || suggested.current) return;
+    suggested.current = true;
+    setNumber((n) => n || opts.nextNumber);
+  }, [opts, channel]);
   const dialog = useRef<HTMLElement>(null);
   useDialog(dialog, onClose);
 
@@ -77,6 +83,10 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
   const sent: VirtualConfig = ads ? cfg : { ...cfg, filler: { ...cfg.filler, folder: "" } };
 
   const save = async () => {
+    if (ads && !cfg.filler.folder.trim()) {
+      setErr("Choose the folder your commercials are in, or turn commercials off.");
+      return;
+    }
     setBusy(true);
     setErr(null);
     try {
@@ -170,6 +180,7 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
                 <p className="mt-1 text-xs text-content-muted">{cfg.libraries.length ? "Only these libraries." : "All libraries."}</p>
               </div>
             )}
+            {optsError && !opts && <ErrorNote>Couldn't load your library's genres, years and titles: {optsError}</ErrorNote>}
             {opts && opts.genres.length > 0 && (
               <>
                 <GenreChips label="Any of these genres" all={opts.genres} value={cfg.genres} onChange={(genres) => set({ genres })} />

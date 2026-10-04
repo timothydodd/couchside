@@ -1,6 +1,6 @@
 import { useState } from "react";
 import LineChart, { type ChartSeries } from "../LineChart";
-import { Segmented } from "../ui";
+import { ErrorNote, Segmented } from "../ui";
 import { useApi } from "../../lib/api";
 import { fmtBytes } from "../../lib/format";
 import type { HistoryPoint, HistoryWindow } from "../../lib/types";
@@ -32,7 +32,7 @@ const count = (v: number) => String(Math.round(v));
 export default function SystemHistory() {
   const [range, setRange] = useState<Range>("15m");
   const secs = RANGES.find((r) => r.id === range)!.secs;
-  const { data } = useApi<HistoryWindow>(`/api/system/history?range=${range}`, { pollMs: secs <= 3600 ? 5000 : 60000, keep: true });
+  const { data, error } = useApi<HistoryWindow>(`/api/system/history?range=${range}`, { pollMs: secs <= 3600 ? 5000 : 60000, keep: true });
   const to = Date.now() / 1000;
   const from = to - secs;
   const scope = data?.scope === "container" ? "Container" : "Machine";
@@ -69,6 +69,11 @@ export default function SystemHistory() {
         </div>
         <Segmented label="Time range" value={range} onChange={setRange} options={RANGES.map((r) => ({ id: r.id, label: r.label }))} />
       </div>
+      {error && !data && (
+        <div className="mb-3">
+          <ErrorNote>Couldn't load the history: {error}</ErrorNote>
+        </div>
+      )}
       {!data ? null : pts.length < 2 ? (
         <p className="py-6 text-center text-xs text-content-muted">
           Collecting readings… the first points show up within a few seconds. (CPU and memory are only measured on Linux.)

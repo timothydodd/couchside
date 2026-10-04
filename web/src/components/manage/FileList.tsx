@@ -21,12 +21,15 @@ const MOVIE_GROUPS: { role: FileRole; label: string }[] = [
 export default function FileList({
   kind,
   files,
+  error,
   libraryPath,
   onDeleted,
   onChanged,
 }: {
   kind: ItemKind;
   files?: ManageFile[];
+  /** Why the files couldn't be loaded, when they couldn't. */
+  error?: string | null;
   libraryPath: string;
   onDeleted: (r: DeleteResult) => void;
   onChanged: () => void;
@@ -84,7 +87,11 @@ export default function FileList({
         </p>
       )}
       {!files ? (
-        <Spinner />
+        error ? (
+          <ErrorNote>Couldn't load the files: {error}</ErrorNote>
+        ) : (
+          <Spinner />
+        )
       ) : (
         <div className="flex flex-col gap-2">
           {[...groups.entries()].map(([k, g]) => (

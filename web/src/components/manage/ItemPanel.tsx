@@ -17,7 +17,7 @@ type Note = { text: string; error?: boolean };
 
 /** Everything you can do to one movie or show, in a drawer over the Manage table. */
 export default function ItemPanel({ row, library, onClose, onChanged }: { row: ManageRow; library: Library; onClose: () => void; onChanged: () => void }) {
-  const { data: files, reload: reloadFiles } = useApi<ManageFile[]>(`/api/items/${row.id}/files`);
+  const { data: files, error: filesError, reload: reloadFiles } = useApi<ManageFile[]>(`/api/items/${row.id}/files`);
   const [note, setNote] = useState<Note | null>(null);
 
   const dialog = useRef<HTMLElement>(null);
@@ -78,7 +78,7 @@ export default function ItemPanel({ row, library, onClose, onChanged }: { row: M
           )}
           <MetadataSearch row={row} onMatched={onChanged} />
           <ArtworkEditor row={row} onChanged={onChanged} />
-          <FileList kind={row.kind} files={files} libraryPath={library.path} onDeleted={deleted} onChanged={changed} />
+          <FileList kind={row.kind} files={files} error={filesError} libraryPath={library.path} onDeleted={deleted} onChanged={changed} />
           <DeleteItem row={row} onDeleted={deleted} />
         </div>
       </aside>

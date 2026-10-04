@@ -7,6 +7,7 @@ import { useAuth, useIsAdmin } from "../stores/auth";
 import { useProfile } from "../stores/profile";
 import { useRouter, type Route } from "../stores/router";
 import { useStatus } from "../stores/status";
+import { attempt } from "../lib/notices";
 
 /*
  * Phone layout (below md): a top bar with the logo, search and the profile,
@@ -132,7 +133,7 @@ function MoreSheet({ onClose }: { onClose: () => void }) {
           {admin && row("/libraries", "Libraries", FolderOpen)}
           {row("/settings", "Settings", Settings)}
           {row("/profiles", "Switch profile", Users)}
-          <button type="button" className="sheet-row" onClick={() => void logout()}>
+          <button type="button" className="sheet-row" onClick={attempt("Couldn't sign out", () => logout())}>
             <LogOut size={20} className="text-content-muted" />
             <span className="flex-1 text-left">Sign out</span>
           </button>

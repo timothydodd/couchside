@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RotateCcw, Upload } from "lucide-react";
 import { ErrorNote, Spinner } from "../ui";
 import { api, backdropUrl, posterUrl } from "../../lib/api";
@@ -86,6 +86,9 @@ function Slot(p: {
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [broken, setBroken] = useState(false);
+  // A new image (just uploaded, or reset) gets another try: while broken the
+  // <img> isn't rendered, so nothing else would clear it.
+  useEffect(() => setBroken(false), [p.preview]);
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <div className={`${p.aspect} relative overflow-hidden rounded-md border border-border-light bg-raised`}>

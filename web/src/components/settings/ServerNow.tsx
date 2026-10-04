@@ -1,7 +1,7 @@
 import { Pause, Play, Radio } from "lucide-react";
 import Link from "../Link";
 import ProfileAvatar from "../ProfileAvatar";
-import { Meter, StatTile } from "../ui";
+import { ErrorNote, Meter, StatTile } from "../ui";
 import { useApi } from "../../lib/api";
 import { fmtAgo, fmtBytes, fmtClock } from "../../lib/format";
 import type { ConnectedClient, SystemInfo } from "../../lib/types";
@@ -10,8 +10,8 @@ const busy = (pct: number) => (pct >= 90 ? "critical" : pct >= 75 ? "warning" : 
 
 /** Live server load, who's connected and what they're watching, and the server's streams. */
 export default function ServerNow() {
-  const { data } = useApi<SystemInfo>("/api/system", { pollMs: 3000 });
-  if (!data) return null;
+  const { data, error } = useApi<SystemInfo>("/api/system", { pollMs: 3000 });
+  if (!data) return error ? <ErrorNote>Couldn't read the server's load: {error}</ErrorNote> : null;
   const { stats, clients } = data;
   const memPct = stats.memTotal ? (stats.memUsed / stats.memTotal) * 100 : 0;
   const scope = stats.scope === "container" ? "container" : "machine";

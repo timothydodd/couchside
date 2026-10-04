@@ -40,7 +40,7 @@ from the start.
 | B14 | Live player: failed Record, phone controls             | Bug       | Confirmed | Done |
 | B15 | `useApi`: late answers, stale errors, cache size       | Bug       | Reported  | Done |
 | B16 | Console polling and token renewal                      | Bug       | Confirmed | Done |
-| B17 | Load failures and failed actions are shown             | Bug       | Reported  |      |
+| B17 | Load failures and failed actions are shown             | Bug       | Reported  | Done |
 | B18 | Keyboard and screen-reader gaps                        | A11y      | Reported  |      |
 | B19 | Docker and compose                                     | Packaging | Reported  |      |
 | B20 | Helm chart hardening                                   | Packaging | Reported  |      |
@@ -421,23 +421,19 @@ doesn't depend on the client clock.
 
 ## B17 · Load failures and failed actions are shown
 
-**Scope**
-- These take only `data` from `useApi`, so a failed request is a blank card or
-  an endless spinner: `ServerNow.tsx:13`, `SystemHistory.tsx:35`,
-  `VirtualChannels.tsx:16`, `manage/ItemPanel.tsx:20` (feeding `FileList`),
-  `ChannelEditor.tsx:51`, `ActivityPage.tsx:149`. `PersonPage.tsx:20` and
-  `ItemPage.tsx:28` say "not found" for any error. Render `ErrorNote`.
-- `void logout()` in `MobileNav.tsx:135`, `AccountSettings.tsx:60` and
-  `ChangePasswordPage.tsx:47`: wrap in `attempt("Couldn't sign out", …)`.
-- `setPrefs` (`stores/profile.ts:35`) swallows failures; roll back and notify.
-- `ArtworkEditor.tsx:88` (`Slot`): `broken` is only cleared by `onLoad`, but
-  the `<img>` isn't rendered while broken. Key the image on `preview`.
-- `ChannelEditor.tsx:61`: the number field refills itself when emptied, and
-  prefills a stale, taken number after creating a channel. Seed it once from a
-  fresh request. The "Classic TV" preset ticks "Add commercials" with no
-  folder, which saves as none; require the folder.
+**Done.** Typechecked and built; not yet tried in a browser with the server
+stopped.
 
-**Done when** each page shows an error state with the server stopped.
+- An error note instead of a blank card or endless spinner: System (load and
+  history), Your channels, the channel editor's options, a title's files in
+  Manage, and Streaming now on Activity.
+- A title or person page says "Couldn't load" with Try again unless the
+  server answered not found.
+- Sign-out failures and unsaved settings are reported; a setting that didn't
+  save goes back to what it was.
+- A new artwork preview is shown after an upload to an item that had none.
+- The channel editor suggests a number once, from a fresh request, and asks
+  for the commercials folder when commercials are on.
 
 ## B18 · Keyboard and screen-reader gaps
 

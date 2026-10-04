@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
+import { notify } from "../lib/notices";
 import type { Prefs, Profile } from "../lib/types";
 
 interface ProfileState {
@@ -32,7 +33,19 @@ export const useProfile = create<ProfileState>((set, get) => ({
     if (!cur) return;
     const next = { ...cur, prefs: { ...cur.prefs, ...patch } };
     set({ current: next, profiles: get().profiles.map((p) => (p.id === cur.id ? next : p)) });
-    void api(`/api/profiles/${cur.id}/prefs`, { method: "PATCH", json: patch }).catch(() => {});
+    api(`/api/profiles/${cur.id}/prefs`, { method: "PATCH", json: patch }).catch((e: unknown) => {
+      // Not saved: put back what was there (unless it's been changed again
+      // since), and say so, or the setting looks saved until the next reload.
+      const now = get().current;
+      if (now?.id === cur.id) {
+        const prefs = { ...now.prefs } as Record<string, unknown>;
+        const was = cur.prefs as Record<string, unknown>;
+        for (const [k, v] of Object.entries(patch)) if (prefs[k] === v) prefs[k] = was[k];
+        const back = { ...now, prefs: prefs as Prefs };
+        set({ current: back, profiles: get().profiles.map((p) => (p.id === cur.id ? back : p)) });
+      }
+      notify(`Couldn't save that setting: ${e instanceof Error ? e.message : String(e)}`);
+    });
   },
 }));
 

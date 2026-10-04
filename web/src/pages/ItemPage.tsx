@@ -26,7 +26,22 @@ export default function ItemPage({ id }: { id: number }) {
       </div>
     );
   }
-  if (!data) return <EmptyState title="Title not found">{error}</EmptyState>;
+  if (!data) {
+    // Only a 404 means it isn't there; anything else is a failed request.
+    const missing = !error || /not found/i.test(error);
+    return (
+      <EmptyState title={missing ? "Title not found" : "Couldn't load this title"}>
+        {!missing && error}
+        {!missing && (
+          <div className="mt-3">
+            <button className="btn-ghost" onClick={() => void reload()}>
+              Try again
+            </button>
+          </div>
+        )}
+      </EmptyState>
+    );
+  }
 
   const { item, files, seasons } = data;
   const isSeries = item.kind === "series";

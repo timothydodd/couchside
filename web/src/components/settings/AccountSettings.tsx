@@ -57,7 +57,7 @@ export default function AccountSettings() {
             {user?.role === "admin" ? " (admin)" : ""}.
           </div>
         </div>
-        <button className="btn-ghost !text-xs" onClick={() => void logout()}>
+        <button className="btn-ghost !text-xs" onClick={attempt("Couldn't sign out", () => logout())}>
           <LogOut size={13} /> Sign out
         </button>
       </div>
