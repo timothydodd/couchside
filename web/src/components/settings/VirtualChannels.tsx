@@ -1,12 +1,12 @@
-import { useState } from "react";
-import { MoreHorizontal, Pencil, Plus, RadioTower, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { Download, MoreHorizontal, Pencil, Plus, RadioTower, Trash2, Upload } from "lucide-react";
 import ChannelEditor from "./ChannelEditor";
 import Link from "../Link";
 import { ErrorNote, MenuButton } from "../ui";
 import { api, useApi } from "../../lib/api";
 import type { VirtualChannel, VirtualConfig } from "../../lib/types";
 import { useStatus } from "../../stores/status";
-import { attempt } from "../../lib/notices";
+import { attempt, notify } from "../../lib/notices";
 
 /**
  * Couchside's own channels: made from the library, they play around the clock
@@ -25,6 +25,24 @@ export default function VirtualChannels() {
     saved();
   });
 
+  // Import a file made by Export (here or on another server). Channels whose
+  // number is already one of yours are replaced.
+  const picker = useRef<HTMLInputElement>(null);
+  const importFile = attempt("Couldn't import the channels", async (file: File) => {
+    let json: unknown;
+    try {
+      json = JSON.parse(await file.text());
+    } catch {
+      throw new Error("that file isn't JSON");
+    }
+    const r = await api<{ created: number; updated: number; skipped: string[]; warnings: string[] }>("/api/livetv/virtual/import", { method: "POST", json });
+    saved();
+    const count = (n: number, what: string) => (n ? `${n} ${what}` : "");
+    notify([count(r.created, "added"), count(r.updated, "replaced")].filter(Boolean).join(", ") || "No channels were imported.", "info");
+    for (const line of r.skipped) notify(`Left out ${line}`);
+    for (const line of r.warnings) notify(line);
+  });
+
   return (
     <section className="card p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -32,9 +50,30 @@ export default function VirtualChannels() {
           <div className="card-title">Your channels</div>
           <div className="text-xs text-content-muted">Channels made from your library that play around the clock, like broadcast TV. No tuner needed.</div>
         </div>
-        <button className="btn-primary shrink-0" onClick={() => setEditing("new")}>
-          <Plus size={15} /> New channel
-        </button>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <input
+            ref={picker}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = ""; // so picking the same file again still fires
+              if (f) void importFile(f);
+            }}
+          />
+          <button className="btn-ghost" onClick={() => picker.current?.click()} title="Add channels from a file exported here or on another Couchside">
+            <Upload size={15} /> Import
+          </button>
+          {data && data.length > 0 && (
+            <a className="btn-ghost" href="/api/livetv/virtual/export" download title="Save these channels as a file, to import on another Couchside">
+              <Download size={15} /> Export
+            </a>
+          )}
+          <button className="btn-primary" onClick={() => setEditing("new")}>
+            <Plus size={15} /> New channel
+          </button>
+        </div>
       </div>
       {error && !data && <ErrorNote>Couldn't load your channels: {error}</ErrorNote>}
       {data && data.length === 0 && (

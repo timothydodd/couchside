@@ -299,6 +299,8 @@ func (s *Server) adminRoutes(r chi.Router) {
 
 	r.Get("/livetv/virtual", s.listVirtual)
 	r.Get("/livetv/virtual/options", s.virtualOptions)
+	r.Get("/livetv/virtual/export", s.exportVirtual)
+	r.Post("/livetv/virtual/import", s.importVirtual)
 	r.Post("/livetv/virtual/preview", s.previewVirtual)
 	r.Post("/livetv/virtual", s.createVirtual)
 	r.Put("/livetv/virtual/{id}", s.updateVirtual)
