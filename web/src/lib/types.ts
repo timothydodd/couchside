@@ -157,6 +157,14 @@ export interface Commercials {
 /** How the player treats commercial breaks. */
 export type BreakMode = "auto" | "button" | "off";
 
+/** A file's intro or end credits (GET /api/files/{id}/segments). */
+export interface MarkedSegment {
+  kind: "intro" | "credits";
+  start: number;
+  end: number;
+  source: "chapters" | "detected" | "manual";
+}
+
 /** Avatar colours, named after the theme tokens they use. */
 export type ProfileColor = "accent" | "pink" | "cyan" | "secondary" | "good" | "warning" | "critical";
 
@@ -164,6 +172,7 @@ export type ProfileColor = "accent" | "pink" | "cyan" | "secondary" | "good" | "
 export interface Prefs {
   autoplayNext?: boolean; // default true
   commercials?: BreakMode; // default "auto"
+  intros?: BreakMode; // skip intros: default "button"
   subtitleLang?: string; // turn on text subtitles in this language; "" = only forced ones (default)
   liveHeight?: number; // live TV and in-progress recording quality, default 720
   livePassthrough?: boolean; // TV apps play broadcasts they can decode untouched; default true

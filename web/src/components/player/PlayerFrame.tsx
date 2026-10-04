@@ -6,9 +6,10 @@ import SeekBar from "./SeekBar";
 import SettingsMenu, { type SettingSection } from "./SettingsMenu";
 import { useMediaState } from "./useMediaState";
 import { useBreakSkip } from "./useBreakSkip";
+import { useIntroSkip } from "./useIntroSkip";
 import { fmtClock, fmtTime } from "../../lib/format";
 import type { PreviewFrame } from "../../lib/trickplay";
-import type { BreakMode, Segment } from "../../lib/types";
+import type { BreakMode, MarkedSegment, Segment } from "../../lib/types";
 
 /**
  * How the timeline behaves:
@@ -50,6 +51,11 @@ export interface PlayerFrameProps {
   settings: SettingSection[];
   /** Commercial breaks to mark and skip (vod only). */
   breaks?: Segment[];
+  /** The file's intro and end credits (vod only), and how to treat the intro. */
+  segments?: MarkedSegment[];
+  introMode?: BreakMode;
+  /** What the button offered during the credits does (the next episode, or leave); omitted, no button. */
+  onCredits?: { label: string; go: () => void };
   /** A thumbnail of this file at time t (seconds), for the seek bar (vod only). */
   preview?: (t: number) => PreviewFrame | null;
   breakMode?: BreakMode;
@@ -80,6 +86,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
   const root = useRef<HTMLDivElement>(null);
   const st = useMediaState(videoRef);
   const brk = useBreakSkip(videoRef, st.time, timeline.kind === "vod" ? p.breaks : undefined, p.breakMode ?? "off");
+  const seg = useIntroSkip(videoRef, st.time, timeline.kind === "vod" ? p.segments : undefined, p.introMode ?? "button");
   const [chrome, setChrome] = useState(true);
   const [menu, setMenu] = useState(false);
   const [breakMenu, setBreakMenu] = useState<{ b: Segment; x: number } | null>(null);
@@ -252,7 +259,8 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           toggleFull();
           break;
         case "s":
-          brk.skip();
+          if (brk.current) brk.skip();
+          else seg.intro?.skip();
           break;
         case "Escape":
           if (menu) setMenu(false);
@@ -394,6 +402,20 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           ) : (
             <button className="player-pill" onClick={brk.watch}>
               Skipped a {fmtClock(brk.skipped!.end - brk.skipped!.start)} commercial break · <span className="underline">Watch it</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {!brk.current && !brk.skipped && !p.error && (seg.intro || (seg.inCredits && p.onCredits)) && (
+        <div className="absolute bottom-28 right-5 z-20" onClick={(e) => e.stopPropagation()}>
+          {seg.intro ? (
+            <button className="player-pill" onClick={seg.intro.skip} title="Skip intro (S)">
+              Skip intro <ChevronsRight size={16} />
+            </button>
+          ) : (
+            <button className="player-pill" onClick={p.onCredits!.go}>
+              {p.onCredits!.label} <ChevronsRight size={16} />
             </button>
           )}
         </div>

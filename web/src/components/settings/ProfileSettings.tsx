@@ -42,6 +42,11 @@ export default function ProfileSettings() {
             ))}
           </select>
         </div>
+        <span className="text-content-muted">Intros</span>
+        <div>
+          <Segmented label="Intros" value={p.intros ?? "button"} onChange={(m) => setPrefs({ intros: m })} options={BREAK_MODES.map((m) => ({ id: m.id, label: m.short.replace("Marked only", "Off") }))} />
+          <p className="mt-1 text-xs text-content-muted">For episodes and films whose intro is known (from the file's chapters, or marked by an admin).</p>
+        </div>
         <span className="text-content-muted">Commercials</span>
         <div>
           <Segmented label="Commercials" value={p.commercials ?? "auto"} onChange={(m) => setPrefs({ commercials: m })} options={BREAK_MODES.map((m) => ({ id: m.id, label: m.short }))} />

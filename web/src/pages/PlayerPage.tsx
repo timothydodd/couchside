@@ -6,11 +6,12 @@ import { useTextSubtitles } from "../components/player/useTextSubtitles";
 import { InfoRows, type SettingSection } from "../components/player/SettingsMenu";
 import { ApiError, api, useApi } from "../lib/api";
 import { fmtClock, fmtResolution } from "../lib/format";
+import { errText } from "../lib/errors";
 import { hlsEngine } from "../lib/hls";
 import { previewFrame, type TrickIndex } from "../lib/trickplay";
 import { chooseSource, fmtMbps, hlsCopyCaps, presetById, presetSource, presetsFor, sourceKey, stepDown, type Quality, type Source } from "../lib/playback";
 import { audioLabel, subtitleDetail, subtitleLabel, type AudioTrack, type SubtitleTrack } from "../lib/tracks";
-import { PROBLEM_TEXT, type BreakMode, type Commercials, type HlsSession, type PlayInfo, type Segment } from "../lib/types";
+import { PROBLEM_TEXT, type MarkedSegment, type BreakMode, type Commercials, type HlsSession, type PlayInfo, type Segment } from "../lib/types";
 import { BREAK_MODES, sameLanguage } from "../lib/prefs";
 import { useIsAdmin } from "../stores/auth";
 import { usePrefs, useProfile } from "../stores/profile";
@@ -40,6 +41,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   // useApi hands back the previous file's info for a render after fileId changes.
   const info = loaded?.fileId === fileId ? loaded : undefined;
   const { data: streams, error: streamsError } = useApi<{ audio: AudioTrack[]; subtitles: SubtitleTrack[] }>(`/api/files/${fileId}/streams`);
+  const { data: marks, reload: reloadMarks } = useApi<{ segments: MarkedSegment[] }>(`/api/files/${fileId}/segments`);
   // Seek-bar thumbnails, when this file's library makes them (404 otherwise).
   const { data: trick } = useApi<TrickIndex>(`/api/files/${fileId}/trickplay`);
   const [breakPoll, setBreakPoll] = useState(false);
@@ -367,6 +369,26 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   };
   const chooseBreakMode = (m: BreakMode) => useProfile.getState().setPrefs({ commercials: m });
 
+  // --- intro and credits -----------------------------------------------------------------
+  const intro = marks?.segments.find((s) => s.kind === "intro");
+  const credits = marks?.segments.find((s) => s.kind === "credits");
+  const mark = async (what: string) => {
+    const v = videoRef.current;
+    if (!v) return;
+    const t = v.currentTime;
+    const url = (kind: string) => `/api/files/${fileId}/segments/${kind}`;
+    try {
+      if (what === "intro-start") await api(url("intro"), { method: "PUT", json: { start: t, end: intro && intro.end > t + 1 ? intro.end : t + 60 } });
+      else if (what === "intro-end") await api(url("intro"), { method: "PUT", json: { start: intro && intro.start < t - 1 ? intro.start : Math.max(0, t - 60), end: t } });
+      else if (what === "credits") await api(url("credits"), { method: "PUT", json: { start: t, end: isFinite(v.duration) ? v.duration : t + 3600 } });
+      else await api(url(what === "clear-intro" ? "intro" : "credits"), { method: "DELETE" });
+      await reloadMarks();
+      flash(what.startsWith("clear") ? "Mark cleared." : "Marked. Everyone watching this file gets the skip button.");
+    } catch (e) {
+      flash(`Couldn't save the mark: ${errText(e)}`);
+    }
+  };
+
   // --- settings ------------------------------------------------------------------------
   const mode = describe(source, session);
   const qualityLabel = (q: Quality) => (q === "auto" ? "Auto" : (presetById(q)?.label ?? q));
@@ -433,6 +455,21 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
     },
     commercialsSection(comm, breakMode, !!info && BROADCAST.has(info.container), chooseBreakMode, findCommercials, isAdmin),
     {
+      // Admins mark where the intro and credits are, at the playhead.
+      id: "marks",
+      label: "Intro and credits",
+      hidden: !isAdmin,
+      value: [intro && "Intro", credits && "Credits"].filter(Boolean).join(", ") || "Not marked",
+      options: [
+        { id: "intro-start", label: "The intro starts here", detail: intro ? `Now ${fmtClock(intro.start)} to ${fmtClock(intro.end)}` : undefined },
+        { id: "intro-end", label: "The intro ends here" },
+        { id: "credits", label: "The credits start here", detail: credits ? `Now at ${fmtClock(credits.start)}` : undefined },
+        ...(intro ? [{ id: "clear-intro", label: "Clear the intro mark" }] : []),
+        ...(credits ? [{ id: "clear-credits", label: "Clear the credits mark" }] : []),
+      ],
+      onSelect: (id) => void mark(id),
+    },
+    {
       id: "speed",
       label: "Playback speed",
       value: rate === 1 ? "Normal" : `${rate}×`,
@@ -462,6 +499,15 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
       }
       settings={settings}
       breaks={comm?.status === "done" ? comm.segments : undefined}
+      segments={marks?.segments}
+      introMode={prefs.intros ?? "button"}
+      onCredits={
+        parts
+          ? undefined
+          : info?.nextFileId
+            ? { label: "Next episode", go: () => void onEnded() }
+            : { label: "Skip credits", go: () => void onEnded() }
+      }
       preview={trick ? (t) => (info?.durationSec && t > info.durationSec ? null : previewFrame(fileId, trick, t)) : undefined}
       breakMode={breakMode}
       onBack={exit}
