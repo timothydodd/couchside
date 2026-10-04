@@ -650,8 +650,10 @@ export interface AuthInfo {
   passwordless: boolean;
   /** COUCHSIDE_AUTH=true on the server requires passwords. */
   passwordlessLocked: boolean;
-  /** Passwordless: every profile to pick from. */
+  /** Passwordless: the profiles to pick from (without the admins while they're hidden; /api/auth?admin=1 lists those). */
   profiles: ProfileStub[];
+  /** Admin accounts are left off the picker and sign in at /admin. */
+  hideAdmins?: boolean;
   setupRequired: boolean;
   user: Profile | null;
   accessExpiresAt?: number;

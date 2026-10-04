@@ -16,13 +16,23 @@ import { authError, useAuth } from "../../stores/auth";
 export default function AccountManager() {
   const { data, error, loading, reload } = useApi<Profile[]>("/api/accounts");
   const [open, setOpen] = useState<number | "new" | null>(null);
-  const { passwordless, passwordlessLocked } = useAuth();
+  const { passwordless, passwordlessLocked, hideAdmins } = useAuth();
   const [toggleErr, setToggleErr] = useState<string | null>(null);
 
   const setPasswordless = async (enabled: boolean) => {
     setToggleErr(null);
     try {
       await api("/api/settings/passwordless", { method: "PUT", json: { enabled } });
+      await useAuth.getState().load();
+    } catch (e) {
+      setToggleErr(authError(e));
+    }
+  };
+
+  const setHideAdmins = async (enabled: boolean) => {
+    setToggleErr(null);
+    try {
+      await api("/api/settings/hide-admins", { method: "PUT", json: { enabled } });
       await useAuth.getState().load();
     } catch (e) {
       setToggleErr(authError(e));
@@ -59,6 +69,18 @@ export default function AccountManager() {
           </span>
         </span>
       </label>
+      {passwordless && (
+        <label className="mb-3 flex items-start gap-2 text-sm">
+          <input type="checkbox" className="accent-brand mt-0.5" checked={hideAdmins} onChange={(e) => void setHideAdmins(e.target.checked)} />
+          <span>
+            <span className="font-medium text-content">Hide admin accounts on the sign-in page</span>
+            <span className="block text-xs text-content-muted">
+              The profile picker (and TV apps) list everyone else; admins sign in at <span className="mono">/admin</span>. This only keeps them out of sight,
+              so give admin accounts a password.
+            </span>
+          </span>
+        </label>
+      )}
       {toggleErr && <ErrorNote>{toggleErr}</ErrorNote>}
       {loading && !data && <Spinner />}
       {error && <ErrorNote>{error}</ErrorNote>}

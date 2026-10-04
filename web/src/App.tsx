@@ -43,7 +43,16 @@ export default function App() {
   if (!auth.user) return <SignInPage />;
   if (auth.user.mustChangePassword) return <ChangePasswordPage />;
   if (route.name === "profiles") return <SignInPage switching />;
+  // /admin is where hidden admin accounts sign in. An admin has nothing more
+  // to do there; anyone else can switch to an admin account.
+  if (route.name === "admin") return auth.user.role === "admin" ? <Redirect to="/" /> : <SignInPage switching />;
   return <Signed />;
+}
+
+function Redirect({ to }: { to: string }) {
+  const go = useRouter((s) => s.go);
+  useEffect(() => go(to, { replace: true }), [go, to]);
+  return null;
 }
 
 /** The app proper, once there's someone to show it to. */

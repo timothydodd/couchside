@@ -164,17 +164,55 @@ func (s *Server) pick(w http.ResponseWriter, r *http.Request) {
 	s.startSession(w, r, p, in.Client, in.Device)
 }
 
-// pickable lists every enabled profile for the passwordless picker.
-func (s *Server) pickable(ctx context.Context) ([]profileStub, error) {
+// Hiding admins: with this on, the passwordless picker leaves admin accounts
+// out, and they're listed at /admin instead (GET /api/auth?admin=1). It only
+// keeps them out of sight (a demo's reviewers needn't see the admin account);
+// what protects an admin account is its password.
+const settingHideAdmins = "auth.hide_admins"
+
+func (s *Server) hideAdmins(ctx context.Context) (bool, error) {
+	v, err := s.db.Setting(ctx, settingHideAdmins)
+	return v == "1", err
+}
+
+// setHideAdmins hides admin accounts from the profile picker, or shows them (admins).
+func (s *Server) setHideAdmins(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, err)
+		return
+	}
+	v := "0"
+	if in.Enabled {
+		v = "1"
+	}
+	if err := s.db.SetSetting(r.Context(), settingHideAdmins, v); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// pickable lists the enabled profiles for the passwordless picker. While
+// admins are hidden it's everyone else, or only the admins for the /admin
+// page (admins true).
+func (s *Server) pickable(ctx context.Context, admins bool) ([]profileStub, error) {
+	hide, err := s.hideAdmins(ctx)
+	if err != nil {
+		return nil, err
+	}
 	ps, err := s.db.Profiles(ctx)
 	if err != nil {
 		return nil, err
 	}
 	out := []profileStub{}
 	for _, p := range ps {
-		if !p.Disabled {
-			out = append(out, profileStub{ID: p.ID, Name: p.Name, Color: p.Color, HasPassword: p.HasPassword})
+		if p.Disabled || (hide && (p.Role == "admin") != admins) {
+			continue
 		}
+		out = append(out, profileStub{ID: p.ID, Name: p.Name, Color: p.Color, HasPassword: p.HasPassword})
 	}
 	return out, nil
 }

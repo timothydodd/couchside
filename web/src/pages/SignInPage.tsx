@@ -24,7 +24,9 @@ export default function SignInPage({ switching = false }: { switching?: boolean 
     return e;
   });
   const back = useRouter((s) => s.back);
-  const tiles = passwordless ? profiles : signedIn;
+  // Profiles this browser is signed in to are always offered, so a hidden
+  // admin can still switch back on their own browser.
+  const tiles = passwordless ? [...profiles, ...signedIn.filter((s) => !profiles.some((p) => p.id === s.id))] : signedIn;
   const [asking, setAsking] = useState<ProfileStub | null>(null); // the profile whose password we want
   const [form, setForm] = useState(!passwordless && signedIn.length === 0);
   const [name, setName] = useState("");

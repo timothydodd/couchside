@@ -22,6 +22,11 @@ rules and server settings are shared. Switch profiles from the sidebar.
 - **Passwords** are optional while passwordless sign-in is on (Argon2id hashes
   when set). With it off, sign-in is by name and password and no list of names
   is shown.
+- **Hiding admins.** With passwordless sign-in on, *Hide admin accounts on
+  the sign-in page* (Settings → Accounts) leaves admins off the profile
+  picker, in the browser and in TV apps. Admins sign in at `/admin` instead.
+  It suits a demo server, where visitors needn't see the admin account. It
+  only keeps the account out of sight, so give it a password.
 - **First run.** A new server is passwordless with one admin profile, "Me".
   With `COUCHSIDE_AUTH=true` and no admin password yet, the server log prints a
   one-time setup code; open the UI and enter it with your name and a password.

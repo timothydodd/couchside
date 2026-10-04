@@ -287,6 +287,7 @@ func (s *Server) adminRoutes(r chi.Router) {
 
 	r.Get("/accounts", s.listAccounts)
 	r.Put("/settings/passwordless", s.setPasswordless)
+	r.Put("/settings/hide-admins", s.setHideAdmins)
 	r.Get("/settings/oidc", s.getOIDC)
 	r.Put("/settings/oidc", s.setOIDC)
 	r.Post("/accounts", s.createAccount)
