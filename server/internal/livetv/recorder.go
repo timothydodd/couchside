@@ -178,7 +178,8 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	// if it's a .ts file (recording folders may be shared with a TV library).
 	if r.Path != "" && strings.HasSuffix(r.Path, ".ts") {
 		if err := os.Remove(r.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
+			slog.Error("delete recording", "id", id, "err", err) // the error names the path
+			return usererr.New("the recording's file couldn't be deleted; the server log has the reason")
 		}
 		if lib, _ := s.db.LibraryContaining(ctx, r.Path); lib != nil {
 			removeEmptyParents(filepath.Dir(r.Path), lib.Path)

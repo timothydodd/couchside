@@ -36,7 +36,10 @@ func (s *Server) commercials(w http.ResponseWriter, r *http.Request) {
 			status = job.Status
 		case "failed":
 			if !done {
-				status, msg = "failed", job.Error
+				status, msg = "failed", "commercial detection failed; an admin can see why in Activity"
+				if currentUser(r.Context()).Admin {
+					msg = job.Error
+				}
 			}
 		}
 	}

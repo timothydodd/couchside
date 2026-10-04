@@ -243,11 +243,7 @@ func (s *Server) dvrRecord(w http.ResponseWriter, r *http.Request) {
 	}
 	id, overlap, existing, err := s.tv.Record(r.Context(), in.ProgramID, currentUser(r.Context()).ID)
 	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
-			writeErr(w, err)
-			return
-		}
-		writeErr(w, badRequest(err.Error()))
+		writeErr(w, userFault(err))
 		return
 	}
 	tuners := 0
@@ -299,7 +295,7 @@ func (s *Server) dvrDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.tv.Delete(r.Context(), id); err != nil {
-		writeErr(w, badRequest(err.Error()))
+		writeErr(w, userFault(err))
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -345,7 +341,7 @@ func (s *Server) dvrWatch(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, httpError{http.StatusTooManyRequests, err.Error()})
 			return
 		}
-		writeErr(w, badRequest(err.Error()))
+		writeErr(w, userFault(err))
 		return
 	}
 	rec, _ := s.db.Recording(r.Context(), id)

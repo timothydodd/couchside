@@ -35,12 +35,16 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	if s.tv != nil {
 		tv = s.tv.Summary()
 	}
+	mediaRoot := "" // a server path: admins only, as tvStatus does with folders
+	if currentUser(r.Context()).Admin {
+		mediaRoot = s.cfg.MediaRoot
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"livetv":    tv,
 		"version":   s.version,
 		"providers": s.providers.Names(),
 		"tmdbKey":   s.cfg.TMDBKeySource(),
-		"mediaRoot": s.cfg.MediaRoot,
+		"mediaRoot": mediaRoot,
 		"counts":    counts,
 		"jobs":      jobs,
 		"scanEvery": s.cfg.ScanInterval.String(),

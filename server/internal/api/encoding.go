@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -125,7 +126,9 @@ func (s *Server) hlsSegment(w http.ResponseWriter, r *http.Request) {
 		if r.Context().Err() != nil {
 			return // player moved on (seek/close); nothing to report
 		}
-		writeErr(w, httpError{http.StatusInternalServerError, err.Error()})
+		// err carries ffmpeg's last lines, which name files on the server.
+		slog.Error("hls segment", "session", chi.URLParam(r, "sid"), "segment", n, "err", err)
+		writeErr(w, httpError{http.StatusInternalServerError, "the server couldn't convert this video; the server log has the reason"})
 		return
 	}
 	w.Header().Set("Content-Type", "video/mp2t")

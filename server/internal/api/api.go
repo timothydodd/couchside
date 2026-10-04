@@ -298,7 +298,8 @@ func (s *Server) adminRoutes(r chi.Router) {
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	if err := s.db.Ping(r.Context()); err != nil {
-		http.Error(w, "db: "+err.Error(), http.StatusServiceUnavailable)
+		slog.Error("health check", "err", err)
+		http.Error(w, "database unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	w.Write([]byte("ok"))
@@ -339,6 +340,16 @@ type httpError struct {
 func (e httpError) Error() string { return e.msg }
 
 func badRequest(msg string) error { return httpError{http.StatusBadRequest, msg} }
+
+// userFault answers a message written for the user (usererr) as a 400. Any
+// other error is returned as it is, so writeErr logs it and says "internal
+// error": its text may hold paths or SQL.
+func userFault(err error) error {
+	if usererr.Is(err) {
+		return badRequest(err.Error())
+	}
+	return err
+}
 
 func idParam(r *http.Request) (int64, error) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)

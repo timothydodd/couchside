@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/timothydodd/couchside/internal/db"
 )
 
 func (s *Server) rulesList(w http.ResponseWriter, r *http.Request) {
@@ -77,11 +76,7 @@ func (s *Server) ruleCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	rule, sum, err := s.tv.CreateRule(ctx, in.ProgramID, in.Mode, in.Channel, in.MediaItemID, in.KeepLast)
 	if err != nil {
-		if err == db.ErrNotFound {
-			writeErr(w, err)
-			return
-		}
-		writeErr(w, badRequest(err.Error()))
+		writeErr(w, userFault(err))
 		return
 	}
 	if err := s.db.SetRuleOwner(ctx, rule.ID, u.ID); err != nil {
@@ -127,7 +122,7 @@ func (s *Server) ruleUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	rule, sum, err := s.tv.UpdateRule(r.Context(), cur)
 	if err != nil {
-		writeErr(w, badRequest(err.Error()))
+		writeErr(w, userFault(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"rule": rule, "summary": sum})
