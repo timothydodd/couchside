@@ -21,9 +21,10 @@ type Limiter struct {
 }
 
 type strike struct {
-	fails int
-	last  time.Time
-	until time.Time
+	fails   int
+	pending int // attempts begun and not yet ended
+	last    time.Time
+	until   time.Time
 }
 
 func NewLimiter(free int, base, max, window time.Duration) *Limiter {
@@ -39,7 +40,7 @@ func (l *Limiter) Wait(key string) time.Duration {
 		return 0
 	}
 	now := l.now()
-	if now.Sub(s.last) > l.Window {
+	if s.pending == 0 && now.Sub(s.last) > l.Window {
 		delete(l.keys, key)
 		return 0
 	}
@@ -49,15 +50,73 @@ func (l *Limiter) Wait(key string) time.Duration {
 	return 0
 }
 
-// Fail records a failed attempt and returns the new lock time.
-func (l *Limiter) Fail(key string) time.Duration {
+// Begin claims an attempt for the key and returns 0, or returns how long to
+// wait. Every claim must be given back with End. Checking with Wait and
+// recording with Fail afterwards lets a burst of parallel requests all pass
+// the check before any has failed; Begin counts the attempts in flight, so a
+// burst gets no more guesses than the same requests one after another.
+func (l *Limiter) Begin(key string) time.Duration {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := l.now()
 	s := l.keys[key]
-	if s == nil || now.Sub(s.last) > l.Window {
+	if s != nil && s.pending == 0 && now.Sub(s.last) > l.Window {
+		delete(l.keys, key)
+		s = nil
+	}
+	if s == nil {
+		s = &strike{last: now}
+		l.keys[key] = s
+		l.prune(now)
+	}
+	if d := s.until.Sub(now); d > 0 {
+		return d
+	}
+	// Free failures don't lock; past those, one attempt at a time.
+	if s.pending >= max(1, l.Free-s.fails) {
+		return time.Second
+	}
+	s.pending++
+	return 0
+}
+
+// End gives back an attempt claimed with Begin, recording it when it failed.
+func (l *Limiter) End(key string, failed bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	s := l.keys[key]
+	if s == nil { // cleared by Success meanwhile
+		if failed {
+			l.fail(key)
+		}
+		return
+	}
+	if s.pending > 0 {
+		s.pending--
+	}
+	if failed {
+		l.fail(key)
+	} else if s.pending == 0 && s.fails == 0 {
+		delete(l.keys, key)
+	}
+}
+
+// Fail records a failed attempt and returns the new lock time.
+func (l *Limiter) Fail(key string) time.Duration {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.fail(key)
+}
+
+// fail is Fail with mu held.
+func (l *Limiter) fail(key string) time.Duration {
+	now := l.now()
+	s := l.keys[key]
+	if s == nil {
 		s = &strike{}
 		l.keys[key] = s
+	} else if now.Sub(s.last) > l.Window {
+		s.fails, s.until = 0, time.Time{}
 	}
 	s.fails++
 	s.last = now
@@ -88,7 +147,7 @@ func (l *Limiter) prune(now time.Time) {
 		return
 	}
 	for k, s := range l.keys {
-		if now.Sub(s.last) > l.Window {
+		if s.pending == 0 && now.Sub(s.last) > l.Window {
 			delete(l.keys, k)
 		}
 	}
