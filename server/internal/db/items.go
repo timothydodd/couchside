@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"strconv"
 	"strings"
 )
 
@@ -23,6 +24,7 @@ type ItemSummary struct {
 	UpdatedAt    int64    `json:"updatedAt"`
 	FileCount    int      `json:"fileCount"`    // extras aren't counted
 	WatchedCount int      `json:"watchedCount"`
+	InWatchlist  bool     `json:"inWatchlist"` // on the profile's "My list"
 	LastAddedAt  int64    `json:"lastAddedAt"`
 }
 
@@ -42,19 +44,38 @@ type Item struct {
 	Provider     string `json:"matchProvider"` // tmdb | omdb | "" (where the rating and details came from)
 }
 
-// summaryCols counts watched files for the profile in ctx.
+// summaryCols counts watched files, and says whether the title is on "My
+// list", for the profile in ctx.
 func summaryCols(ctx context.Context) string {
 	return `m.id, m.kind, m.title, m.sort_title, m.year, m.genres, m.rating, m.runtime_min,
 	m.has_poster, m.has_backdrop, m.match_status, m.added_at, m.updated_at,
 	(SELECT COUNT(*) FROM files f WHERE f.media_item_id = m.id AND f.role <> 'extra'),
 	(SELECT COUNT(*) FROM files f ` + watchJoin(ctx) + ` WHERE f.media_item_id = m.id AND f.role <> 'extra' AND w.watched = 1),
+	EXISTS (SELECT 1 FROM profile_items pi WHERE pi.item_id = m.id AND pi.profile_id = ` + strconv.FormatInt(ProfileID(ctx), 10) + `),
 	COALESCE((SELECT MAX(f.added_at) FROM files f WHERE f.media_item_id = m.id), m.added_at) AS last_added`
 }
 
 func scanSummary(dest *ItemSummary, extra ...any) []any {
 	return append([]any{&dest.ID, &dest.Kind, &dest.Title, &dest.SortTitle, &dest.Year, &genreScanner{&dest.Genres}, &dest.Rating,
 		&dest.RuntimeMin, &dest.HasPoster, &dest.HasBackdrop, &dest.MatchStatus, &dest.AddedAt, &dest.UpdatedAt,
-		&dest.FileCount, &dest.WatchedCount, &dest.LastAddedAt}, extra...)
+		&dest.FileCount, &dest.WatchedCount, &dest.InWatchlist, &dest.LastAddedAt}, extra...)
+}
+
+// Watchlist is the profile's "My list", newest first.
+func (d *DB) Watchlist(ctx context.Context, limit int) ([]ItemSummary, error) {
+	return d.querySummaries(ctx, `SELECT `+summaryCols(ctx)+` FROM media_items m
+		JOIN profile_items pl ON pl.item_id = m.id AND pl.profile_id = ?
+		ORDER BY pl.added_at DESC, m.id DESC LIMIT ?`, ProfileID(ctx), limit)
+}
+
+// SetWatchlist adds a title to the profile's "My list", or takes it off.
+func (d *DB) SetWatchlist(ctx context.Context, itemID int64, on bool) error {
+	q := `DELETE FROM profile_items WHERE profile_id = ? AND item_id = ?`
+	if on {
+		q = `INSERT OR IGNORE INTO profile_items (profile_id, item_id) VALUES (?, ?)`
+	}
+	_, err := d.sql.ExecContext(ctx, q, ProfileID(ctx), itemID)
+	return err
 }
 
 // genreScanner splits the comma-separated genres column into a slice.

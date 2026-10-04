@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, Eye, EyeOff, Play, RotateCcw, Star, Trash2, Wand2 } from "lucide-react";
+import { ArrowLeft, Bookmark, BookmarkCheck, Check, Eye, EyeOff, Play, RotateCcw, Star, Trash2, Wand2 } from "lucide-react";
 import { CastRow, CrewLine } from "../components/Credits";
 import Link from "../components/Link";
 import { PosterArt } from "../components/PosterCard";
@@ -56,6 +56,10 @@ export default function ItemPage({ id }: { id: number }) {
   const resumeAt = isSeries ? next?.positionSec : movieAt >= 0 ? partOffset + movieFile.positionSec : 0;
   const allWatched = item.fileCount > 0 && item.watchedCount >= item.fileCount;
 
+  const setListed = attempt("Couldn't change your list", async (on: boolean) => {
+    await api(`/api/items/${id}/watchlist`, { method: on ? "PUT" : "DELETE" });
+    await reload();
+  });
   const setWatched = attempt("Couldn't change watched", async (watched: boolean) => {
     await api(`/api/items/${item.id}/watched`, { method: "POST", json: { watched } });
     await reload();
@@ -128,6 +132,10 @@ export default function ItemPage({ id }: { id: number }) {
                     : "Play"}
               </Link>
             )}
+            <button className="btn-ghost !py-2" aria-pressed={item.inWatchlist} onClick={() => void setListed(!item.inWatchlist)}>
+              {item.inWatchlist ? <BookmarkCheck size={15} className="text-accent" /> : <Bookmark size={15} />}
+              {item.inWatchlist ? "On my list" : "My list"}
+            </button>
             <button className="btn-ghost !py-2" onClick={() => void setWatched(!allWatched)}>
               {allWatched ? <EyeOff size={15} /> : <Eye size={15} />}
               {allWatched ? "Mark unwatched" : "Mark watched"}

@@ -17,6 +17,8 @@ export interface ItemSummary {
   updatedAt: number;
   fileCount: number;
   watchedCount: number;
+  /** On this profile's "My list". */
+  inWatchlist: boolean;
   lastAddedAt: number;
 }
 
@@ -313,6 +315,8 @@ export interface NowPlaying {
 
 export interface Home {
   continueWatching: PlayInfo[];
+  /** The profile's "My list", newest first. */
+  watchlist: ItemSummary[];
   recentMovies: ItemSummary[];
   recentSeries: ItemSummary[];
 }

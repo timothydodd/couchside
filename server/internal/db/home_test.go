@@ -112,3 +112,43 @@ func TestContinueWatchingAndNextUp(t *testing.T) {
 		t.Fatalf("caught up: %+v", got)
 	}
 }
+
+// "My list" is per profile, newest first, and shows on a title's summary.
+func TestWatchlist(t *testing.T) {
+	d := openTest(t)
+	bg := context.Background()
+	me, _ := d.SetupAdmin(bg, "Me", "hash")
+	other, _ := d.CreateAccount(bg, "Other", "accent", "user", false, "h", false)
+	mine, theirs := WithProfile(bg, me.ID), WithProfile(bg, other.ID)
+	lib, _ := d.CreateLibrary(bg, "Films", "/films", "movies")
+	heat, _, _ := d.EnsureItem(bg, lib, "movie", "Heat", 1995)
+	ronin, _, _ := d.EnsureItem(bg, lib, "movie", "Ronin", 1998)
+
+	for i, id := range []int64{heat, ronin} {
+		if err := d.SetWatchlist(mine, id, true); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := d.sql.ExecContext(bg, `UPDATE profile_items SET added_at = ? WHERE item_id = ?`, 100+i, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := d.SetWatchlist(mine, heat, true); err != nil { // twice is fine
+		t.Fatal(err)
+	}
+	list, err := d.Watchlist(mine, 10)
+	if err != nil || len(list) != 2 || list[0].ID != ronin || !list[0].InWatchlist {
+		t.Fatalf("my list = %+v %v", list, err)
+	}
+	if l, _ := d.Watchlist(theirs, 10); len(l) != 0 {
+		t.Fatalf("another profile's list: %+v", l)
+	}
+	if it, _ := d.Item(theirs, heat); it.InWatchlist {
+		t.Fatal("a title on my list shows as on someone else's")
+	}
+	if err := d.SetWatchlist(mine, ronin, false); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := d.Watchlist(mine, 10); len(list) != 1 || list[0].ID != heat {
+		t.Fatalf("after removing one: %+v", list)
+	}
+}

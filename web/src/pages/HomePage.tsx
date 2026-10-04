@@ -74,6 +74,7 @@ export default function HomePage() {
           ))}
         </Row>
       )}
+      <PosterRow title="My list" items={data?.watchlist ?? []} />
       <PosterRow
         title="Recently added movies"
         items={data?.recentMovies ?? []}

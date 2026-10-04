@@ -212,6 +212,8 @@ func (s *Server) userRoutes(r chi.Router) {
 	r.Get("/items/{id}", s.getItem)
 	r.Get("/people/{id}", s.person)
 	r.Post("/items/{id}/watched", s.itemWatched)
+	r.Put("/items/{id}/watchlist", s.setWatchlist)
+	r.Delete("/items/{id}/watchlist", s.setWatchlist)
 
 	r.Get("/files/{id}", s.playInfo)
 	r.Put("/files/{id}/progress", s.saveProgress)

@@ -54,7 +54,7 @@ from the start.
 | C5  | Web duplication, dead CSS, player colour tokens        | Cleanup   |           |      |
 | C6  | Load pages on demand                                   | Cleanup   |           |      |
 | F1  | Next Up, and remove from Continue Watching             | Feature   | S         | Done |
-| F2  | Watchlist                                              | Feature   | S         |      |
+| F2  | Watchlist                                              | Feature   | S         | Done |
 | F3  | Database backup and restore                            | Feature   | S         |      |
 | F4  | Seek-bar preview thumbnails                            | Feature   | M         |      |
 | F5  | Skip intro and credits                                 | Feature   | M to L    |      |
@@ -628,17 +628,15 @@ browser. The Roku gets the row from the same `/api/home`; its side is in R18.
 
 ## F2 · Watchlist
 
-**Why.** Jellyfin about 1,300 votes. The Roku already keeps `favoriteShows`
-in prefs; the web has nothing.
+**Done.** Server tested; the web is typechecked and built, not yet seen in a
+browser. The Roku still writes its `favoriteShows` pref until R18 moves it
+to this.
 
-**Scope**
-- Table `profile_items` (`profile_id`, `item_id`, `added_at`), like
-  `profile_channels`. `PUT`/`DELETE /api/items/{id}/watchlist`; `inWatchlist`
-  on summaries through `summaryCols(ctx)`.
-- A button on the title page, a Home row, and a filter in the grids.
-- Migrate the Roku's `favoriteShows` pref into it once per profile.
-
-**Done when** a title added on the web shows in "My list" on both clients.
+- Table `profile_items` (migration 0024, which also copies each profile's
+  `favoriteShows` in). `PUT` / `DELETE /api/items/{id}/watchlist`;
+  `inWatchlist` on every title summary; `watchlist` in `/api/home`.
+- Web: a "My list" button on the title page, a "My list" row on Home, and
+  "My list" in the Movies and TV filters.
 
 ## F3 · Database backup and restore
 

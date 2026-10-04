@@ -8,7 +8,7 @@ import { useApi } from "../lib/api";
 import type { ItemKind, ItemSummary } from "../lib/types";
 
 type Sort = "title" | "added" | "year" | "rating";
-type Filter = "all" | "unwatched" | "watched" | "unmatched";
+type Filter = "all" | "unwatched" | "watched" | "list" | "unmatched";
 
 const SORTS: Record<Sort, (a: ItemSummary, b: ItemSummary) => number> = {
   title: (a, b) => a.sortTitle.localeCompare(b.sortTitle),
@@ -17,7 +17,7 @@ const SORTS: Record<Sort, (a: ItemSummary, b: ItemSummary) => number> = {
   rating: (a, b) => (b.rating ?? -1) - (a.rating ?? -1) || a.sortTitle.localeCompare(b.sortTitle),
 };
 
-const FILTER_LABELS: Record<Filter, string> = { all: "All", unwatched: "Unwatched", watched: "Watched", unmatched: "Unmatched" };
+const FILTER_LABELS: Record<Filter, string> = { all: "All", unwatched: "Unwatched", watched: "Watched", list: "My list", unmatched: "Unmatched" };
 
 /** An active filter under the search box; tap to clear it. */
 function ActiveChip({ label, onClear }: { label: string; onClear: () => void }) {
@@ -52,6 +52,7 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
         const watched = i.fileCount > 0 && i.watchedCount >= i.fileCount;
         if (filter === "unwatched") return !watched;
         if (filter === "watched") return watched;
+        if (filter === "list") return i.inWatchlist;
         if (filter === "unmatched") return i.matchStatus === "unmatched";
         return true;
       })
@@ -104,6 +105,7 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
                 { id: "all", label: "All" },
                 { id: "unwatched", label: "Unwatched" },
                 { id: "watched", label: "Watched" },
+                { id: "list", label: "My list" },
                 { id: "unmatched", label: "Unmatched" },
               ]}
             />

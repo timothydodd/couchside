@@ -81,7 +81,30 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"continueWatching": cont, "recentMovies": movies, "recentSeries": series})
+	list, err := s.db.Watchlist(ctx, 24)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"continueWatching": cont, "watchlist": list, "recentMovies": movies, "recentSeries": series})
+}
+
+// setWatchlist puts a title on the profile's "My list" (PUT) or takes it off (DELETE).
+func (s *Server) setWatchlist(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if _, err := s.db.Item(r.Context(), id); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := s.db.SetWatchlist(r.Context(), id, r.Method == http.MethodPut); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // hideFromHome takes a title off the profile's Continue Watching row until

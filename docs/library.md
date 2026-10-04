@@ -76,7 +76,12 @@ single other copy Part 1.
 
 ## Browsing
 
-- Home: a hero for the newest title, Continue Watching, and recently added rows.
+- Home: a hero for the newest title, Continue Watching (what you're part way
+  through, plus the next episode of a show whose last one you finished; the X
+  on a card removes it until you watch it again), My list, and recently added
+  rows.
+- **My list:** the button on a title's page saves it to your profile's list,
+  which is a row on Home and a filter in Movies and TV Shows.
 - Movies and TV grids with search, genre and watched filters, and sorting.
 - Title pages with seasons and episodes, cast (click someone to see everything
   of theirs in your library), parts and extras.
