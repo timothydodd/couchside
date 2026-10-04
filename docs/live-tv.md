@@ -122,6 +122,12 @@ on the web and the Roku. No tuner is needed.
   and have breaks every 8, 12 or 20 minutes. A guide entry covers its program's
   commercials, as on real TV. `scripts/fetch-reviewer-media.py` downloads
   a few public-domain 1950s and 60s commercials to try it with.
+- **Export and import:** **Export** in Your channels saves the line-up as a
+  JSON file, and **Import** adds one, here or on another Couchside. Libraries
+  are matched by name and picked titles by title and year, so add the
+  libraries (with the same names) first. A channel with the same number as one
+  of yours replaces it; one whose libraries or titles aren't here is left out,
+  and the import says why. The commercials folder must exist on the server.
 - **How it works:** the schedule is built 36 hours ahead and topped up every 10
   minutes, so nothing shifts when Couchside restarts or the library changes.
   Nothing is encoded until someone tunes in: the stream starts part way into

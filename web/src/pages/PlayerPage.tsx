@@ -516,7 +516,17 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
       noticeAction={notice ? noticeAction : null}
       onNotCommercial={isAdmin && comm?.status === "done" ? notCommercial : undefined}
       error={errorText ? { title: "Can't play this right now", message: errorText, actions: <button className="btn-primary" onClick={() => (info ? switchTo(() => setNonce((n) => n + 1)) : void reloadInfo())}>Try again</button> } : null}
-      videoProps={{ onError: onVideoError, onWaiting, onPlaying, onSeeking: () => (waitingSince.current = null), onEnded: () => void onEnded() }}
+      videoProps={{
+        onError: onVideoError,
+        onWaiting,
+        onPlaying,
+        // Ready but not playing: the browser refused to start it by itself
+        // (a page reload has no click behind it). Show the play button, not
+        // "Preparing stream…" for ever.
+        onCanPlay: () => videoRef.current?.paused && setLoading(null),
+        onSeeking: () => (waitingSince.current = null),
+        onEnded: () => void onEnded(),
+      }}
     />
   );
 }
