@@ -61,8 +61,13 @@ type Request struct {
 	// that can't play a film's TrueHD still plays its 4K HEVC.
 	VideoCodecs    []string
 	AllowCopyAudio bool // client can play the source's AAC/MP3 as is
-	AudioIndex     int  // which audio track (0:a:N)
-	BurnSubtitle   int  // image subtitle track to burn into the video, -1 for none
+	// AudioCodecs are surround codecs the client (a TV with a receiver)
+	// plays: "ac3", "eac3". A track already in one is copied; any other
+	// track with more than two channels is converted to one, 5.1, instead of
+	// being mixed down to stereo AAC.
+	AudioCodecs  []string
+	AudioIndex   int // which audio track (0:a:N)
+	BurnSubtitle int // image subtitle track to burn into the video, -1 for none
 }
 
 // Session is one live stream of one file at one quality.
@@ -75,6 +80,7 @@ type Session struct {
 	BitrateK  int       `json:"bitrateK"`
 	CopyVideo bool      `json:"copyVideo"`
 	CopyAudio bool      `json:"copyAudio"`
+	AudioOut  string    `json:"audioOut"` // what the stream's audio is: copy | aac | eac3 | ac3
 	Audio     int       `json:"audio"`
 	BurnSub   int       `json:"burnSubtitle"`
 	HDR       bool      `json:"hdr"`
@@ -138,6 +144,30 @@ func (m *Manager) Max() int         { return m.max }
 
 // Create decides copy-vs-encode for each stream and registers a session.
 // ffmpeg itself starts lazily, on the first segment request. Probing (up to
+// audioName turns an audio codec as a client names it into ffprobe's name.
+func audioName(c string) string {
+	switch c = strings.ToLower(strings.TrimSpace(c)); c {
+	case "ac-3", "dolby digital":
+		return "ac3"
+	case "e-ac3", "e-ac-3", "ec-3", "ec3", "dolby digital plus":
+		return "eac3"
+	}
+	return c
+}
+
+// audioArgs encodes a session's audio: stereo AAC for browsers, or 5.1 in a
+// codec the client's receiver takes. 640k is the most AC-3 carries, and
+// plenty for E-AC-3.
+func audioArgs(out string) []string {
+	switch out {
+	case "eac3":
+		return []string{"-c:a", "eac3", "-ac", "6", "-b:a", "640k"}
+	case "ac3":
+		return []string{"-c:a", "ac3", "-ac", "6", "-b:a", "640k"}
+	}
+	return AudioArgs()
+}
+
 // codecName turns a codec as a client names it into ffprobe's name for it.
 func codecName(c string) string {
 	switch c = strings.ToLower(strings.TrimSpace(c)); c {
@@ -182,10 +212,23 @@ func (m *Manager) Create(ctx context.Context, r Request) (*Session, error) {
 	listed := info.DVProfile != 5 && slices.ContainsFunc(r.VideoCodecs, func(c string) bool { return codecName(c) == info.VideoCodec })
 	copyVideo := r.AllowCopyVideo && !burn && (plainH264 || listed) &&
 		(r.Height == 0 || (srcH > 0 && srcH <= r.Height))
-	copyAudio := r.AllowCopyAudio && (audioCodec == "aac" || audioCodec == "mp3") && audioCh <= 6
+	surround := func(c string) bool {
+		return slices.ContainsFunc(r.AudioCodecs, func(x string) bool { return audioName(x) == c })
+	}
+	copyAudio := r.AllowCopyAudio && audioCh <= 6 &&
+		(audioCodec == "aac" || audioCodec == "mp3" || ((audioCodec == "ac3" || audioCodec == "eac3") && surround(audioCodec)))
+	audioOut := "aac"
+	switch {
+	case copyAudio:
+		audioOut = "copy"
+	case audioCh > 2 && surround("eac3"):
+		audioOut = "eac3"
+	case audioCh > 2 && surround("ac3"):
+		audioOut = "ac3"
+	}
 
 	s := &Session{
-		ID: newID(), FileID: r.FileID, Title: r.Title, CopyVideo: copyVideo, CopyAudio: copyAudio,
+		ID: newID(), FileID: r.FileID, Title: r.Title, CopyVideo: copyVideo, CopyAudio: copyAudio, AudioOut: audioOut,
 		Audio: r.AudioIndex, BurnSub: r.BurnSubtitle,
 		HDR: info.HDR() && !copyVideo, HW: m.enc.HW, Created: time.Now(),
 		src: r.Path, duration: r.Duration, srcHeight: srcH, enc: m.enc,
@@ -547,7 +590,7 @@ func (s *Session) start(n int) error {
 		if preroll > 0 {
 			args = append(args, "-af", "atrim=start="+strconv.FormatFloat(startSec, 'f', 3, 64))
 		}
-		args = append(args, AudioArgs()...)
+		args = append(args, audioArgs(s.AudioOut)...)
 	}
 	args = append(args, "-max_muxing_queue_size", "4096", "-avoid_negative_ts", "disabled")
 	args = append(args, HLSOutput{SegDur: SegDur, Start: n,

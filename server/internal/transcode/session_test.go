@@ -280,3 +280,42 @@ func TestDolbyVisionProfile5IsNotCopied(t *testing.T) {
 		t.Fatal("Dolby Vision profile 5 was copied")
 	}
 }
+
+// The test file's audio is 5.1 AC-3. A browser gets stereo AAC; a TV that
+// plays AC-3 gets it untouched; one that only plays E-AC-3 gets 5.1 E-AC-3.
+func TestSurroundAudio(t *testing.T) {
+	m, _ := newTestManager(t, 8)
+	req := Request{FileID: 1, Path: "/x.mkv", Duration: 600, Height: 1080, AllowCopyAudio: true, BurnSubtitle: -1}
+	create := func(codecs ...string) *Session {
+		t.Helper()
+		req.AudioCodecs = codecs
+		s, err := m.Create(context.Background(), req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		m.Close(s.ID)
+		return s
+	}
+	if s := create(); s.CopyAudio || s.AudioOut != "aac" {
+		t.Fatalf("a browser: copy=%v out=%s", s.CopyAudio, s.AudioOut)
+	}
+	if s := create("ac3", "eac3"); !s.CopyAudio || s.AudioOut != "copy" {
+		t.Fatalf("a TV that plays AC-3: copy=%v out=%s", s.CopyAudio, s.AudioOut)
+	}
+	if s := create(" AC-3 "); !s.CopyAudio {
+		t.Fatalf("AC-3 spelled the client's way wasn't recognised")
+	}
+	if s := create("eac3"); s.CopyAudio || s.AudioOut != "eac3" {
+		t.Fatalf("a TV that only plays E-AC-3: copy=%v out=%s", s.CopyAudio, s.AudioOut)
+	}
+	req.AllowCopyAudio = false
+	if s := create("ac3"); s.CopyAudio || s.AudioOut != "ac3" {
+		t.Fatalf("copying not allowed: copy=%v out=%s", s.CopyAudio, s.AudioOut)
+	}
+	if got := strings.Join(audioArgs("eac3"), " "); got != "-c:a eac3 -ac 6 -b:a 640k" {
+		t.Fatalf("eac3 args = %s", got)
+	}
+	if got := strings.Join(audioArgs("aac"), " "); got != strings.Join(AudioArgs(), " ") {
+		t.Fatalf("aac args = %s", got)
+	}
+}

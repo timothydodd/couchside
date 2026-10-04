@@ -36,6 +36,9 @@ func (s *Server) createHLS(w http.ResponseWriter, r *http.Request) {
 		BurnSubtitle *int `json:"burnSubtitle"`
 		// Codecs (ffprobe names) the client plays as is, beyond 8-bit H.264.
 		VideoCodecs []string `json:"videoCodecs"`
+		// Surround codecs the client plays ("ac3", "eac3"): such a track is
+		// copied, and other multichannel audio converted to one, not to stereo.
+		AudioCodecs []string `json:"audioCodecs"`
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, err)
@@ -70,7 +73,7 @@ func (s *Server) createHLS(w http.ResponseWriter, r *http.Request) {
 	sess, err := s.tc.Create(r.Context(), transcode.Request{
 		FileID: id, Title: title, Path: f.Path, Duration: dur,
 		Height: in.Height, BitrateK: in.BitrateK, AllowCopyVideo: in.CopyVideo, AllowCopyAudio: in.CopyAudio,
-		AudioIndex: max(0, in.AudioIndex), BurnSubtitle: burn, VideoCodecs: in.VideoCodecs,
+		AudioIndex: max(0, in.AudioIndex), BurnSubtitle: burn, VideoCodecs: in.VideoCodecs, AudioCodecs: in.AudioCodecs,
 	})
 	if err != nil {
 		if errors.Is(err, transcode.ErrBusy) {
@@ -86,13 +89,13 @@ func (s *Server) createHLS(w http.ResponseWriter, r *http.Request) {
 		"mode":      sess.Mode,
 		"height":    sess.Height,
 		"copyVideo": sess.CopyVideo,
-		"copyAudio": sess.CopyAudio,
-		"hdr":       sess.HDR,
-		"hw":        sess.HW,
-		"hwDecode":  sess.HWDecode,
-		"audio":     sess.Audio,
-		"burnSub":   sess.BurnSub,
-		"bitrateK":  sess.BitrateK,
+		"copyAudio": sess.CopyAudio, "audioOut": sess.AudioOut,
+		"hdr":      sess.HDR,
+		"hw":       sess.HW,
+		"hwDecode": sess.HWDecode,
+		"audio":    sess.Audio,
+		"burnSub":  sess.BurnSub,
+		"bitrateK": sess.BitrateK,
 	})
 }
 

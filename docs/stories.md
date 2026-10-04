@@ -60,7 +60,7 @@ from the start.
 | F5  | Skip intro and credits                                 | Feature   | M to L    | Done |
 | F6  | Per-profile libraries and rating limit                 | Feature   | M         | Done |
 | F7  | Versions and editions                                  | Feature   | S to M    | Done |
-| F8  | Surround sound passthrough                             | Feature   | S to M    |      |
+| F8  | Surround sound passthrough                             | Feature   | S to M    | Done |
 | F9  | Sign in with OIDC                                      | Feature   | M         |      |
 | F10 | Two-factor sign-in                                     | Feature   | S to M    |      |
 
@@ -740,18 +740,16 @@ and episodes with two copies still play the larger.
 
 ## F8 · Surround sound passthrough
 
-**Why.** Audio on the HLS path is copied only for AAC/MP3
-(`transcode/session.go:168`); everything else becomes AAC, so a TV with a
-receiver loses 5.1 (judgement; Plex Atmos thread about 700).
+**Done** on the server, and run for real: a 5.1 FLAC film asked for with
+`audioCodecs: ["ac3","eac3"]` came out as 6-channel E-AC-3 in the HLS
+segments. The Roku sending the list is R18; browsers don't send one and keep
+stereo AAC.
 
-**Scope**
-- An `audioCodecs` list on `POST /api/files/{id}/hls`, as live TV has. Copy
-  AC3 and E-AC3 when the client lists them; convert DTS and TrueHD to E-AC3
-  5.1 rather than stereo AAC. Browsers keep AAC.
-- The Roku sends what `CanDecodeAudio` allows (R18).
-
-**Done when** an AC3 5.1 file plays as 5.1 on a Roku through HLS (argument
-test, then on a device).
+- `POST /api/files/{id}/hls` takes `audioCodecs` (`ac3`, `eac3`, in any
+  spelling). An AC-3 or E-AC-3 track the client lists is copied; any other
+  track with more than two channels is converted to 5.1 E-AC-3 (or AC-3 when
+  that's all the client plays) at 640 kbit/s. The answer's `audioOut` says
+  which: `copy`, `aac`, `eac3` or `ac3`.
 
 ## F9 · Sign in with OIDC
 
