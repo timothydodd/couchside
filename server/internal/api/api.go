@@ -193,6 +193,9 @@ func (s *Server) Handler() http.Handler {
 	// with accounts on, so TV apps' image nodes needn't send a token.
 	r.Get("/api/artwork/items/{id}/{kind}", s.itemArtwork)
 	r.Get("/api/artwork/files/{id}/still", s.fileStill)
+	// Preview thumbnails are pictures like stills: the Roku fetches its BIF
+	// by itself, without the stream's headers.
+	r.Get("/api/files/{id}/trickplay/{name}", s.trickplayFile)
 	r.Get("/api/artwork/people/{id}", s.personPhoto)
 	r.Get("/api/artwork/remote", s.remoteImage)
 	r.Group(func(r chi.Router) {
@@ -237,7 +240,6 @@ func (s *Server) userRoutes(r chi.Router) {
 	r.Get("/files/{id}/commercials", s.commercials)
 	r.Get("/files/{id}/segments", s.segments)
 	r.Get("/files/{id}/trickplay", s.trickplay)
-	r.Get("/files/{id}/trickplay/{name}", s.trickplayFile)
 	r.Post("/files/{id}/commercials", s.findCommercials)
 	r.Get("/hls/{sid}/index.m3u8", s.hlsPlaylist)
 	r.Get("/hls/{sid}/{seg}", s.hlsSegment)
