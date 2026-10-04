@@ -69,6 +69,11 @@ single other copy Part 1.
   library. Sort by quality, size or date added; filter to duplicates,
   unmatched or SD titles. Open a title to fix its match, upload artwork, sort
   its files into copies, parts and extras, or delete files.
+- **Select several titles** (admins) on the Movies or TV page: Ctrl-click
+  (Cmd-click on a Mac) each one, or Shift-click for a range. An **Actions**
+  menu appears above the grid: mark them watched or unwatched, delete them,
+  or, with one selected, open it in the Manage view. Escape clears the
+  selection.
 - **Deleting** removes files from disk, along with subtitle sidecars and
   cached artwork. Empty folders are removed; folders that still hold other
   files (artwork, `.nfo`) are left and reported. This needs the media mounted
