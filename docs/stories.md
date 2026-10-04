@@ -49,7 +49,7 @@ from the start.
 | B23 | Demo media script                                      | Hygiene   | Reported  | Done |
 | C1  | Server dead code and stale comments                    | Cleanup   |           | Done |
 | C2  | One builder for ffmpeg's HLS arguments                 | Cleanup   |           | Done |
-| C3  | Split `api/auth.go` and `api/handlers.go`              | Cleanup   |           |      |
+| C3  | Split `api/auth.go` and `api/handlers.go`              | Cleanup   |           | Done |
 | C4  | One HLS hook for the three players                     | Cleanup   |           |      |
 | C5  | Web duplication, dead CSS, player colour tokens        | Cleanup   |           |      |
 | C6  | Load pages on demand                                   | Cleanup   |           |      |
@@ -565,10 +565,13 @@ that runs real ffmpeg still passes.
 
 ## C3 · Split `api/auth.go` and `api/handlers.go`
 
-`auth.go` (821 lines) mixes middleware, sign-in, sessions and password
-change: move the session handlers and the password handlers out.
-`handlers.go` (635) holds libraries, items, playback, artwork and jobs: one
-file each. No behaviour change.
+**Done.** Moves only, no behaviour change.
+
+- `auth.go` keeps the state, the session cache and the middleware;
+  `signin.go` has sign-in, refresh, setup and sign-out; `password.go` the
+  password change; `sessions.go` the session list and pruning.
+- `handlers.go` keeps status and Home; `libraries.go`, `items.go`,
+  `playback.go`, `artwork.go` and `jobs.go` have the rest.
 
 ## C4 · One HLS hook for the three players
 
