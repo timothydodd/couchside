@@ -1,4 +1,4 @@
-import { Cpu, Image, MonitorPlay, Pause, RotateCcw, ScanSearch, Search, Square, Trash2, Wand2, X, type LucideIcon } from "lucide-react";
+import { Cpu, Image, MonitorPlay, Pause, RotateCcw, ScanSearch, Scissors, Search, Square, Trash2, Wand2, X, type LucideIcon } from "lucide-react";
 import Link from "../components/Link";
 import { EmptyState, ErrorNote, Meter, PageHeader, StatTile, StatusPill, type Tone } from "../components/ui";
 import { api, useApi } from "../lib/api";
@@ -12,6 +12,7 @@ const KINDS: Record<string, { label: string; Icon: LucideIcon }> = {
   artwork: { label: "Artwork", Icon: Wand2 },
   still: { label: "Thumbnail", Icon: Image },
   optimize: { label: "Encode", Icon: Cpu },
+  commercials: { label: "Commercials", Icon: Scissors },
 };
 
 const STATUS: Record<Job["status"], { label: string; tone: Tone }> = {

@@ -32,7 +32,7 @@ from the start.
 | B6  | Virtual channels stay on their schedule                | Bug       | Confirmed | Done |
 | B7  | Virtual and tuner streams use the right picture path   | Bug       | Reported  | Done |
 | B8  | A recording watched from the start outlives recording  | Bug       | Confirmed | Done |
-| B9  | Commercial detection: custom ini and the job lookup    | Bug       | Confirmed |      |
+| B9  | Commercial detection: custom ini and the job lookup    | Bug       | Confirmed | Done |
 | B10 | DVR: stale series matches and failed joins             | Bug       | Reported  |      |
 | B11 | Transcode: false GPU fallback, copied HEVC             | Bug       | Reported  |      |
 | B12 | Server odds and ends                                   | Bug       | Mixed     |      |
@@ -269,6 +269,8 @@ and tone maps HDR films, and decodes on the GPU when the start-up test passed
 **Done when** the tests pass.
 
 ## B9 · Commercial detection: custom ini and the job lookup
+
+**Done.**
 
 **Scope**
 - With `COUCHSIDE_COMSKIP_INI` set, `comskipINI` (`worker/commercials.go:182`)
