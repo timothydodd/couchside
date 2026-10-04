@@ -85,6 +85,28 @@ func (d *DB) LibraryFiles(ctx context.Context, libraryID int64) ([]File, error) 
 	return d.queryFiles(ctx, `WHERE f.library_id = ? ORDER BY f.id`, libraryID)
 }
 
+// notFailed leaves out files whose job of a kind failed and is still in
+// Activity, so a file that can't be done isn't queued again by every scan.
+func notFailed(kind string) string {
+	return ` AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.kind = '` + kind + `' AND j.ref_id = f.id AND j.status = 'failed')`
+}
+
+// FilesNeedingStills lists a library's playable episode and extra files
+// that have no still.
+func (d *DB) FilesNeedingStills(ctx context.Context, libraryID int64) ([]File, error) {
+	return d.queryFiles(ctx, `WHERE f.library_id = ? AND f.problem = '' AND f.has_still = 0
+		AND (f.episode_id IS NOT NULL OR f.role = 'extra')`+notFailed("still")+` ORDER BY f.id`, libraryID)
+}
+
+// RecordingsNeedingCommercials lists a library's finished DVR recordings
+// that haven't been through commercial detection as they are now.
+func (d *DB) RecordingsNeedingCommercials(ctx context.Context, libraryID int64) ([]File, error) {
+	return d.queryFiles(ctx, `WHERE f.library_id = ? AND f.problem = ''
+		AND EXISTS (SELECT 1 FROM recordings r WHERE r.path = f.path AND r.status = 'completed')
+		AND NOT EXISTS (SELECT 1 FROM commercials c WHERE c.file_id = f.id AND c.size = f.size AND c.mtime = f.mtime)`+
+		notFailed("commercials")+` ORDER BY f.id`, libraryID)
+}
+
 // ItemFiles returns all of an item's files, in fileRoleOrder.
 func (d *DB) ItemFiles(ctx context.Context, itemID int64) ([]File, error) {
 	return d.queryFiles(ctx, `WHERE f.media_item_id = ?`+fileRoleOrder, itemID)

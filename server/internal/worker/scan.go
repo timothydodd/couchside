@@ -227,10 +227,8 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 	if err := w.retryMatches(ctx, lib); err != nil {
 		return summary, err
 	}
-	if lib.Intros && lib.Kind == "tv" {
-		if _, err := w.QueueIntros(ctx, lib.ID); err != nil {
-			return summary, err
-		}
+	if err := w.catchUp(ctx, lib); err != nil {
+		return summary, err
 	}
 	return summary, w.db.MarkLibraryScanned(ctx, lib.ID, time.Now().Unix())
 }
