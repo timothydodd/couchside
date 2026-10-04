@@ -140,6 +140,25 @@ func (d *DB) PendingMatches(ctx context.Context, libraryID int64) ([]ItemRef, er
 	return out, rows.Err()
 }
 
+// FailedJobRefs returns the refs whose job of a kind failed and is still in
+// Activity.
+func (d *DB) FailedJobRefs(ctx context.Context, kind string) (map[int64]bool, error) {
+	rows, err := d.sql.QueryContext(ctx, `SELECT DISTINCT ref_id FROM jobs WHERE kind = ? AND status = 'failed'`, kind)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]bool{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
+}
+
 func (d *DB) RetryJob(ctx context.Context, id int64) error {
 	_, err := d.sql.ExecContext(ctx, `UPDATE jobs SET status = 'queued', error = '', finished_at = NULL
 		WHERE id = ? AND status = 'failed'

@@ -69,6 +69,11 @@ single other copy Part 1.
   library. Sort by quality, size or date added; filter to duplicates,
   unmatched or SD titles. Open a title to fix its match, upload artwork, sort
   its files into copies, parts and extras, or delete files.
+- **Select several titles** (admins) on the Movies or TV page: Ctrl-click
+  (Cmd-click on a Mac) each one, or Shift-click for a range. An **Actions**
+  menu appears above the grid: mark them watched or unwatched, delete them,
+  or, with one selected, open it in the Manage view. Escape clears the
+  selection.
 - **Deleting** removes files from disk, along with subtitle sidecars and
   cached artwork. Empty folders are removed; folders that still hold other
   files (artwork, `.nfo`) are left and reported. This needs the media mounted
@@ -94,6 +99,11 @@ and the player shows a frame of the film as you move along the seek bar.
 Making them reads each file from start to end once (a few minutes for a large
 film on a network share), so it's off by default. The jobs run after
 everything else and are listed in Activity as Thumbnails.
+
+Switching it on makes them for the files already in the library, not only
+new ones. Every scan also catches existing files up on anything they lack:
+episode stills, preview thumbnails, intros, and commercial detection for
+recordings. A file that failed is left alone until you retry it in Activity.
 
 ## Versions
 

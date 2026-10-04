@@ -137,7 +137,7 @@ export default function SeekBar({
       )}
       <div
         className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 scale-0 rounded-full bg-player-fg shadow transition-transform group-hover/seek:scale-100 pointer-coarse:scale-100"
-        style={{ left: pct(shown), transform: drag !== null ? "translate(-50%,-50%) scale(1)" : undefined }}
+        style={{ left: pct(shown), scale: drag !== null ? "1" : undefined }}
       />
       {hover !== null && thumb && (
         // Kept inside the bar's ends, so it isn't cut off at the screen's edge.

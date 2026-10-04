@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import PosterCard from "./PosterCard";
 import type { ItemSummary } from "../lib/types";
@@ -11,8 +11,14 @@ const sizes = (width: number) =>
 // Scroll offsets per grid, so going back from a detail page lands where you were.
 const scrollMemory = new Map<string, number>();
 
+/** Cards that can be picked: which are, and what a click on one does (preventDefault keeps the page from opening). */
+export interface GridSelection {
+  ids: Set<number>;
+  onClick: (item: ItemSummary, e: MouseEvent<HTMLAnchorElement>) => void;
+}
+
 /** Virtualised, responsive poster grid. Renders only the visible rows. */
-export default function PosterGrid({ items, memoryKey }: { items: ItemSummary[]; memoryKey: string }) {
+export default function PosterGrid({ items, memoryKey, selection }: { items: ItemSummary[]; memoryKey: string; selection?: GridSelection }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
 
@@ -78,7 +84,12 @@ export default function PosterGrid({ items, memoryKey }: { items: ItemSummary[];
               }}
             >
               {items.slice(row.index * cols, row.index * cols + cols).map((it) => (
-                <PosterCard key={it.id} item={it} />
+                <PosterCard
+                  key={it.id}
+                  item={it}
+                  selected={selection?.ids.has(it.id)}
+                  onClick={selection ? (e) => selection.onClick(it, e) : undefined}
+                />
               ))}
             </div>
           ))}

@@ -1,11 +1,15 @@
-import { useMemo, useState } from "react";
-import { Clapperboard, Tv, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { ChevronDown, Clapperboard, Eye, EyeOff, Settings2, Trash2, Tv, X } from "lucide-react";
 import Link from "../components/Link";
 import PosterGrid from "../components/PosterGrid";
+import DeleteSelected from "../components/manage/DeleteSelected";
 import FilterMenu, { Choices } from "../components/FilterMenu";
-import { EmptyState, ErrorNote, SearchInput, Spinner } from "../components/ui";
-import { useApi } from "../lib/api";
-import type { ItemKind, ItemSummary } from "../lib/types";
+import { EmptyState, ErrorNote, MenuButton, SearchInput, Spinner } from "../components/ui";
+import { api, useApi } from "../lib/api";
+import { attempt } from "../lib/notices";
+import { useIsAdmin } from "../stores/auth";
+import { useRouter } from "../stores/router";
+import type { Item, ItemKind, ItemSummary } from "../lib/types";
 
 type Sort = "title" | "added" | "year" | "rating";
 type Filter = "all" | "unwatched" | "watched" | "list" | "unmatched";
@@ -33,7 +37,7 @@ function ActiveChip({ label, onClear }: { label: string; onClear: () => void }) 
 const saved: Record<string, { q: string; sort: Sort; filter: Filter; genre: string }> = {};
 
 export default function LibraryPage({ kind }: { kind: ItemKind }) {
-  const { data, error, loading } = useApi<ItemSummary[]>(`/api/items?kind=${kind}`, { pollMs: 20000 });
+  const { data, error, loading, reload } = useApi<ItemSummary[]>(`/api/items?kind=${kind}`, { pollMs: 20000 });
   const init = saved[kind] ?? { q: "", sort: "title", filter: "all", genre: "" };
   const [q, setQ] = useState(init.q);
   const [sort, setSort] = useState<Sort>(init.sort);
@@ -58,6 +62,53 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
       })
       .sort(SORTS[sort]);
   }, [data, q, sort, filter, genre]);
+
+  // Admins pick titles with Ctrl-click (Cmd on a Mac) and Shift-click for a
+  // range; while any are picked a plain click picks too. Only picked titles
+  // that are in view count, so nothing hidden by a filter is acted on.
+  const admin = useIsAdmin();
+  const go = useRouter((s) => s.go);
+  const [picked, setPicked] = useState<Set<number>>(() => new Set());
+  const anchor = useRef<number | null>(null); // the last title clicked, where a Shift-click range starts
+  const [deleting, setDeleting] = useState(false);
+  const chosen = useMemo(() => items.filter((i) => picked.has(i.id)), [items, picked]);
+  const clear = () => {
+    setPicked(new Set());
+    anchor.current = null;
+  };
+  const pick = (it: ItemSummary, e: MouseEvent<HTMLAnchorElement>) => {
+    if (e.button !== 0 || e.altKey) return;
+    if (chosen.length === 0 && !e.ctrlKey && !e.metaKey) return; // an ordinary click: open the title
+    e.preventDefault();
+    const next = new Set(chosen.map((i) => i.id));
+    const from = e.shiftKey ? items.findIndex((i) => i.id === anchor.current) : -1;
+    if (from >= 0) {
+      const to = items.indexOf(it);
+      for (const i of items.slice(Math.min(from, to), Math.max(from, to) + 1)) next.add(i.id);
+    } else if (!next.delete(it.id)) next.add(it.id);
+    anchor.current = it.id;
+    setPicked(next);
+  };
+  const selecting = chosen.length > 0;
+  useEffect(() => {
+    if (!selecting || deleting) return;
+    // Escape clears the selection, unless it's closing the Actions menu.
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !document.querySelector('[role="menu"]') && clear();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selecting, deleting]);
+  const setWatched = (watched: boolean) =>
+    attempt(`Couldn't mark ${watched ? "watched" : "unwatched"}`, async () => {
+      for (const it of chosen) await api(`/api/items/${it.id}/watched`, { method: "POST", json: { watched } });
+      clear();
+      await reload();
+    })();
+
+  // The title's panel in its library's Manage view (the grid's rows don't say which library).
+  const manage = attempt("Couldn't open Manage", async (it: ItemSummary) => {
+    const { libraryId } = await api<Item>(`/api/items/${it.id}`);
+    go(`/libraries/${libraryId}?item=${it.id}`);
+  });
 
   const title = kind === "movie" ? "Movies" : "TV Shows";
   const noun = kind === "movie" ? "movie" : "show";
@@ -114,6 +165,44 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
             )}
           </FilterMenu>
         </div>
+        {selecting && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-medium text-content">{chosen.length.toLocaleString()} selected</span>
+            <MenuButton
+              label="Actions for the selected titles"
+              className="btn-ghost"
+              icon={
+                <>
+                  Actions <ChevronDown size={14} />
+                </>
+              }
+              items={[
+                { id: "watched", label: "Mark watched", icon: <Eye size={14} />, onSelect: () => void setWatched(true) },
+                { id: "unwatched", label: "Mark unwatched", icon: <EyeOff size={14} />, onSelect: () => void setWatched(false) },
+                ...(chosen.length === 1
+                  ? [
+                      {
+                        id: "manage",
+                        label: "Manage…",
+                        detail: "Fix the match, artwork and files",
+                        icon: <Settings2 size={14} />,
+                        onSelect: () => void manage(chosen[0]),
+                      },
+                    ]
+                  : []),
+                { id: "delete", label: "Delete…", detail: "Removes the files from disk", icon: <Trash2 size={14} />, danger: true, onSelect: () => setDeleting(true) },
+              ]}
+            />
+            {chosen.length < items.length && (
+              <button type="button" className="btn-quiet" onClick={() => setPicked(new Set(items.map((i) => i.id)))}>
+                Select all {items.length.toLocaleString()}
+              </button>
+            )}
+            <button type="button" className="btn-quiet" onClick={clear}>
+              Clear
+            </button>
+          </div>
+        )}
         {(filter !== "all" || genre) && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {filter !== "all" && <ActiveChip label={FILTER_LABELS[filter]} onClear={() => setFilter("all")} />}
@@ -138,7 +227,17 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
       ) : items.length === 0 ? (
         <EmptyState title="Nothing matches those filters" />
       ) : (
-        <PosterGrid items={items} memoryKey={kind} />
+        <PosterGrid items={items} memoryKey={kind} selection={admin ? { ids: picked, onClick: pick } : undefined} />
+      )}
+      {deleting && (
+        <DeleteSelected
+          items={chosen}
+          onClose={() => setDeleting(false)}
+          onDeleted={() => {
+            clear();
+            void reload();
+          }}
+        />
       )}
     </div>
   );

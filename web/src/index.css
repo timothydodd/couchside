@@ -333,6 +333,10 @@ body {
   .poster-link:focus-visible {
     outline: none;
   }
+  /* A card picked with Ctrl-click (admins, on the Movies and TV grids). */
+  .poster-link[data-selected] .poster {
+    @apply border-accent ring-2 ring-accent;
+  }
   .poster-title {
     @apply mt-2 truncate text-sm font-medium text-content;
   }

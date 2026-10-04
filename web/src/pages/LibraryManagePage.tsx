@@ -44,7 +44,8 @@ export default function LibraryManagePage({ id }: { id: number }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "title", desc: false });
-  const [open, setOpen] = useState<number | null>(null);
+  // ?item=<id> opens that title's panel (the Movies and TV grids link here).
+  const [open, setOpen] = useState<number | null>(() => Number(new URLSearchParams(location.search).get("item")) || null);
 
   const items = useMemo(() => data?.items ?? [], [data]);
   const pending = items.some((r) => r.matchStatus === "pending");

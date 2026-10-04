@@ -72,15 +72,26 @@ func Trickplay(cacheDir string, f db.File) *TrickIndex {
 }
 
 // QueueTrickplay queues thumbnails for a library's files that lack them, and
-// reports how many.
+// reports how many. It's what switching the library's setting on does, so
+// files that failed before are tried again.
 func (w *Worker) QueueTrickplay(ctx context.Context, libraryID int64) (int, error) {
+	return w.queueTrickplay(ctx, libraryID, true)
+}
+
+func (w *Worker) queueTrickplay(ctx context.Context, libraryID int64, retryFailed bool) (int, error) {
 	files, err := w.db.LibraryFiles(ctx, libraryID)
 	if err != nil {
 		return 0, err
 	}
+	failed := map[int64]bool{}
+	if !retryFailed {
+		if failed, err = w.db.FailedJobRefs(ctx, KindTrickplay); err != nil {
+			return 0, err
+		}
+	}
 	n := 0
 	for _, f := range files {
-		if f.Problem != "" || Trickplay(w.cfg.CacheDir, f) != nil {
+		if f.Problem != "" || failed[f.ID] || Trickplay(w.cfg.CacheDir, f) != nil {
 			continue
 		}
 		if err := w.db.Enqueue(ctx, KindTrickplay, f.ID, "Preview thumbnails "+filepath.Base(f.Path)); err != nil {
