@@ -3,24 +3,28 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Couchside</title>
-<meta name="theme-color" content="#0D1418">
+<title>Couchside: a fast, local media server with live TV and DVR</title>
+<link rel="canonical" href="https://couchside.app/">
+<meta name="theme-color" content="#111315">
 <meta name="description" content="A fast, lightweight, local-only media server for your movies, shows and live TV, with a proper DVR, a web app and a Roku app.">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/logo-32.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://couchside.app/">
+<meta name="twitter:card" content="summary">
 <meta property="og:title" content="Couchside">
 <meta property="og:description" content="Fast, light and local: your movies, shows and live TV with a proper DVR, served from your own server.">
 <meta property="og:image" content="https://couchside.app/icons/logo-512.png">
 <style>
-  /* Tokens from docs/style.md: one dark theme, seafoam on slate. */
+  /* Tokens from docs/style.md: one dark theme, seafoam on neutral grey. */
   :root {
     color-scheme: dark;
-    --bg-page: #0D1418; --bg-surface: #151F24; --bg-raised: #1D292E;
-    --text-primary: #EDF4F2; --text-secondary: #9DAEAA; --text-muted: #869894;
-    --border: #55696F; --border-light: #304047;
-    --accent: #63D6BE; --accent-hover: #7DE3CE; --text-on-accent: #0D1418;
-    --brand-gradient: linear-gradient(90deg, #63D6BE, #62A9D1);
+    --bg-page: #111315; --bg-surface: #181B1F; --bg-raised: #22262B;
+    --text-primary: #ECEFF3; --text-secondary: #B3BAC4; --text-muted: #8C949F;
+    --border: #626A75; --border-light: #262A30;
+    --accent: #5AF6B9; --accent-hover: #8CF9CF; --text-on-accent: #04261A;
+    --brand-gradient: linear-gradient(90deg, #5AF6B9, #5B93FF);
   }
   * { box-sizing: border-box; }
   body {
@@ -77,7 +81,7 @@
 
 <main class="wrap">
   <section class="features goals" aria-label="What it's for">
-    <div class="card"><h2>Fast and light</h2><p>One 7&nbsp;MB binary with its database built in. Runs on a NAS, a Pi or k3s.</p></div>
+    <div class="card"><h2>Fast and light</h2><p>One small binary with its database built in. Runs on a NAS, a Pi or k3s.</p></div>
     <div class="card"><h2>Local only</h2><p>No cloud account, no telemetry. Everything it fetches is cached on your server.</p></div>
     <div class="card"><h2>Live TV and DVR</h2><p>HDHomeRun guide, series recordings, commercial skipping, and channels made from your library.</p></div>
     <div class="card"><h2>A good UI</h2><p>A dark web app that works on phones, a Plex-style player, and a Roku app.</p></div>

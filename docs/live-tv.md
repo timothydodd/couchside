@@ -21,7 +21,8 @@ Broadcast TV needs an [HDHomeRun](https://www.silicondust.com) tuner: set
 ## Watching
 
 - **Browsers** get the tuner stream deinterlaced and transcoded to HLS at
-  1080p, 720p or 480p (on the GPU when VAAPI is set up). Viewers of the same
+  1080p, 720p or 480p (on the GPU when VAAPI is set up; TV apps can also ask
+  for 360p). Viewers of the same
   channel share one tuner, released about 20 seconds after the last leaves.
 - **TVs** (the Roku app) play broadcasts they can decode (MPEG-2 or H.264 with
   AC-3, most channels) straight off the tuner: no server work and full
@@ -47,7 +48,7 @@ Broadcast TV needs an [HDHomeRun](https://www.silicondust.com) tuner: set
   also updates recordings that haven't started.
 - **Names** are Plex-style (`Show/Season 3/Show - S03E15 - Title.ts`, or by
   air date).
-- **Where they go:** Settings → Live TV & DVR. Couchside's own storage, any TV
+- **Where they go:** Settings → Live TV. Couchside's own storage, any TV
   library folder, or another folder under the media root. Recordings reuse a
   matching show and season folder, so they join that show instead of
   duplicating it, and existing recordings can be moved along. Recording into a
@@ -89,7 +90,10 @@ used instead.
   a **Watch it** link to go back. A profile can switch to a skip button (or the
   S key) or turn skipping off.
 - Skipping starts 1 second into a break and stops 1 second before its end, so
-  it never cuts into the show (Settings → Advanced).
+  it never cuts into the show (Settings → Advanced). Breaks less than a minute
+  apart are treated as one.
+- A break that isn't one: an admin can right-click it on the seek bar and
+  choose **Not a commercial**. It stays hidden if detection runs again.
 - Other `.ts` files, such as older Plex DVR recordings, can be checked from the
   player's Commercials page, or a whole show at once: on its page, the **⋯**
   menu has **Find commercials in every episode** (only episodes not checked
@@ -100,8 +104,8 @@ used instead.
 
 ## Your own channels
 
-Admins can make channels from the library in **Settings → Your channels →
-New channel**. They play around the clock like broadcast TV and sit in the
+Admins can make channels from the library in **Settings → Live TV → Your
+channels → New channel**. They play around the clock like broadcast TV and sit in the
 guide and channel list next to tuner channels (numbered from 900 by default),
 on the web and the Roku. No tuner is needed.
 

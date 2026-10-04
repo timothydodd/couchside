@@ -45,7 +45,7 @@ from the start.
 | B19 | Docker and compose                                     | Packaging | Reported  | Done |
 | B20 | Helm chart hardening                                   | Packaging | Reported  | Done |
 | B21 | CI and release                                         | Packaging | Reported  | Done |
-| B22 | Docs and site catch up                                 | Docs      | Reported  |      |
+| B22 | Docs and site catch up                                 | Docs      | Reported  | Done |
 | B23 | Demo media script                                      | Hygiene   | Reported  |      |
 | C1  | Server dead code and stale comments                    | Cleanup   |           |      |
 | C2  | One builder for ffmpeg's HLS arguments                 | Cleanup   |           |      |
@@ -500,31 +500,23 @@ hooks rules, and Vitest for B15's hook test, wait for that.
 
 ## B22 · Docs and site catch up
 
-**Scope**
-- `docs/configuration.md:45` describes the old single Settings page. Rewrite
-  per section (Your settings, System, Console, Accounts, Metadata, Live TV,
-  Advanced); fix "Settings → Live TV & DVR", "→ Your channels" and
-  "→ Transcoding" in `docs/live-tv.md` and `docs/playback.md`. Cover the
-  Console, the history charts, search, "Not a commercial" and the merge gap.
-- `SECURITY.md:31` and `docs/accounts.md:63` list posters, backdrops and
-  stills as open. Add `/api/artwork/people/{id}`, `/api/artwork/remote` and
-  `/api/discovery`.
-- `docs/configuration.md:13`: the data folder also holds `auth.key` and
-  `server.id` (matters for backups, F3).
-- `site/privacy.html`: the last 2000 log lines, with sign-in names and
-  addresses, are held in memory and shown in Settings → Console.
-- "One 7 MB binary" (`README.md:8`, `site/index.html:79`) is 13.7 MB before
-  the UI. State the real size or drop the number.
-- The site, `web/index.html` `theme-color` and `site.webmanifest` still use
-  the previous palette (`#0D1418`, `#63D6BE`); `docs/style.md` has `#111315`,
-  `#5AF6B9`, `#04261A`. `index.html` also declares `color-scheme: dark
-  light`.
-- Site meta: canonical, `og:url`, `og:type`, `twitter:card`; the privacy page
-  gets its own og text and loses the landing page's CSS; add `404.html`.
-- `CLAUDE.md`: Alpine 3.24, `SHA256SUMS.txt`, and a current "Next milestones".
-  `docs/development.md:58`: the `:v<version>` tag. `docs/live-tv.md:21`: 360p.
+**Done.** Look at the site in a browser before publishing: its colours
+changed to the current tokens and haven't been seen rendered.
 
-**Done when** each doc matches the code it describes.
+- `docs/configuration.md` describes Settings by section, with the Console,
+  the history charts, search and the merge gap; the three wrong menu paths in
+  `live-tv.md` and `playback.md` are fixed; "Not a commercial" is documented.
+- `SECURITY.md` and `docs/accounts.md` list everything open without a
+  session.
+- The data folder's `auth.key` and `server.id` are named for backups.
+- The privacy page mentions the in-memory log shown in the Console.
+- "7 MB" is gone from the README and the site.
+- The site, `theme-color` and the web manifest use the tokens in
+  `docs/style.md`; `color-scheme` is `dark`.
+- The site has canonical and Open Graph tags per page, and a `404.html`.
+- `CLAUDE.md`: Alpine version, `SHA256SUMS.txt`, next milestones.
+
+**Not done:** the privacy page still carries the landing page's unused CSS.
 
 ## B23 · Demo media script
 

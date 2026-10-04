@@ -68,6 +68,6 @@ progress on the Activity page, and can be cancelled.
   film converts with little CPU. The Intel drivers are in the image.
 - **Fallbacks.** An unusable GPU falls back to software with a log warning,
   and a file the GPU can't decode falls back to CPU decoding.
-  Settings → Transcoding shows what passed its start-up test.
+  Settings → System shows what passed its start-up test.
 - **QSV and NVENC** need an ffmpeg built with them; Alpine's lacks NVENC and
   the newer Intel QSV runtime.

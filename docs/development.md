@@ -52,7 +52,7 @@ cuts the logo out onto a transparent background.
 
 Push a version tag. The release workflow builds the zips (Linux and macOS
 amd64/arm64, Windows amd64), publishes the container to
-`ghcr.io/<owner>/couchside` (`:<version>`, `:<major>.<minor>`, `:latest`), and
+`ghcr.io/<owner>/couchside` (`:v<version>`, `:<version>`, `:<major>.<minor>`, `:latest`), and
 creates a GitHub Release with checksums. Tags with a hyphen, such as
 `v0.2.0-rc1`, become pre-releases and don't move `:latest`.
 
