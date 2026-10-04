@@ -184,6 +184,9 @@ func TestRunEndsPasswordlessSessionsAtStart(t *testing.T) {
 			t.Fatal("the passwordless session still worked while the server ran")
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 // Parallel wrong passwords for one account get the checks a serial run
 // would, not one each.
 func TestLoginBurstIsThrottled(t *testing.T) {
