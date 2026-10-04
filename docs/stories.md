@@ -817,7 +817,7 @@ provider's own second step, and a TV is best signed in with a code from
 | ID  | Story                                 | Needed by | State                    |
 | --- | ------------------------------------- | --------- | ------------------------ |
 | S5  | Demo server for Roku reviewers        | R7        | DNS record left; see B23 |
-| S7  | Subtitle and audio track info for TVs | R4        | Open                     |
+| S7  | Subtitle and audio track info for TVs | R4        | Done                     |
 | S8  | Server discovery on the LAN           | R10       | Device test left         |
 
 ## S5 · Demo server for Roku reviewers
@@ -827,22 +827,14 @@ cross-network check from a Roku, and B23 (what the demo library holds).
 
 ## S7 · Subtitle and audio track info for TVs
 
-**Why.** Roku review expects captions, and the Roku app (R4) offers subtitle
-and audio tracks.
+**Done** on the server. The Roku asking this way is R18.
 
-**Already there.** `GET /api/files/{id}/streams` lists the tracks.
-`s<N>.vtt` returns a whole embedded text track, and the web fetches 90s
-chunks (`s<N>.c<K>.vtt`).
-
-**Left to do**
-- Whole-track extraction reads the entire file (about 7 minutes for a 30 GB
-  remux over SMB) and is cut off at 5 minutes. Either extract in the
-  background and let the client poll (202 until ready), or offer a subtitle
-  rendition inside the HLS session that the Roku can select.
-- Confirm with R4 which of the two the Roku's Video node can use.
-
-**Done when** the Roku can show a chosen text track for the whole film,
-including on a large remux.
+`GET /api/files/{id}/subtitles/s<N>.vtt?async=1` converts the whole embedded
+track in the background (up to 30 minutes, for a large remux on a share)
+and answers 202 with `Retry-After` until it's cached, then the track. A
+conversion that fails answers 422 for the next ten minutes instead of
+starting again on every poll. Without `async` the URL behaves as before, so
+a player can be given it once the poll says it's ready.
 
 ## S8 · Server discovery on the LAN
 
