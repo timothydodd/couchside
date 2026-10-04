@@ -24,12 +24,21 @@ jobs:
   chart-version:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - name: Chart appVersion matches the tag
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0 # the whole history, to check the tag is on main
+      - name: Chart version and appVersion match the tag
         if: github.event_name == 'push'
         run: |
-          got=$(sed -n 's/^appVersion: *"\{0,1\}\([^" ]*\)"\{0,1\}.*/\1/p' deploy/helm/couchside/Chart.yaml)
-          [ "$got" = "${VERSION#v}" ] || { echo "::error file=deploy/helm/couchside/Chart.yaml::appVersion is $got; set it (and version) to ${VERSION#v} before tagging"; exit 1; }
+          for field in appVersion version; do
+            got=$(sed -n "s/^${field}: *\"\{0,1\}\([^\" ]*\)\"\{0,1\}.*/\1/p" deploy/helm/couchside/Chart.yaml)
+            [ "$got" = "${VERSION#v}" ] || { echo "::error file=deploy/helm/couchside/Chart.yaml::${field} is $got; set version and appVersion to ${VERSION#v} before tagging"; exit 1; }
+          done
+      - name: The tag is on main
+        if: github.event_name == 'push'
+        run: |
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::${VERSION} isn't on main; releases are cut from main"; exit 1; }
 
   # Nothing is built or published from a commit that doesn't pass CI's checks.
   verify:
@@ -38,20 +47,33 @@ jobs:
       run:
         working-directory: server
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.27" # the Dockerfile's
           cache-dependency-path: server/go.sum
       - run: go vet ./...
-      - run: go test ./...
+      - run: go test -race ./...
+      # A release ships the notices file as it is in the repo: it must match
+      # the dependencies being built. (Only license files are read, so no
+      # install scripts need to run.)
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 26 # the Dockerfile's
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund --ignore-scripts
+        working-directory: web
+      - name: Third-party notices are current
+        working-directory: .
+        run: python3 scripts/third-party-notices.py --check
 
   web:
     needs: [chart-version, verify]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 26 # the Dockerfile's
           cache: npm
@@ -60,7 +82,7 @@ jobs:
         working-directory: web
       - run: npm run build
         working-directory: web
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: web-dist
           path: web/dist
@@ -78,12 +100,12 @@ jobs:
           - { goos: darwin, goarch: arm64 }
           - { goos: windows, goarch: amd64 }
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.27" # the Dockerfile's
           cache-dependency-path: server/go.sum
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: web-dist
           path: server/internal/webui/dist
@@ -115,7 +137,7 @@ jobs:
           All settings are in docs/configuration.md.
           TXT
           (cd pkg && zip -qr "../${name}.zip" "${name}")
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: zip-${{ matrix.goos }}-${{ matrix.goarch }}
           path: couchside-*.zip
@@ -129,7 +151,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -167,7 +189,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: zip-*
           merge-multiple: true

@@ -44,7 +44,7 @@ from the start.
 | B18 | Keyboard and screen-reader gaps                        | A11y      | Reported  | Done |
 | B19 | Docker and compose                                     | Packaging | Reported  | Done |
 | B20 | Helm chart hardening                                   | Packaging | Reported  | Done |
-| B21 | CI and release                                         | Packaging | Reported  |      |
+| B21 | CI and release                                         | Packaging | Reported  | Done |
 | B22 | Docs and site catch up                                 | Docs      | Reported  |      |
 | B23 | Demo media script                                      | Hygiene   | Reported  |      |
 | C1  | Server dead code and stale comments                    | Cleanup   |           |      |
@@ -484,18 +484,19 @@ before the release.
 
 ## B21 · CI and release
 
-**Scope**
-- `go test -race ./...` in `ci.yml` and the release `verify` job.
-- Run `scripts/third-party-notices.py --check` in `verify`.
-- `release.yml` checks `appVersion` but not the chart `version`, nor that the
-  tag is on `main`.
-- Pin `actions/*` by SHA in the workflows that can write (`notices.yml`,
-  `pages.yml`, `release.yml`), as third-party actions already are.
-- Add a web lint step (ESLint with the React hooks rules: B16's missing
-  dependency arrays are what it would have caught).
+**Done**, except the web lint. The workflows can only be proven by running
+them: watch the first CI run and the next tag.
 
-**Done when** CI runs the race detector and the lint, and a tag whose chart
-version is behind fails `verify`.
+- `go test -race` in CI and in the release's `verify` job.
+- `verify` also runs `third-party-notices.py --check`.
+- A tag must match the chart's `version` as well as `appVersion`, and must be
+  on `main`.
+- Every `actions/*` step is pinned by commit SHA (Dependabot keeps them
+  current).
+
+**Not done:** a web lint step. `typescript-eslint` doesn't install against
+TypeScript 7 yet (the peer range stops below it), so ESLint with the React
+hooks rules, and Vitest for B15's hook test, wait for that.
 
 ## B22 · Docs and site catch up
 
