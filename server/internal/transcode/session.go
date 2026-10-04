@@ -138,6 +138,19 @@ func (m *Manager) Max() int         { return m.max }
 
 // Create decides copy-vs-encode for each stream and registers a session.
 // ffmpeg itself starts lazily, on the first segment request. Probing (up to
+// codecName turns a codec as a client names it into ffprobe's name for it.
+func codecName(c string) string {
+	switch c = strings.ToLower(strings.TrimSpace(c)); c {
+	case "h265", "h.265":
+		return "hevc"
+	case "avc", "h.264", "mpeg4 avc":
+		return "h264"
+	case "mpeg2", "mpeg-2":
+		return "mpeg2video"
+	}
+	return c
+}
+
 // a minute on a slow share) happens before the manager lock is taken.
 func (m *Manager) Create(ctx context.Context, r Request) (*Session, error) {
 	if r.Duration <= 0 {
@@ -163,7 +176,11 @@ func (m *Manager) Create(ctx context.Context, r Request) (*Session, error) {
 	}
 	burn := r.BurnSubtitle >= 0
 	plainH264 := info.VideoCodec == "h264" && info.EightBit420() && !info.HDR()
-	copyVideo := r.AllowCopyVideo && !burn && (plainH264 || slices.Contains(r.VideoCodecs, info.VideoCodec)) &&
+	// The client's own codec list: any spelling ("HEVC", "h265"), and never
+	// Dolby Vision profile 5, which probes as plain hevc but only a Dolby
+	// Vision player can show.
+	listed := info.DVProfile != 5 && slices.ContainsFunc(r.VideoCodecs, func(c string) bool { return codecName(c) == info.VideoCodec })
+	copyVideo := r.AllowCopyVideo && !burn && (plainH264 || listed) &&
 		(r.Height == 0 || (srcH > 0 && srcH <= r.Height))
 	copyAudio := r.AllowCopyAudio && (audioCodec == "aac" || audioCodec == "mp3") && audioCh <= 6
 

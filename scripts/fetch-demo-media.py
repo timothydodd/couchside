@@ -7,9 +7,9 @@ credits) or public domain in the US (the Internet Archive items, all marked
 public domain there). Public domain status is US-only; restorations and new
 scores can carry their own copyright, so the items below are plain prints.
 
-    python fetch-demo-media.py D:\\couchside-demo            # everything
+    python fetch-demo-media.py D:\\couchside-demo            # movies, TV, commercials
     python fetch-demo-media.py /mnt/media/demo --only movies tv
-    python fetch-demo-media.py /mnt/media/demo --only cartoons  # about 38 GB
+    python fetch-demo-media.py /mnt/media/demo --only cartoons  # tens of GB; not in the default run
     python fetch-demo-media.py /mnt/media/demo --list         # sizes, no download
 
 Lays files out the way Couchside (and Plex) expect:
@@ -83,8 +83,10 @@ COMMERCIALS = [
 # 1929-30 ones have since expired. Each is (title, year, Internet Archive item,
 # file), picked as the best copy there by resolution, then bitrate. Left out:
 # colorized and "redrawn" versions (still under copyright), copies labelled as
-# DVD or Blu-ray rips, foreign dubs, and "Bosko's Dizzy Date" (only a re-edit
-# is public domain). Not on the Archive: the unreleased Snafus "Going Home"
+# DVD or Blu-ray rips, captures of TV broadcasts and of video sites, foreign
+# dubs, "Bosko's Dizzy Date" (only a re-edit is public domain), and the shorts
+# built on racial or wartime caricature (the "Censored Eleven" ones among
+# them): this library is shown to app-store reviewers. Not on the Archive: the unreleased Snafus "Going Home"
 # (only as a Blu-ray rip) and "Secrets of the Caribbean".
 CARTOONS = [
     # Looney Tunes and Merrie Melodies
@@ -108,7 +110,6 @@ CARTOONS = [
     ('Bosko the Doughboy', 1931, 'BoskoTheDoughboy1931HughHarmanRudolfIsing', 'Bosko The Doughboy 1931 Hugh Harman, Rudolf Ising.avi'),
     ("You Don't Know What You're Doin'!", 1931, 'YouDontKnowWhatYoureDoinCartoon', 'YouDontKnowWhatYoureDoinCartoon.mp4'),
     ("Bosko's Soda Fountain", 1931, 'BoskosSodaFountain1931HughHarmanRudolfIsing', "Bosko's Soda Fountain 1931 Hugh Harman, Rudolf Ising.avi"),
-    ("Hittin' the Trail for Hallelujah Land", 1931, '001MerrieMelodiesHittinTheTrailForHallelujahLand1931BannedOneOfTheAAPsCensored11AudoSyncFix', "001 Merrie Melodies - Hittin' The Trail For Hallelujah Land (1931) (Banned - One Of The A A P 's Censored 11) Audo Sync Fix.avi"),
     ("Bosko's Fox Hunt", 1931, 'bosko-s-fox-hunt-1931-1080p', 'Bosko s Fox Hunt (1931)_1080p.mp4'),
     ('Red-Headed Baby', 1931, 'RedHeadedBaby1931HughHarmanRudolfIsing', 'Red Headed Baby 1931 Hugh Harman, Rudolf Ising.avi'),
     ('Bosko at the Zoo', 1931, 'BoskoAtTheZoo1932HughHarmanRudolfIsing', 'Bosko at the Zoo 1932 Hugh Harman, Rudolf Ising.avi'),
@@ -140,7 +141,6 @@ CARTOONS = [
     ('Get Rich Quick Porky', 1937, 'get-rich-quick-porky-1937', 'Get Rich Quick Porky (1937).mp4'),
     ("Porky's Garden", 1937, 'porkys-garden-1937', "Porky's Garden (1937).mp4"),
     ('I Wanna Be a Sailor', 1937, 'i-wanna-be-a-sailor_202301', 'I Wanna Be A Sailor (1937) - HD.mp4'),
-    ('Jungle Jitters', 1938, 'jungle-jitters-1938-brand-new-restoration-100-for-real-this-time-no-rick-rolled_202510', 'Jungle Jitters (1938) - Brand New Restoration (100% For Real This Time) [No Rick rolled].mp4'),
     ('Have You Got Any Castles?', 1938, 'haveyougotanycastles1938merriemelodieshdcc', 'Have You Got Any Castles - 1938 - Merrie Melodies - (HD + CC).mp4'),
     ('Hamateur Night', 1939, 'looney-tunes-s-1939-e-04-hamateur-night', 'Looney Tunes - S1939E04 - Hamateur Night.mp4'),
     ('Robin Hood Makes Good', 1939, 'robin-hood-makes-good-1939-restored', 'S05E012_Robin Hood Makes Good.mp4'),
@@ -159,12 +159,10 @@ CARTOONS = [
     ("Porky's Ant", 1941, 'PorkysAnt_596', 'PorkysAnt.mp4'),
     ('Farm Frolics', 1941, 'FarmFrolics1941', 'Farm Frolics (1941).MP4'),
     ('A Coy Decoy', 1941, 'a-coy-decoy-1941_202403', 'A Coy Decoy (1941).mp4'),
-    ("Porky's Prize Pony", 1941, 'PeerTube-a9a5891b-ee95-4c6a-af7a-9f496a30cf5b', 'a9a5891b-ee95-4c6a-af7a-9f496a30cf5b.mp4'),
     ('Meet John Doughboy', 1941, 'meetjohndoughboy1941', 'Meet John Doughboy (1941).mp4'),
     ('We, the Animals - Squeak!', 1941, 'wetheanimalssqueak1941', 'We, the Animals Squeak! (1941).mp4'),
     ('Sport Chumpions', 1941, 'sportchumpions1941', 'Sport Chumpions (1941).mp4'),
     ('The Henpecked Duck', 1941, 'the-henpecked-duck-1941', 'The Henpecked Duck (1941).mp4'),
-    ('All This and Rabbit Stew', 1941, 'all-this-and-rabbit-stew', 'All This and Rabbit Stew.mp4'),
     ('Notes to You', 1941, 'NotesToYou', 'NotesToYou.mp4'),
     ('Robinson Crusoe Jr.', 1941, 'robinson-crusoe-jr.-1941', 'Robinson Crusoe Jr. (1941).mp4'),
     ('Rookie Revue', 1941, 'RookieRevue1941WW2Cartoon', 'Rookie Revue (1941) WW2 Cartoon.mp4'),
@@ -175,20 +173,17 @@ CARTOONS = [
     ("Porky's Cafe", 1942, 'porkys-cafe-1942-restored', 'S08E015_Porkys Cafe.mp4'),
     ('The Wabbit Who Came to Supper', 1942, 'the-wabbit-who-came-to-supper-1942_202605', 'The Wabbit Who Came to Supper (1942).mkv'),
     ('Saps in Chaps', 1942, 'sapsinchaps', '0361- Saps in Chaps (1942).mkv'),
-    ("Daffy's Southern Exposure", 1942, 'dailymotion-x3p3n5i', 'Daffy_s_Southern_Exposure_1942-x3p3n5i.mp4'),
     ('The Wacky Wabbit', 1942, 'the-wacky-wabbit-1942_202605', 'The Wacky Wabbit (1942).mkv'),
     ('Nutty News', 1942, 'nutty-news-1942', 'Nutty News (1942).mp4'),
     ('Hobby Horse-Laffs', 1942, 'hobby-horse-laffs-1942', 'Hobby Horse-Laffs (1942).mp4'),
     ('Gopher Goofy', 1942, 'gopher-goofy-1942', 'Gopher Goofy (1942).mp4'),
     ('Wacky Blackout', 1942, 'WackyBlackout1942WW2Cartoon', 'Wacky Blackout (1942) WW2 Cartoon.mp4'),
     ('Foney Fables', 1942, 'FoneyFables1942', 'Foney Fables (1942).mp4'),
-    ('The Ducktators', 1942, '201164_The_Ducktators', '201164_The_Ducktators_master.intros.mov'),
     ("Eatin' on the Cuff", 1942, 'eatin-on-the-cuff-1942-restored', 'S08E001_Eatin on the Cuff.mp4'),
     ('Fresh Hare', 1942, 'fresh-hare-1942_202605', 'Fresh Hare (1942).mkv'),
     ('The Impatient Patient', 1942, 'the-impatient-patient-1942-restored', 'S08E014_The Impatient Patient.mp4'),
     ('Fox Pop', 1942, 'fox-pop_202607', '1942.09.05 - Fox Pop.mp4'),
     ('The Dover Boys', 1942, 'the-dover-boys-at-pimento-university_202402', 'The_Dover_Boys_at_Pimento_University_1080p.webm'),
-    ('The Sheepish Wolf', 1942, 'the-sheepish-wolf-1942-metv-airing', 'The Sheepish Wolf (1942) METV+ AIRING.mp4'),
     ('The Daffy Duckaroo', 1942, 'the-daffy-duckaroo-1942-restored', 'The Daffy Duckaroo (1942).mp4'),
     ('A Tale of Two Kitties', 1942, 'a-tale-of-two-kitties-1942-restored', 'S08E011_A Tale of Two Kitties.mp4'),
     ('Ding Dog Daddy', 1942, 'dingdogdaddy1942looneytunesclassiccartoon', 'Ding Dog Daddy (1942) - Looney Tunes Classic Cartoon.mp4'),
@@ -198,14 +193,12 @@ CARTOONS = [
     ('To Duck .... or Not to Duck', 1943, 'to-duck-or-not-to-duck-1943_202605', 'To Duck or Not to Duck (1943).mkv'),
     ('The Fifth-Column Mouse', 1943, 'TheFifthColumnMouse1943WW2Cartoon', 'The Fifth Column Mouse (1943) WW2 Cartoon.mp4'),
     ('Hop and Go', 1943, 'hop-and-go-1943_202304', 'Hop and Go (1943).mp4'),
-    ('Tokio Jokio', 1943, 'tokio-jokio-1943_202304', 'Tokio Jokio (1943).mp4'),
     ('Yankee Doodle Daffy', 1943, 'YankeeDoodleDaffy19431', 'Yankee Doodle Daffy (1943)-1.mp4'),
     ('Wackiki Wabbit', 1943, 'wackiki-wabbit-1943_202605', 'Wackiki Wabbit (1943).mkv'),
     ("Porky Pig's Feat", 1943, 'porky-pigs-feat-1943-restored', 'S09E009_Porky Pigs Feat.mp4'),
     ('Scrap Happy Daffy', 1943, 'scraphappydaffy', 'scraphappydaffy.mp4'),  # the 720p .mov is private
     ('A Corny Concerto', 1943, '1943-9-25-a-corny-concerto', '[1943-9-25] A Corny Concerto @.mkv'),
     ('Falling Hare', 1943, 'falling-hare-1943_202605', 'Falling Hare (1943).mkv'),
-    ('Inki and the Minah Bird', 1943, 'InkiAndTheMinahBird', 'Inki and the Minah Bird.mp4'),
     ('Daffy - The Commando', 1943, 'daffy-the-commando-1943-restored', 'Looney Tunes - S1943E26 - Daffy - The Commando.mp4'),
     ("Puss n' Booty", 1943, 'puss-n-booty-1943-restored', 'S09E007_Puss N Booty.mp4'),
     # Private Snafu: made for the US Army, so never under copyright
@@ -219,8 +212,6 @@ CARTOONS = [
     ('Rumors', 1943, 'private-snafu-no-buddy-atoll', 'Private Snafu - Rumors [Pixar].mp4'),
     ('Booby Traps', 1944, 'PrivateSnafuBoobyTraps1944', 'snafu_boobytraps.mp4'),
     ('Snafuperman', 1944, 'PrivateSnafuSnafuperman', 'Private_Snafu_as_Snafuperman.mpg'),
-    ('Private Snafu vs. Malaria Mike', 1944, 'youtube-IMLN_-p62hU', 'IMLN_-p62hU.webm'),
-    ('A Lecture on Camouflage', 1944, 'youtube-8CsC_gytvD0', '8CsC_gytvD0.webm'),
     ('Gas', 1944, 'Pvt.SNAFU.Gas', 'Pvt.SNAFU.Gas.avi'),
     ('The Chow Hound', 1944, 'private-snafu-no-buddy-atoll', 'Private Snafu - The Chow Hound.mp4'),
     ('Censored', 1944, '111-M-1076', '111-M-1076.mp4'),
@@ -238,7 +229,6 @@ CARTOONS = [
     ('The Good Egg', 1945, 'mr-hook', 'The Good Egg (1945).mp4'),
     ('Tokyo Woes', 1945, 'TokyoWoes', 'Mr.Hook-03TokyoWoes1945.avi'),
     # Made for the US government
-    ('Any Bonds Today?', 1942, 'AnyBondsToday', 'Any Bonds Today-Nh_oc5hQt-A.ogv'),
     ('Point Rationing of Foods', 1943, '77354-point-rationing-of-foods', '77354 Point Rationing Of Foods.mov'),
     ('So Much for So Little', 1949, 'so-much-for-so-little-1949', 'So Much for So Little (1949).mp4'),
     ('A Hitch in Time', 1955, 'a-hitch-in-time-1955', 'A Hitch in Time (1955).mp4'),
@@ -383,12 +373,16 @@ def plan_cartoons(root):
 
 
 SECTIONS = {"movies": plan_movies, "tv": plan_tv, "cartoons": plan_cartoons, "commercials": plan_commercials}
+# Fetched when --only isn't given. The cartoons are tens of GB: ask for them.
+DEFAULT = ["movies", "tv", "commercials"]
+# Sections that are libraries, and the folder each fills.
+LIBRARIES = {"movies": "Movies", "tv": "TV", "cartoons": "Cartoons"}
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("root", help="folder to fill (created if missing)")
-    ap.add_argument("--only", nargs="+", choices=SECTIONS, default=list(SECTIONS), help="sections to fetch")
+    ap.add_argument("--only", nargs="+", choices=SECTIONS, default=DEFAULT, help="sections to fetch (default: %(default)s)")
     ap.add_argument("--list", action="store_true", help="show what would be fetched, with sizes")
     args = ap.parse_args()
 
@@ -419,8 +413,13 @@ def main():
         print("\nFailed (re-run to retry):\n  " + "\n  ".join(failed))
         sys.exit(1)
     if not args.list:
-        libs = [os.path.join(root, d) for d in ("Movies", "TV", "Cartoons") if os.path.isdir(os.path.join(root, d))]
-        print(f"\nDone. Add {', '.join(libs)} as libraries in Couchside (Cartoons as movies).")
+        libs = [os.path.join(root, LIBRARIES[s]) for s in args.only if s in LIBRARIES]
+        print("\nDone.")
+        if libs:
+            note = " (Cartoons as a movie library)" if "cartoons" in args.only else ""
+            print(f"Add {', '.join(libs)} as libraries in Couchside{note}.")
+        if "commercials" in args.only:
+            print(f"{os.path.join(root, 'Commercials')} is filler for virtual channels, not a library.")
 
 
 if __name__ == "__main__":

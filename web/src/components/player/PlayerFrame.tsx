@@ -175,8 +175,18 @@ export default function PlayerFrame(p: PlayerFrameProps) {
   useEffect(() => {
     const onFs = () => setFull(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onFs);
-    return () => document.removeEventListener("fullscreenchange", onFs);
-  }, []);
+    // iPhone's own full-screen player doesn't fire fullscreenchange.
+    const el = videoRef.current;
+    const begin = () => setFull(true);
+    const end = () => setFull(false);
+    el?.addEventListener("webkitbeginfullscreen", begin);
+    el?.addEventListener("webkitendfullscreen", end);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFs);
+      el?.removeEventListener("webkitbeginfullscreen", begin);
+      el?.removeEventListener("webkitendfullscreen", end);
+    };
+  }, [videoRef]);
 
   // restore volume once
   useEffect(() => {
@@ -451,7 +461,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           <div className="flex-1" />
           {timeline.kind === "recording" && (
             <CtlButton label="Start over" onClick={() => seekTo(0)} wide>
-              <SkipBack size={15} /> <span className="text-xs">Start over</span>
+              <SkipBack size={15} /> <span className="hidden text-xs sm:inline">Start over</span>
             </CtlButton>
           )}
           {isLive && (

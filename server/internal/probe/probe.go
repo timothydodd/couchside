@@ -23,6 +23,10 @@ type Info struct {
 	PixFmt         string // e.g. yuv420p, yuv420p10le
 	ColorTransfer  string // smpte2084 (HDR10) / arib-std-b67 (HLG) mean HDR
 	AudioChannels  int
+	// DVProfile is the Dolby Vision profile (5, 7, 8…), 0 when the video
+	// isn't Dolby Vision. Profile 5 has no HDR10 or SDR layer underneath: a
+	// player without Dolby Vision shows it green and purple.
+	DVProfile int
 }
 
 // HDR reports whether the video uses a PQ or HLG transfer and needs tone mapping for SDR output.
@@ -49,7 +53,10 @@ type ffprobeOut struct {
 		PixFmt        string            `json:"pix_fmt"`
 		ColorTransfer string            `json:"color_transfer"`
 		Channels      int               `json:"channels"`
-		Disposition   struct {
+		SideData      []struct {
+			DVProfile int `json:"dv_profile"`
+		} `json:"side_data_list"`
+		Disposition struct {
 			AttachedPic int `json:"attached_pic"`
 		} `json:"disposition"`
 	} `json:"streams"`
@@ -109,6 +116,11 @@ func Probe(ctx context.Context, bin, path string) (*Info, error) {
 				w, h := s.Width, s.Height
 				info.VideoCodec, info.Width, info.Height = s.CodecName, &w, &h
 				info.PixFmt, info.ColorTransfer = s.PixFmt, s.ColorTransfer
+				for _, sd := range s.SideData {
+					if sd.DVProfile > 0 {
+						info.DVProfile = sd.DVProfile
+					}
+				}
 			}
 		case "audio":
 			if info.AudioCodec == "" {

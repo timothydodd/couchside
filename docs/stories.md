@@ -46,7 +46,7 @@ from the start.
 | B20 | Helm chart hardening                                   | Packaging | Reported  | Done |
 | B21 | CI and release                                         | Packaging | Reported  | Done |
 | B22 | Docs and site catch up                                 | Docs      | Reported  | Done |
-| B23 | Demo media script                                      | Hygiene   | Reported  | Part |
+| B23 | Demo media script                                      | Hygiene   | Reported  | Done |
 | C1  | Server dead code and stale comments                    | Cleanup   |           |      |
 | C2  | One builder for ffmpeg's HLS arguments                 | Cleanup   |           |      |
 | C3  | Split `api/auth.go` and `api/handlers.go`              | Cleanup   |           |      |
@@ -307,7 +307,7 @@ don't appear in the library.
 
 ## B11 · Transcode: false GPU fallback, copied HEVC
 
-**Done**, except the copied-video items.
+**Done.**
 
 - The stale waiter was real: a restart lets go of the session lock while the
   old ffmpeg dies, and a request waiting on a segment could then turn GPU
@@ -318,10 +318,12 @@ don't appear in the library.
 - The Windows comment and `docs/install.md` say that ffmpeg isn't paused
   there.
 
-**Left for the copied-video change** (`Request.VideoCodecs`), which isn't on
-this branch yet: normalise codec names as `livetv.NormalizeCodec` does; don't
-copy Dolby Vision profile 5; check on a Roku that HEVC with 10s keyframe
-spacing plays against a playlist listing 4s segments (R15).
+- Copied video (`Request.VideoCodecs`): the client's codec names are
+  normalised (`codecName`), and Dolby Vision profile 5 (`probe.Info.DVProfile`)
+  is never copied.
+
+**Left for a device:** check on a Roku that HEVC with 10s keyframe spacing
+plays against a playlist listing 4s segments (R15).
 
 ## B12 · Server odds and ends
 
@@ -367,9 +369,9 @@ spacing plays against a playlist listing 4s segments (R15).
 - The page's own shortcuts run before the modifier check, so Ctrl+Up/Down
   change channel.
 
-**Left for the touch-controls change** (not on this branch yet): after
-`webkitEnterFullscreen` on an iPhone, `full` never updates; listen for
-`webkitbeginfullscreen` / `webkitendfullscreen`.
+- On an iPhone, `full` follows `webkitbeginfullscreen` /
+  `webkitendfullscreen` (its own full-screen player fires no
+  `fullscreenchange`). Not tried on an iPhone.
 
 ## B14 · Live player: failed Record, phone controls
 
@@ -380,9 +382,8 @@ spacing plays against a playlist listing 4s segments (R15).
 - "Start over" and "Record"/"Stop" lose their text below `md` (the buttons
   keep an `aria-label`), so the title has room at 360px.
 
-**Left for the touch-controls change** (not on this branch yet): a
-recording's bottom row with 44px buttons overflows at 360px; move "Start
-over" into the menu there.
+- A recording's "Start over" button in the bottom row is icon-only below
+  `sm`, so the row fits at 360px.
 
 ## B15 · `useApi`: late answers, stale errors, cache size
 
@@ -520,20 +521,18 @@ changed to the current tokens and haven't been seen rendered.
 
 ## B23 · Demo media script
 
-**Partly done:** `.gitignore` has `__pycache__/` and `*.pyc`.
+**Done.** The script compiles and its `--help` runs; nothing was downloaded.
 
-**Waiting.** The rest is about changes to `scripts/fetch-demo-media.py` that
-aren't committed yet (the cartoons section). When they land:
-- "Any Bonds Today?" downloads as `.ogv`, which `parse.videoExts` doesn't
-  scan. Pick another copy or drop it.
-- `--only` defaults to every section, so the documented run pulls the
-  cartoons too (about 38 GB). Leave cartoons out of the default.
-- The closing message prints an empty list when only `commercials` was
-  fetched, and mentions Cartoons when they weren't.
-- Remove the Censored Eleven and wartime-caricature shorts ("Hittin' the
-  Trail for Hallelujah Land", "Jungle Jitters", "All This and Rabbit Stew",
-  "Tokio Jokio", "The Ducktators", "Inki and the Minah Bird") and the
-  broadcast-capture and rip sources: this feeds the reviewers' demo (S5).
+- Removed "Any Bonds Today?" (an `.ogv`, which isn't scanned), the six shorts
+  built on racial or wartime caricature, and the copies taken from a TV
+  broadcast, PeerTube, Dailymotion and YouTube.
+- Cartoons aren't in the default run (`--only cartoons` fetches them).
+- The closing message lists only what was fetched.
+- `.gitignore` has `__pycache__/` and `*.pyc`.
+
+**Yours to judge:** many remaining cartoons come from Archive items named
+"restored". A restoration can carry its own copyright, which the script's
+header says it avoids.
 
 ---
 

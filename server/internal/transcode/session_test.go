@@ -245,11 +245,38 @@ func TestVideoCodecsCopyTenBitHEVC(t *testing.T) {
 	if !s.CopyVideo || s.Mode != "remux" || s.HDR {
 		t.Fatalf("HEVC not copied for a client that plays it: %+v", s)
 	}
+	req.VideoCodecs = []string{" H265 "} // however the client spells it
+	if s, err = m.Create(context.Background(), req); err != nil || !s.CopyVideo {
+		t.Fatalf("HEVC asked for as H265: copy=%v err=%v", s != nil && s.CopyVideo, err)
+	}
 	req.Height = 720 // smaller than the source: has to be encoded
 	if s, err = m.Create(context.Background(), req); err != nil {
 		t.Fatal(err)
 	}
 	if s.CopyVideo {
 		t.Fatal("copied a 1080p source for a 720p request")
+	}
+}
+
+// Dolby Vision profile 5 probes as hevc, but only a Dolby Vision player can
+// show it: it's never copied on the strength of "plays hevc".
+func TestDolbyVisionProfile5IsNotCopied(t *testing.T) {
+	ffmpeg, _, _ := fakeTools(t)
+	ffprobe := filepath.Join(t.TempDir(), "ffprobe")
+	out := `{"format":{"duration":"600"},"streams":[{"codec_type":"video","codec_name":"hevc","width":3840,"height":2160,"pix_fmt":"yuv420p10le","side_data_list":[{"side_data_type":"DOVI configuration record","dv_profile":5}]},{"codec_type":"audio","codec_name":"eac3","channels":6}]}`
+	if err := os.WriteFile(ffprobe, []byte("#!/bin/sh\necho '"+out+"'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewManager(Encoder{FFmpeg: ffmpeg}, ffprobe, filepath.Join(t.TempDir(), "hls"), 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := m.Create(context.Background(), Request{FileID: 1, Path: "/x.mkv", Duration: 600, AllowCopyVideo: true, VideoCodecs: []string{"hevc"}, BurnSubtitle: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { m.Close(s.ID) })
+	if s.CopyVideo {
+		t.Fatal("Dolby Vision profile 5 was copied")
 	}
 }
