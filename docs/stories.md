@@ -38,7 +38,7 @@ from the start.
 | B12 | Server odds and ends                                   | Bug       | Mixed     | Done |
 | B13 | Player: subtitles, audio track, retry                  | Bug       | Confirmed | Done |
 | B14 | Live player: failed Record, phone controls             | Bug       | Confirmed | Done |
-| B15 | `useApi`: late answers, stale errors, cache size       | Bug       | Reported  |      |
+| B15 | `useApi`: late answers, stale errors, cache size       | Bug       | Reported  | Done |
 | B16 | Console polling and token renewal                      | Bug       | Confirmed |      |
 | B17 | Load failures and failed actions are shown             | Bug       | Reported  |      |
 | B18 | Keyboard and screen-reader gaps                        | A11y      | Reported  |      |
@@ -386,18 +386,18 @@ over" into the menu there.
 
 ## B15 · `useApi`: late answers, stale errors, cache size
 
-**Why.** `web/src/lib/api.ts:66`: no request sequencing, so a poll sent
-before a mutation can land after the reload and repaint old data (Activity,
-Libraries, Manage). `error` isn't reset when the URL changes. The module
-`cache` never evicts, so every search keystroke stays for the tab's life.
+**Done.** Typechecked and built; not yet tried in a browser.
 
-**Scope**
-- A per-hook request counter that drops out-of-date answers.
-- Reset `error` (and `data` when the URL becomes null) on a URL change.
-- Cap the cache (LRU, a few hundred entries).
+- An answer is dropped when a newer request for the same URL has been sent.
+- Data, error and loading always belong to the URL passed in: no previous
+  page's error or data after the URL changes (or becomes null).
+- The cache keeps the 300 most recently used URLs.
+- New option `keep`, used by the guide, the folder picker and the history
+  charts: they page by changing the URL and relied on the old data staying
+  up until the new answer arrives.
 
-**Done when** a slow poll can't overwrite a newer reload (unit test of the
-hook's fetch logic, pulled out so it can be tested without a DOM).
+**Not done:** the unit test. The web app has no test runner; adding one
+(Vitest) belongs with the lint step in B21.
 
 ## B16 · Console polling and token renewal
 

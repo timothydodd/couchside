@@ -32,7 +32,7 @@ const count = (v: number) => String(Math.round(v));
 export default function SystemHistory() {
   const [range, setRange] = useState<Range>("15m");
   const secs = RANGES.find((r) => r.id === range)!.secs;
-  const { data } = useApi<HistoryWindow>(`/api/system/history?range=${range}`, { pollMs: secs <= 3600 ? 5000 : 60000 });
+  const { data } = useApi<HistoryWindow>(`/api/system/history?range=${range}`, { pollMs: secs <= 3600 ? 5000 : 60000, keep: true });
   const to = Date.now() / 1000;
   const from = to - secs;
   const scope = data?.scope === "container" ? "Container" : "Machine";
