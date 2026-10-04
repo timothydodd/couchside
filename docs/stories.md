@@ -24,11 +24,11 @@ from the start.
 
 | ID  | Story                                                  | Kind      | Finding   | Done |
 | --- | ------------------------------------------------------ | --------- | --------- | ---- |
-| B1  | Turning passwords on ends passwordless sessions        | Security  | Confirmed | PR #45|
-| B2  | Sign-in hardening, second pass                         | Security  | Reported  | PR #46|
-| B3  | Remote image cache can't be filled between prunes      | Security  | Reported  | PR #47|
-| B4  | Internal error text stays on the server                | Security  | Reported  | PR #48|
-| B5  | A provider outage doesn't wipe cast and backdrops      | Data loss | Confirmed | PR #49|
+| B1  | Turning passwords on ends passwordless sessions        | Security  | Confirmed | Done |
+| B2  | Sign-in hardening, second pass                         | Security  | Reported  | Done |
+| B3  | Remote image cache can't be filled between prunes      | Security  | Reported  | Done |
+| B4  | Internal error text stays on the server                | Security  | Reported  | Done |
+| B5  | A provider outage doesn't wipe cast and backdrops      | Data loss | Confirmed | Done |
 | B6  | Virtual channels stay on their schedule                | Bug       | Confirmed |      |
 | B7  | Virtual and tuner streams use the right picture path   | Bug       | Reported  |      |
 | B8  | A recording watched from the start outlives recording  | Bug       | Confirmed |      |
@@ -72,7 +72,9 @@ runtime. Line numbers are from commit `1acefb8` and will drift; the function
 names are the stable reference.
 
 **Rules for every story**
-- One story per branch and PR. Don't fold neighbouring cleanups in.
+- All of this goes on one branch, `audit-2`, with one commit per story
+  (`B4: …`), and becomes a single PR when the release is decided. Don't fold
+  neighbouring cleanups into a story's commit.
 - Write the failing test first where the story lists one. Tests for `livetv`
   and `db` run on a temp SQLite DB (see `livetv/rules_test.go`).
 - Verify with the commands in `CLAUDE.md`: `go vet ./... && go test -race
@@ -90,7 +92,7 @@ names are the stable reference.
 
 ## B1 · Turning passwords on ends passwordless sessions
 
-**Done** (PR #45).
+**Done.**
 
 **Why.** `Server.Run` (`api/api.go:74`) calls `s.pruneSessions(ctx)`, which
 loops on a 6-hour ticker until shutdown. The `if s.cfg.Auth {
@@ -108,7 +110,7 @@ for a year. This was A7's item 4.
 
 ## B2 · Sign-in hardening, second pass
 
-**Done** (PR #46).
+**Done.**
 
 **Scope**
 - **The throttle is check-then-act.** `throttled` (`api/auth.go:389`) reads
@@ -137,7 +139,7 @@ and a TV client that repeats a refresh with the previous token gets a session.
 
 ## B3 · Remote image cache can't be filled between prunes
 
-**Done** (PR #47).
+**Done.**
 
 **Why.** `GET /api/artwork/remote` needs no sign-in, and the 2 GB
 `remoteMaxTotal` is only enforced by `pruneRemote` on the daily ticker
@@ -155,7 +157,7 @@ volume in between. A6 left this.
 
 ## B4 · Internal error text stays on the server
 
-**Done** (PR #48).
+**Done.**
 
 **Why.** A7 made 500s say "internal error" unless the message is a `usererr`,
 but several handlers still wrap anything.
@@ -179,7 +181,7 @@ error for a non-admin, with a test for `hlsSegment` and `dvrDelete`.
 
 ## B5 · A provider outage doesn't wipe cast and backdrops
 
-**Done** (PR #49).
+**Done.**
 
 **Why.** `Chain.Lookup` (`metadata/metadata.go:77`) moves on to the next
 provider when one errors and returns that answer with a nil error. When TMDB
