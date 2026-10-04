@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/timothydodd/couchside/internal/db"
+	"github.com/timothydodd/couchside/internal/transcode"
 	"github.com/timothydodd/couchside/internal/usererr"
 )
 
@@ -191,5 +192,32 @@ func TestVirtualLoopTuneInToABrokenFile(t *testing.T) {
 	b, ok := r.firstRun("/tv/b.mkv")
 	if !ok || b.at < minutes(30)-1500 {
 		t.Fatalf("the next program: %+v (played %v)", b, ok)
+	}
+}
+
+// A piece's ffmpeg arguments tone map an HDR file and use the GPU pipeline
+// when asked; a plain file gets neither.
+func TestVirtualArgsHDRAndGPU(t *testing.T) {
+	m := &liveManager{enc: transcode.Encoder{FFmpeg: "ffmpeg", HW: "vaapi", VAAPIDevice: "/dev/dri/renderD128", Tonemap: true, HWDecode: true, HWTonemap: true}}
+	p := db.PlayoutPiece{StartMs: 0, EndMs: 60_000, Path: "/films/x.mkv", HasAudio: true}
+	spec := Spec{Height: 720}
+	args := func(v pieceVideo, hw bool) string {
+		return strings.Join(m.virtualArgs(p, v, hw, 0, 60_000, 0, true, spec, "/tmp/s", 1), " ")
+	}
+	plain := args(pieceVideo{Codec: "h264"}, false)
+	if strings.Contains(plain, "tonemap") || strings.Contains(plain, "-hwaccel") {
+		t.Fatalf("a plain file on the CPU path: %s", plain)
+	}
+	hdr := args(pieceVideo{HDR: true, Codec: "hevc"}, true)
+	if !strings.Contains(hdr, "tonemap_vaapi") || !strings.Contains(hdr, "-hwaccel vaapi") {
+		t.Fatalf("an HDR file on the GPU path: %s", hdr)
+	}
+	cpu := args(pieceVideo{HDR: true, Codec: "hevc"}, false)
+	if !strings.Contains(cpu, "tonemap=tonemap=hable") || strings.Contains(cpu, "-hwaccel") {
+		t.Fatalf("an HDR file on the CPU path: %s", cpu)
+	}
+	// Smaller sources are still scaled to the session's height.
+	if !strings.Contains(plain, "scale=-2:720") {
+		t.Fatalf("output isn't the session's height: %s", plain)
 	}
 }

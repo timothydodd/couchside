@@ -77,6 +77,9 @@ type liveManager struct {
 	enc        transcode.Encoder
 	root       string
 	maxEncodes int // live streams that encode video at once (COUCHSIDE_MAX_TRANSCODES)
+	// pieceInfo says how a library file must be converted for a virtual
+	// channel; nil (tests) treats every file as plain SDR, decoded on the CPU.
+	pieceInfo func(ctx context.Context, path string) pieceVideo
 
 	mu       sync.Mutex
 	sessions map[string]*LiveSession

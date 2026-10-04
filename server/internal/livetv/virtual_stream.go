@@ -108,8 +108,21 @@ func (m *liveManager) launchVirtual(ctx context.Context, key, channel, name stri
 // playVirtual runs until ctx ends. The first error before any output goes to
 // failed; later ones are logged and the piece skipped.
 func (m *liveManager) playVirtual(ctx context.Context, s *LiveSession, pl *mergedPlaylist, spec Spec, src playoutSource, failed chan<- error) {
+	info := map[string]pieceVideo{} // probed once per file
+	gpuOff := false                 // a GPU run failed: decode on the CPU from here on
 	play := func(ctx context.Context, p db.PlayoutPiece, inMs, durMs, streamMs int64, realtime bool, run int) (int64, error) {
-		err := m.runPiece(ctx, m.virtualArgs(p, inMs, durMs, streamMs, realtime, spec, s.dir, run), s, pl, run)
+		v, ok := info[p.Path]
+		if !ok && m.pieceInfo != nil {
+			v = m.pieceInfo(ctx, p.Path)
+			info[p.Path] = v
+		}
+		hw := !gpuOff && m.enc.HWDecode && transcode.HWDecodable[v.Codec]
+		err := m.runPiece(ctx, m.virtualArgs(p, v, hw, inMs, durMs, streamMs, realtime, spec, s.dir, run), s, pl, run)
+		if err != nil && hw && ctx.Err() == nil && pl.runMs(run) == 0 {
+			slog.Warn("virtual channel: GPU decoding failed, decoding on the CPU instead", "channel", s.Channel, "file", p.Path, "err", err)
+			gpuOff = true
+			err = m.runPiece(ctx, m.virtualArgs(p, v, false, inMs, durMs, streamMs, realtime, spec, s.dir, run), s, pl, run)
+		}
 		return pl.runMs(run), err
 	}
 	virtualLoop(ctx, s.Channel, src, play, func() int64 { return time.Now().UnixMilli() }, sleepCtx, failed)
@@ -206,12 +219,21 @@ func virtualLoop(ctx context.Context, channel string, src playoutSource, play pi
 	}
 }
 
+// pieceVideo is what converting a library file needs to know about it.
+type pieceVideo struct {
+	HDR   bool   // PQ or HLG: tone map to SDR
+	Codec string // ffprobe's name, for transcode.HWDecodable
+}
+
 // virtualArgs encodes durMs of a file from inMs to HLS segments for run,
-// with timestamps starting offsetMs into the stream.
-func (m *liveManager) virtualArgs(p db.PlayoutPiece, inMs, durMs, offsetMs int64, realtime bool, spec Spec, dir string, run int) []string {
+// with timestamps starting offsetMs into the stream. Every piece comes out
+// at the session's height, smaller sources included: the pieces are joined
+// into one stream, and players cope badly with the picture size changing at
+// each join.
+func (m *liveManager) virtualArgs(p db.PlayoutPiece, v pieceVideo, hwDecode bool, inMs, durMs, offsetMs int64, realtime bool, spec Spec, dir string, run int) []string {
 	secs := func(ms int64) string { return strconv.FormatFloat(float64(ms)/1000, 'f', 3, 64) }
 	vIn, vOut := m.enc.Video(transcode.VideoOpts{MaxHeight: spec.Height, BitrateK: transcode.BitrateFor(spec.Height),
-		Deinterlace: true, Live: true})
+		Deinterlace: true, Live: true, HDR: v.HDR, HWDecode: hwDecode})
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
 	args = append(args, vIn...)
 	if realtime {

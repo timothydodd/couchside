@@ -30,7 +30,7 @@ from the start.
 | B4  | Internal error text stays on the server                | Security  | Reported  | Done |
 | B5  | A provider outage doesn't wipe cast and backdrops      | Data loss | Confirmed | Done |
 | B6  | Virtual channels stay on their schedule                | Bug       | Confirmed | Done |
-| B7  | Virtual and tuner streams use the right picture path   | Bug       | Reported  |      |
+| B7  | Virtual and tuner streams use the right picture path   | Bug       | Reported  | Done |
 | B8  | A recording watched from the start outlives recording  | Bug       | Confirmed |      |
 | B9  | Commercial detection: custom ini and the job lookup    | Bug       | Confirmed |      |
 | B10 | DVR: stale series matches and failed joins             | Bug       | Reported  |      |
@@ -237,19 +237,16 @@ plays the next programme at its scheduled time.
 
 ## B7 · Virtual and tuner streams use the right picture path
 
-**Why.** `virtualArgs` (`livetv/virtual_stream.go:158`) passes no `HDR`,
-`SrcHeight` or `HWDecode` in `VideoOpts`, and `PlayoutPiece` doesn't carry
-them. HDR films go out without tone mapping, SD files are upscaled to the
-session height, and 4K HEVC is decoded on the CPU when the GPU could. Tuner
-streams pass no `SrcHeight` either, so 480i channels are upscaled.
+**Done**, in part. A virtual channel now probes each file once per session
+and tone maps HDR films, and decodes on the GPU when the start-up test passed
+(falling back to the CPU for the rest of the session if a GPU run fails).
 
-**Scope**
-- Carry height and HDR on the piece (from `files`, when the playout is built)
-  and pass them, with `Encoder.HWDecode`, to `VideoOpts`.
-- Pass the lineup's height for tuner streams where it's known.
-
-**Done when** an HDR film on a virtual channel is tone-mapped and an SD file
-isn't upscaled (argument tests, as `session_test.go` does).
+**Dropped, and why**
+- *SD files are upscaled to the session height.* Kept on purpose: the pieces
+  are joined into one stream, and the picture size changing at every join is
+  worse than the upscale.
+- *Tuner streams pass no `SrcHeight`.* The lineup only says HD or not, never
+  a height, so there's nothing to pass.
 
 ## B8 · A recording watched from the start outlives recording
 

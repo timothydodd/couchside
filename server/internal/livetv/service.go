@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/timothydodd/couchside/internal/db"
+	"github.com/timothydodd/couchside/internal/probe"
 	"github.com/timothydodd/couchside/internal/metadata"
 	"github.com/timothydodd/couchside/internal/transcode"
 	"github.com/timothydodd/couchside/internal/usererr"
@@ -67,6 +68,17 @@ func (s *Service) configured() bool { return s.hdhr != nil || s.virtualCount > 0
 
 func New(cfg Config, d *db.DB, enc transcode.Encoder, work Enqueuer, cacheDir string) (*Service, error) {
 	lm, err := newLiveManager(enc, filepath.Join(cacheDir, "live"), cfg.MaxEncodes)
+	if err == nil && cfg.FFprobe != "" {
+		lm.pieceInfo = func(ctx context.Context, path string) pieceVideo {
+			ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+			defer cancel()
+			info, err := probe.Probe(ctx, cfg.FFprobe, path)
+			if err != nil {
+				return pieceVideo{} // play it as plain SDR on the CPU; a missing file fails in ffmpeg
+			}
+			return pieceVideo{HDR: info.HDR(), Codec: info.VideoCodec}
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
