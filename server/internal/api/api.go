@@ -91,13 +91,13 @@ func (s *Server) Run(ctx context.Context) {
 	if _, err := s.setupNeeded(ctx); err != nil {
 		slog.Error("accounts", "err", err)
 	}
-	s.pruneSessions(ctx)
 	if s.cfg.Auth {
 		// Passwords are required now; sessions from passwordless days end.
 		if err := s.endPasswordlessSessions(ctx); err != nil {
 			slog.Error("accounts", "err", err)
 		}
 	}
+	s.pruneSessions(ctx) // loops until ctx ends
 }
 
 // pruneTables drops rows that would otherwise only grow: finished jobs after

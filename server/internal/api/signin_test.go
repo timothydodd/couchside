@@ -157,3 +157,30 @@ func TestInternalErrorsStayInTheLog(t *testing.T) {
 		t.Fatalf("user-facing error hidden: %s", rec.Body)
 	}
 }
+
+// COUCHSIDE_AUTH=true on a server that was passwordless: sessions of profiles
+// without a password end when the server starts, not when it stops.
+func TestRunEndsPasswordlessSessionsAtStart(t *testing.T) {
+	s, _, admin := passwordlessServer(t)
+	if code := admin.do("GET", "/api/auth/sessions", nil, nil); code != 200 {
+		t.Fatalf("sessions before = %d", code)
+	}
+	s.cfg.Auth = true
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { s.Run(ctx); close(done) }()
+	t.Cleanup(func() { cancel(); <-done })
+
+	deadline := time.Now().Add(5 * time.Second)
+	for admin.do("GET", "/api/auth/sessions", nil, nil) != 401 {
+		select {
+		case <-done:
+			t.Fatal("Run returned before ctx ended")
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the passwordless session still worked while the server ran")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
