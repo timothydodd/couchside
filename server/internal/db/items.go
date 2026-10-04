@@ -153,14 +153,20 @@ type Metadata struct {
 	PosterURL    string
 	BackdropURL  string
 	Provider     string
+	// Partial: a provider earlier in the chain couldn't be reached, so this
+	// answer may be missing what only that one has. The item keeps its
+	// backdrop link when this answer has none, and stays pending so the next
+	// scan matches it again.
+	Partial bool
 }
 
 func (d *DB) ApplyMetadata(ctx context.Context, id int64, m Metadata) error {
 	_, err := d.sql.ExecContext(ctx, `UPDATE media_items SET title = ?, sort_title = ?, year = NULLIF(?, 0), plot = ?,
 		genres = ?, rated = ?, rating = ?, runtime_min = ?, imdb_id = ?, total_seasons = ?, poster_url = ?,
-		backdrop_url = ?, match_status = 'matched', match_provider = ?, updated_at = unixepoch() WHERE id = ?`,
+		backdrop_url = CASE WHEN ? AND ? = '' THEN backdrop_url ELSE ? END,
+		match_status = CASE WHEN ? THEN 'pending' ELSE 'matched' END, match_provider = ?, updated_at = unixepoch() WHERE id = ?`,
 		m.Title, SortTitle(m.Title), m.Year, m.Plot, strings.Join(m.Genres, ", "), m.Rated, m.Rating, m.RuntimeMin,
-		m.ImdbID, m.TotalSeasons, m.PosterURL, m.BackdropURL, m.Provider, id)
+		m.ImdbID, m.TotalSeasons, m.PosterURL, m.Partial, m.BackdropURL, m.BackdropURL, m.Partial, m.Provider, id)
 	return err
 }
 
