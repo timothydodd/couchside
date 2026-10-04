@@ -78,6 +78,7 @@ func New(d *db.DB, cfg config.Config, w *worker.Worker, providers *metadata.Chai
 // Run does the server's background upkeep until ctx ends.
 func (s *Server) Run(ctx context.Context) {
 	go s.history.Run(ctx)
+	go s.runBackups(ctx)
 	go func() {
 		t := time.NewTicker(24 * time.Hour)
 		defer t.Stop()
@@ -257,6 +258,11 @@ func (s *Server) adminRoutes(r chi.Router) {
 	r.Get("/system", s.system)
 	r.Get("/system/history", s.systemHistory)
 	r.Get("/system/logs", s.systemLogs)
+	r.Get("/system/backups", s.listBackups)
+	r.Post("/system/backups", s.createBackup)
+	r.Get("/system/backups/{name}", s.downloadBackup)
+	r.Delete("/system/backups/{name}", s.deleteBackup)
+	r.Put("/settings/backup", s.setBackupSettings)
 
 	r.Get("/accounts", s.listAccounts)
 	r.Put("/settings/passwordless", s.setPasswordless)

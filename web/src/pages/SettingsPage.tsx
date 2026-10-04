@@ -9,6 +9,7 @@ import { SECTIONS } from "../components/settings/sections";
 import ServerInfo from "../components/settings/ServerInfo";
 import ServerNow from "../components/settings/ServerNow";
 import SystemHistory from "../components/settings/SystemHistory";
+import BackupSettings from "../components/settings/Backups";
 import TimingSettings from "../components/settings/TimingSettings";
 import VirtualChannels from "../components/settings/VirtualChannels";
 import { PageHeader } from "../components/ui";
@@ -66,7 +67,12 @@ export default function SettingsPage() {
             <VirtualChannels />
           </>
         )}
-        {id === "advanced" && <TimingSettings />}
+        {id === "advanced" && (
+          <>
+            <TimingSettings />
+            <BackupSettings />
+          </>
+        )}
         {id === "you" && <About />}
       </div>
     </div>

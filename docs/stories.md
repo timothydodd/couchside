@@ -55,7 +55,7 @@ from the start.
 | C6  | Load pages on demand                                   | Cleanup   |           |      |
 | F1  | Next Up, and remove from Continue Watching             | Feature   | S         | Done |
 | F2  | Watchlist                                              | Feature   | S         | Done |
-| F3  | Database backup and restore                            | Feature   | S         |      |
+| F3  | Database backup and restore                            | Feature   | S         | Done |
 | F4  | Seek-bar preview thumbnails                            | Feature   | M         |      |
 | F5  | Skip intro and credits                                 | Feature   | M to L    |      |
 | F6  | Per-profile libraries and rating limit                 | Feature   | M         |      |
@@ -640,17 +640,19 @@ to this.
 
 ## F3 · Database backup and restore
 
-**Why.** One SQLite file holds everything; Jellyfin shipped this as a
-headline feature of 10.11.
+**Done.** Server tested (backup, restore, pruning, the pre-upgrade copy, the
+routes); the Settings card is typechecked and built, not yet seen in a
+browser. The restore command hasn't been run against a real data folder.
 
-**Scope**
-- `VACUUM INTO $DATA/backups/couchside-<date>.db` on a timer (daily, keep 7;
-  both settable), and before each migration run.
-- Settings → Advanced: list, "Back up now", download. The download includes
-  `auth.key` and `server.id` (a zip), or the docs say to copy them.
-- `couchside restore <file>` beside `reset-password`, and a doc section.
-
-**Done when** a backup taken from the UI restores to a working server.
+- `internal/backup`: a zip of a `VACUUM INTO` copy of the database with
+  `auth.key` and `server.id`, in `$DATA/backups`. Daily by default, the last
+  7 kept (`backup.daily`, `backup.keep`); manual ones stay until deleted.
+- `db.Open` copies an existing database to `backups/` before applying a new
+  migration (the last 3 kept).
+- Settings → Advanced → Backups: list, Back up now, download, delete, and the
+  two settings. Admin only.
+- `couchside restore <file>` refuses while the server answers on its port,
+  checks the file is a database, and keeps what it replaces.
 
 ## F4 · Seek-bar preview thumbnails
 

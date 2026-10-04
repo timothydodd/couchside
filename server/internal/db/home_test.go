@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"testing"
 )
 
@@ -150,5 +151,50 @@ func TestWatchlist(t *testing.T) {
 	}
 	if list, _ := d.Watchlist(mine, 10); len(list) != 1 || list[0].ID != heat {
 		t.Fatalf("after removing one: %+v", list)
+	}
+}
+
+// A database that already has data is copied to backups/ before a new
+// migration changes it; a brand-new one isn't.
+func TestBackupBeforeUpgrade(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/couchside.db"
+	d, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.SetupAdmin(context.Background(), "Me", "hash"); err != nil {
+		t.Fatal(err)
+	}
+	copies := func() []string {
+		got, _ := filepath.Glob(dir + "/" + BackupDir + "/couchside-upgrade-*.db")
+		return got
+	}
+	if got := copies(); len(got) != 0 {
+		t.Fatalf("a new database was backed up: %v", got)
+	}
+	// Pretend the newest migration hasn't run yet.
+	if _, err := d.sql.Exec(`DROP INDEX jobs_ref; DELETE FROM schema_migrations WHERE version = '0022_jobs_ref.sql'`); err != nil {
+		t.Fatal(err)
+	}
+	d.Close()
+	if d, err = Open(path); err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	got := copies()
+	if len(got) != 1 {
+		t.Fatalf("upgrade backups = %v, want one", got)
+	}
+	if err := Check(got[0]); err != nil {
+		t.Fatalf("the upgrade backup can't be read: %v", err)
+	}
+	old, err := Open(got[0]) // it has the data from before
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer old.Close()
+	if ps, _ := old.Profiles(context.Background()); len(ps) != 1 {
+		t.Fatalf("profiles in the backup: %+v", ps)
 	}
 }
