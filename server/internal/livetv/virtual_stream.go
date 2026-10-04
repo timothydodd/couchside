@@ -247,12 +247,12 @@ func (m *liveManager) virtualArgs(p db.PlayoutPiece, v pieceVideo, hwDecode bool
 	}
 	args = append(args, "-map", "0:v:0", "-map", audio, "-sn", "-dn")
 	args = append(args, vOut...)
-	args = append(args, "-force_key_frames", fmt.Sprintf("expr:gte(t,n_forced*%d)", liveSegDur))
+	args = append(args, transcode.ForceKeyFrames(liveSegDur)...)
 	args = append(args, transcode.AudioArgs()...)
-	return append(args, "-ar", "48000", "-output_ts_offset", secs(offsetMs), "-f", "hls", "-hls_time", strconv.Itoa(liveSegDur), "-hls_list_size", "0",
-		"-hls_playlist_type", "event", "-hls_flags", "temp_file+independent_segments",
-		"-hls_segment_filename", filepath.Join(dir, fmt.Sprintf("seg%d_%%d.ts", run)),
-		filepath.Join(dir, fmt.Sprintf("run%d.m3u8", run)))
+	args = append(args, "-ar", "48000", "-output_ts_offset", secs(offsetMs))
+	return append(args, transcode.HLSOutput{SegDur: liveSegDur, Start: -1, Event: true, Independent: true,
+		Segments: filepath.Join(dir, fmt.Sprintf("seg%d_%%d.ts", run)),
+		Playlist: filepath.Join(dir, fmt.Sprintf("run%d.m3u8", run))}.Args()...)
 }
 
 // runPiece runs one ffmpeg, merging its segments into the playlist as they appear.

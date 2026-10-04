@@ -539,7 +539,7 @@ func (s *Session) start(n int) error {
 		args = append(args, vCodec...)
 		// t is relative to this run's first frame, and runs always start on the
 		// grid, so "every SegDur seconds" lands on the playlist's boundaries.
-		args = append(args, "-force_key_frames", fmt.Sprintf("expr:gte(t,n_forced*%d)", SegDur))
+		args = append(args, ForceKeyFrames(SegDur)...)
 	}
 	if s.CopyAudio {
 		args = append(args, "-c:a", "copy")
@@ -549,10 +549,9 @@ func (s *Session) start(n int) error {
 		}
 		args = append(args, AudioArgs()...)
 	}
-	args = append(args, "-max_muxing_queue_size", "4096", "-avoid_negative_ts", "disabled",
-		"-f", "hls", "-hls_time", strconv.Itoa(SegDur), "-hls_segment_type", "mpegts",
-		"-hls_flags", "temp_file", "-hls_list_size", "0", "-start_number", strconv.Itoa(n),
-		"-hls_segment_filename", filepath.Join(s.dir, "seg%d.ts"), filepath.Join(s.dir, "ffmpeg.m3u8"))
+	args = append(args, "-max_muxing_queue_size", "4096", "-avoid_negative_ts", "disabled")
+	args = append(args, HLSOutput{SegDur: SegDur, Start: n,
+		Segments: filepath.Join(s.dir, "seg%d.ts"), Playlist: filepath.Join(s.dir, "ffmpeg.m3u8")}.Args()...)
 
 	cmd := exec.Command(s.enc.FFmpeg, args...)
 	stderr := &limitedWriter{max: stderrKeep}

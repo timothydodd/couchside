@@ -48,7 +48,7 @@ from the start.
 | B22 | Docs and site catch up                                 | Docs      | Reported  | Done |
 | B23 | Demo media script                                      | Hygiene   | Reported  | Done |
 | C1  | Server dead code and stale comments                    | Cleanup   |           | Done |
-| C2  | One builder for ffmpeg's HLS arguments                 | Cleanup   |           |      |
+| C2  | One builder for ffmpeg's HLS arguments                 | Cleanup   |           | Done |
 | C3  | Split `api/auth.go` and `api/handlers.go`              | Cleanup   |           |      |
 | C4  | One HLS hook for the three players                     | Cleanup   |           |      |
 | C5  | Web duplication, dead CSS, player colour tokens        | Cleanup   |           |      |
@@ -557,10 +557,11 @@ three packages' tests, so it stays in `db`.
 
 ## C2 · One builder for ffmpeg's HLS arguments
 
-`session.start`, `liveArgs` and `virtualArgs` each build the HLS output
-arguments, `-force_key_frames` and `temp_file` themselves. Move the shared
-part into `transcode`, so B7-style gaps (an option one path forgot) can't
-recur. Do this after B7 and B11.
+**Done.** `transcode.HLSOutput` builds the HLS output arguments and
+`transcode.ForceKeyFrames` the keyframe grid, for a file's session, live TV
+(tuner streams and recordings watched from the start) and a virtual
+channel's pieces. Argument tests cover the three shapes; the live TV test
+that runs real ffmpeg still passes.
 
 ## C3 · Split `api/auth.go` and `api/handlers.go`
 

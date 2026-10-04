@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -296,21 +295,17 @@ func (m *liveManager) liveArgs(input []string, spec Spec, hwDecode bool, dir str
 		args = append(args, "-c:v", "copy")
 	} else {
 		args = append(args, vOut...)
-		args = append(args, "-force_key_frames", fmt.Sprintf("expr:gte(t,n_forced*%d)", liveSegDur))
+		args = append(args, transcode.ForceKeyFrames(liveSegDur)...)
 	}
 	if spec.CopyAudio {
 		args = append(args, "-c:a", "copy")
 	} else {
 		args = append(args, transcode.AudioArgs()...)
 	}
-	args = append(args, "-f", "hls", "-hls_time", strconv.Itoa(liveSegDur))
-	if spec.window > 0 {
-		args = append(args, "-hls_list_size", strconv.Itoa(spec.window), "-hls_delete_threshold", "1",
-			"-hls_flags", "temp_file+independent_segments+delete_segments")
-	} else {
-		args = append(args, "-hls_list_size", "0", "-hls_playlist_type", "event", "-hls_flags", "temp_file+independent_segments")
-	}
-	return append(args, "-hls_segment_filename", filepath.Join(dir, "seg%d.ts"), filepath.Join(dir, "index.m3u8"))
+	// A tuner stream slides (spec.window); a recording watched from its
+	// start keeps everything.
+	return append(args, transcode.HLSOutput{SegDur: liveSegDur, Start: -1, Window: spec.window, Event: true, Independent: true,
+		Segments: filepath.Join(dir, "seg%d.ts"), Playlist: filepath.Join(dir, "index.m3u8")}.Args()...)
 }
 
 // launch starts ffmpeg and waits for its first playlist.
