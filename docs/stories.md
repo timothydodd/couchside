@@ -52,7 +52,7 @@ from the start.
 | C3  | Split `api/auth.go` and `api/handlers.go`              | Cleanup   |           | Done |
 | C4  | One HLS hook for the three players                     | Cleanup   |           | Done |
 | C5  | Web duplication, dead CSS, player colour tokens        | Cleanup   |           | Done |
-| C6  | Load pages on demand                                   | Cleanup   |           |      |
+| C6  | Load pages on demand                                   | Cleanup   |           | Done |
 | F1  | Next Up, and remove from Continue Watching             | Feature   | S         | Done |
 | F2  | Watchlist                                              | Feature   | S         | Done |
 | F3  | Database backup and restore                            | Feature   | S         | Done |
@@ -605,10 +605,11 @@ The large files named in the story are split when next touched.
 
 ## C6 · Load pages on demand
 
-`App.tsx` imports every page, so the 525 kB entry chunk carries the admin
-sections, Manage and all three players for every profile. `React.lazy` the
-players and the admin routes. Done when the entry chunk is under Vite's
-500 kB warning.
+**Done.** The three players, Live TV, Settings, Activity, Libraries and
+Manage load when first opened (`lib/lazyPage.tsx`, which shows a Reload
+message if a page's file can't be fetched). The entry file went from 525 kB
+to 339 kB (155 kB to 103 kB gzipped), under Vite's warning. Checked in a
+browser: Settings and the player open.
 
 ---
 
