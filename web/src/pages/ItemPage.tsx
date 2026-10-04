@@ -47,7 +47,14 @@ export default function ItemPage({ id }: { id: number }) {
   const { item, files, seasons } = data;
   const isSeries = item.kind === "series";
   const next = isSeries ? nextEpisode(seasons ?? []) : null;
-  const feature = featureFiles(files);
+  // A movie with more than one copy (4K and 1080p, two cuts): the profile's choice, or the biggest.
+  const versions = isSeries ? [] : files.filter((f) => f.role === "copy" && !f.problem);
+  const chosen = versions.find((f) => f.id === data.versionFileId);
+  const feature = featureFiles(files, chosen);
+  const setVersion = attempt("Couldn't change the version", async (fileId: number) => {
+    await api(`/api/items/${id}/version`, { method: "PUT", json: { fileId } });
+    await reload();
+  });
   const extras = files.filter((f) => f.role === "extra");
   // A split movie resumes in its first unfinished part, at a time on the whole movie's clock.
   const movieAt = feature.findIndex((f) => !f.watched);
@@ -133,6 +140,21 @@ export default function ItemPage({ id }: { id: number }) {
                     : "Play"}
               </Link>
             )}
+            {versions.length > 1 && feature.length === 1 && (
+              <select
+                className="field !py-2"
+                aria-label="Version to watch"
+                title="Which copy plays. Your choice is remembered for this title."
+                value={feature[0].id}
+                onChange={(e) => void setVersion(Number(e.target.value))}
+              >
+                {versions.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {versionLabel(f)}
+                  </option>
+                ))}
+              </select>
+            )}
             <button className="btn-ghost !py-2" aria-pressed={item.inWatchlist} onClick={() => void setListed(!item.inWatchlist)}>
               {item.inWatchlist ? <BookmarkCheck size={15} className="text-accent" /> : <Bookmark size={15} />}
               {item.inWatchlist ? "On my list" : "My list"}
@@ -176,11 +198,16 @@ export default function ItemPage({ id }: { id: number }) {
 }
 
 /** The files that make up a movie: its parts in order (the best copy of each), or its best copy. */
-function featureFiles(files: MediaFile[]): MediaFile[] {
+function featureFiles(files: MediaFile[], chosen?: MediaFile): MediaFile[] {
   const parts = files.filter((f) => f.role === "part" && !f.problem); // server order: part number, then biggest
   if (parts.length) return parts.filter((f, i) => i === 0 || parts[i - 1].partNo !== f.partNo);
-  const copy = files.find((f) => f.role === "copy");
+  const copy = chosen ?? files.find((f) => f.role === "copy");
   return copy ? [copy] : [];
+}
+
+/** A copy of a movie, as the version chooser names it: "4K · HEVC · Extended · 54 GB". */
+function versionLabel(f: MediaFile): string {
+  return [fmtResolution(f.width, f.height), f.videoCodec.toUpperCase(), f.edition, fmtBytes(f.size)].filter(Boolean).join(" · ");
 }
 
 /** First episode that isn't finished: resume it, or start the next one. */

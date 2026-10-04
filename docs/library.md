@@ -94,3 +94,12 @@ and the player shows a frame of the film as you move along the seek bar.
 Making them reads each file from start to end once (a few minutes for a large
 film on a network share), so it's off by default. The jobs run after
 everything else and are listed in Activity as Thumbnails.
+
+## Versions
+
+Keep more than one copy of a film (a 4K and a 1080p, or two cuts) and its
+page gets a version chooser next to Play; what you pick is remembered for
+your profile. A cut is recognised from the file name: Plex's
+`{edition-Final Cut}` tag, or a word after the year such as `Extended`,
+`Director's Cut`, `Unrated`, `Theatrical` or `IMAX`. Different cuts aren't
+counted as duplicates.

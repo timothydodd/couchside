@@ -59,7 +59,7 @@ from the start.
 | F4  | Seek-bar preview thumbnails                            | Feature   | M         | Done |
 | F5  | Skip intro and credits                                 | Feature   | M to L    | Done |
 | F6  | Per-profile libraries and rating limit                 | Feature   | M         | Done |
-| F7  | Versions and editions                                  | Feature   | S to M    |      |
+| F7  | Versions and editions                                  | Feature   | S to M    | Done |
 | F8  | Surround sound passthrough                             | Feature   | S to M    |      |
 | F9  | Sign in with OIDC                                      | Feature   | M         |      |
 | F10 | Two-factor sign-in                                     | Feature   | S to M    |      |
@@ -724,20 +724,19 @@ typechecked and built, not yet seen in a browser.
 
 ## F7 · Versions and editions
 
-**Why.** Plex "multiple cuts" about 1,450 votes; Jellyfin about 265. Extra
-`copy` files exist and `PlayInfo` picks the best, but the viewer can't choose
-4K or 1080p, and "extended", "unrated" and "remastered" are stripped as junk
-(`parse/parse.go:32`).
+**Done.** Tested, and seen in a browser with two cuts of one film.
 
-**Scope**
-- Parse an `edition` from `{edition-…}` and those words into `files.edition`
-  (re-parsed on scan like roles). Copies with different editions aren't
-  duplicates in the Manage view.
-- A version chooser on the title page (resolution, HDR, edition, size);
-  the choice is remembered per item and profile.
+- `parse.Edition`: Plex's `{edition-…}` tag (on the file or its folder), or
+  a cut named after the year (Extended, Director's Cut, Final Cut, Unrated,
+  Uncut, Theatrical, Remastered, Special Edition, IMAX). Stored in
+  `files.edition`, and kept up to date for unchanged files on each scan.
+- A film with more than one copy gets a version chooser beside Play
+  ("4K · HEVC · Extended · 54 GB"). The choice is remembered per profile and
+  title (`profile_versions`, `PUT /api/items/{id}/version`).
+- Copies that are different cuts aren't duplicates in the Manage view.
 
-**Done when** a film with a 4K and a 1080p copy, or two cuts, lets the viewer
-pick.
+**Not done:** HDR isn't in the chooser's label (it isn't stored for files),
+and episodes with two copies still play the larger.
 
 ## F8 · Surround sound passthrough
 

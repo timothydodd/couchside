@@ -57,7 +57,13 @@ func (s *Server) getItem(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	out := map[string]any{"item": item, "files": files, "cast": cast, "crew": crew}
+	// The copy this profile chose to watch (0 = none chosen: the best one).
+	version, err := s.db.PreferredVersion(ctx, id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	out := map[string]any{"item": item, "files": files, "cast": cast, "crew": crew, "versionFileId": version}
 	if item.Kind == "series" {
 		eps, err := s.db.SeriesEpisodes(ctx, id)
 		if err != nil {
@@ -75,6 +81,32 @@ func (s *Server) getItem(w http.ResponseWriter, r *http.Request) {
 		out["files"] = []db.File{}
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// setVersion remembers which copy of a title this profile watches.
+func (s *Server) setVersion(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	var in struct {
+		FileID int64 `json:"fileId"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, err)
+		return
+	}
+	// Through File, so a copy the profile may not see can't be chosen.
+	if f, err := s.db.File(r.Context(), in.FileID); err != nil || f.MediaItemID != id {
+		writeErr(w, db.ErrNotFound)
+		return
+	}
+	if err := s.db.SetPreferredVersion(r.Context(), id, in.FileID); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 var reImdb = regexp.MustCompile(`tt\d{5,10}`)

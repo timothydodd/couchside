@@ -58,6 +58,8 @@ export interface MediaFile {
   partNo: number;
   extraTitle: string;
   rolePinned: boolean;
+  /** Which cut ("Extended"); "" for the ordinary one. */
+  edition: string;
 }
 
 export interface EpisodeRow {
@@ -82,6 +84,8 @@ export interface ItemDetail {
   seasons?: { season: number; episodes: EpisodeRow[] }[];
   cast: CreditRow[];
   crew: CreditRow[];
+  /** The copy of a movie this profile chose to watch; 0 = none chosen. */
+  versionFileId: number;
 }
 
 /** One person in a title's credits. role is the character, or the job(s) for crew. */
@@ -563,6 +567,8 @@ export interface LibraryMatch {
 
 /** GET /api/libraries/{id}/manage: one movie or show with its file facts. */
 export interface ManageRow {
+  /** Different cuts among a movie's copies. */
+  editions: number;
   id: number;
   kind: ItemKind;
   title: string;

@@ -24,7 +24,8 @@ export const codecLabel = (c: string) => CODECS[c] ?? c.toUpperCase();
  * Extra copies: more files than movies/episodes they cover. A movie's parts
  * together are one copy, and its extras (bonus material) aren't copies at all.
  */
-export const extraFiles = (r: { kind: string; fileCount: number; episodeCount: number; parts: number; extras: number }) =>
+export const extraFiles = (r: { kind: string; fileCount: number; episodeCount: number; parts: number; extras: number; editions?: number }) =>
   r.kind === "series"
     ? Math.max(0, r.fileCount - Math.max(1, r.episodeCount))
-    : Math.max(0, r.fileCount - r.extras - r.parts - (r.parts > 0 ? 0 : 1));
+    : // Different cuts (theatrical and extended) are versions, not duplicates.
+      Math.max(0, r.fileCount - r.extras - r.parts - (r.parts > 0 ? 0 : Math.max(1, r.editions ?? 1)));

@@ -31,13 +31,14 @@ type File struct {
 	PartNo         int      `json:"partNo"`
 	ExtraTitle     string   `json:"extraTitle"`
 	RolePinned     bool     `json:"rolePinned"`
+	Edition        string   `json:"edition"` // which cut ("Extended"); "" = the ordinary one
 }
 
 const fileCols = `f.id, f.library_id, f.media_item_id, f.episode_id, f.path, f.size, f.mtime, f.duration_sec,
 	f.container, f.video_codec, f.audio_codec, f.width, f.height, f.audio_tracks, f.subtitle_tracks,
 	f.has_still, f.added_at, COALESCE(w.position_sec, 0), COALESCE(w.watched, 0),
 	EXISTS (SELECT 1 FROM optimized o WHERE o.file_id = f.id), f.problem,
-	f.role, f.part_no, f.extra_title, f.role_pinned`
+	f.role, f.part_no, f.extra_title, f.role_pinned, f.edition`
 
 // fileFrom selects files the profile in ctx may see, with its watch state.
 func fileFrom(ctx context.Context) string {
@@ -49,7 +50,7 @@ func scanFile(r interface{ Scan(...any) error }) (File, error) {
 	err := r.Scan(&f.ID, &f.LibraryID, &f.MediaItemID, &f.EpisodeID, &f.Path, &f.Size, &f.Mtime, &f.DurationSec,
 		&f.Container, &f.VideoCodec, &f.AudioCodec, &f.Width, &f.Height, &f.AudioTracks, &f.SubtitleTracks,
 		&f.HasStill, &f.AddedAt, &f.PositionSec, &f.Watched, &f.Optimized, &f.Problem,
-		&f.Role, &f.PartNo, &f.ExtraTitle, &f.RolePinned)
+		&f.Role, &f.PartNo, &f.ExtraTitle, &f.RolePinned, &f.Edition)
 	return f, err
 }
 
@@ -130,16 +131,17 @@ type FileStamp struct {
 	ExtraTitle  string
 	RolePinned  bool
 	Problem     string // unreadable | no-video | ""
+	Edition     string
 }
 
 func (d *DB) FileStamp(ctx context.Context, path string) (*FileStamp, error) {
 	var s FileStamp
 	err := d.sql.QueryRowContext(ctx, `SELECT f.id, f.size, f.mtime, m.parsed_title, m.parsed_year,
 		COALESCE(e.season, 0), COALESCE(e.episode, 0),
-		f.role, f.part_no, f.extra_title, f.role_pinned, f.problem
+		f.role, f.part_no, f.extra_title, f.role_pinned, f.problem, f.edition
 		FROM files f JOIN media_items m ON m.id = f.media_item_id LEFT JOIN episodes e ON e.id = f.episode_id
 		WHERE f.path = ?`, path).Scan(&s.ID, &s.Size, &s.Mtime, &s.ParsedTitle, &s.ParsedYear, &s.Season, &s.Episode,
-		&s.Role, &s.PartNo, &s.ExtraTitle, &s.RolePinned, &s.Problem)
+		&s.Role, &s.PartNo, &s.ExtraTitle, &s.RolePinned, &s.Problem, &s.Edition)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -167,6 +169,29 @@ func (d *DB) UpsertFile(ctx context.Context, f File, seen int64) (int64, error) 
 		f.LibraryID, f.MediaItemID, f.EpisodeID, f.Path, f.Size, f.Mtime, f.DurationSec, f.Container, f.VideoCodec,
 		f.AudioCodec, f.Width, f.Height, f.AudioTracks, f.SubtitleTracks, f.Problem, seen).Scan(&id)
 	return id, err
+}
+
+// SetFileEdition records which cut of a film a file is.
+func (d *DB) SetFileEdition(ctx context.Context, id int64, edition string) error {
+	_, err := d.sql.ExecContext(ctx, `UPDATE files SET edition = ? WHERE id = ?`, edition, id)
+	return err
+}
+
+// PreferredVersion is the copy of a title the profile in ctx chose to watch
+// (0 when it hasn't chosen, or that file has gone).
+func (d *DB) PreferredVersion(ctx context.Context, itemID int64) (int64, error) {
+	var id int64
+	err := d.sql.QueryRowContext(ctx, `SELECT file_id FROM profile_versions WHERE profile_id = ? AND item_id = ?`, ProfileID(ctx), itemID).Scan(&id)
+	return id, notFoundOK(err)
+}
+
+// SetPreferredVersion remembers which copy of a title the profile in ctx
+// watches. The file must be one of the title's.
+func (d *DB) SetPreferredVersion(ctx context.Context, itemID, fileID int64) error {
+	res, err := d.sql.ExecContext(ctx, `INSERT INTO profile_versions (profile_id, item_id, file_id)
+		SELECT ?, f.media_item_id, f.id FROM files f WHERE f.id = ? AND f.media_item_id = ?
+		ON CONFLICT (profile_id, item_id) DO UPDATE SET file_id = excluded.file_id`, ProfileID(ctx), fileID, itemID)
+	return affected(res, err)
 }
 
 func (d *DB) SetFileStill(ctx context.Context, id int64, has bool) error {

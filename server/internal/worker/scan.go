@@ -304,7 +304,15 @@ func relPath(lib db.Library, path string) string {
 // refreshRole brings an unchanged movie file's guessed role (part, extra) up
 // to date with the parser, so detection reaches files indexed before it.
 func (w *Worker) refreshRole(ctx context.Context, lib db.Library, path string, st *db.FileStamp) error {
-	if lib.Kind == "tv" || st.RolePinned {
+	if lib.Kind == "tv" {
+		return nil
+	}
+	if e := parse.Edition(path); e != st.Edition {
+		if err := w.db.SetFileEdition(ctx, st.ID, e); err != nil {
+			return err
+		}
+	}
+	if st.RolePinned {
 		return nil
 	}
 	r := parse.MovieRoleIn(relPath(lib, path), st.ParsedTitle, videosIn(lib))
@@ -387,6 +395,9 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 	}
 	if lib.Kind != "tv" {
 		if err := w.db.SetDetectedRole(ctx, fileID, role.Kind, role.Part, role.Extra); err != nil {
+			return false, err
+		}
+		if err := w.db.SetFileEdition(ctx, fileID, parse.Edition(path)); err != nil {
 			return false, err
 		}
 	}

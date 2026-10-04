@@ -198,3 +198,56 @@ func TestBackupBeforeUpgrade(t *testing.T) {
 		t.Fatalf("profiles in the backup: %+v", ps)
 	}
 }
+
+// A profile's chosen copy of a title is remembered, per profile, and only a
+// file of that title can be chosen.
+func TestPreferredVersion(t *testing.T) {
+	d := openTest(t)
+	bg := context.Background()
+	me, _ := d.SetupAdmin(bg, "Me", "hash")
+	other, _ := d.CreateAccount(bg, "Other", "accent", "user", false, "h", false)
+	mine, theirs := WithProfile(bg, me.ID), WithProfile(bg, other.ID)
+	lib, _ := d.CreateLibrary(bg, "Films", "/films", "movies")
+	aliens, _, _ := d.EnsureItem(bg, lib, "movie", "Aliens", 1986)
+	heat, _, _ := d.EnsureItem(bg, lib, "movie", "Heat", 1995)
+	theatrical, _ := d.UpsertFile(bg, File{LibraryID: lib, MediaItemID: aliens, Path: "/films/Aliens (1986).mkv", Size: 2, Mtime: 1}, 1)
+	extended, _ := d.UpsertFile(bg, File{LibraryID: lib, MediaItemID: aliens, Path: "/films/Aliens (1986) Extended.mkv", Size: 1, Mtime: 1}, 1)
+	heatFile, _ := d.UpsertFile(bg, File{LibraryID: lib, MediaItemID: heat, Path: "/films/Heat (1995).mkv", Size: 1, Mtime: 1}, 1)
+	if err := d.SetFileEdition(bg, extended, "Extended"); err != nil {
+		t.Fatal(err)
+	}
+	if v, err := d.PreferredVersion(mine, aliens); err != nil || v != 0 {
+		t.Fatalf("before choosing: %d %v", v, err)
+	}
+	if err := d.SetPreferredVersion(mine, aliens, extended); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetPreferredVersion(mine, aliens, heatFile); err == nil {
+		t.Fatal("chose another title's file as a version")
+	}
+	if v, _ := d.PreferredVersion(mine, aliens); v != extended {
+		t.Fatalf("my version = %d, want %d", v, extended)
+	}
+	if v, _ := d.PreferredVersion(theirs, aliens); v != 0 {
+		t.Fatalf("another profile's version = %d", v)
+	}
+	if err := d.SetPreferredVersion(mine, aliens, theatrical); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := d.PreferredVersion(mine, aliens); v != theatrical {
+		t.Fatalf("after changing: %d", v)
+	}
+	if f, _ := d.File(bg, extended); f.Edition != "Extended" {
+		t.Fatalf("edition = %q", f.Edition)
+	}
+	// Two cuts are one "edition" each: the Manage view doesn't call them duplicates.
+	rows, err := d.ManageRows(bg, lib)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		if r.ID == aliens && (r.Editions != 2 || r.FileCount != 2) {
+			t.Fatalf("manage row: %+v", r)
+		}
+	}
+}

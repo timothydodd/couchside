@@ -29,6 +29,7 @@ type ManageRow struct {
 	SameImdb       int    `json:"sameImdb"`     // other items in the library matched to the same title
 	Parts          int    `json:"parts"`        // files that are parts of a split movie
 	Extras         int    `json:"extras"`       // bonus-material files
+	Editions       int    `json:"editions"`     // different cuts among a movie's copies (1 when they're all the same)
 }
 
 // ManageRows lists a library's items with the file facts the Manage view
@@ -45,7 +46,8 @@ func (d *DB) ManageRows(ctx context.Context, libraryID int64) ([]ManageRow, erro
 		(SELECT COUNT(*) FROM media_items m2 WHERE m2.library_id = m.library_id AND m2.id <> m.id
 		   AND m.imdb_id <> '' AND m2.imdb_id = m.imdb_id),
 		(SELECT COUNT(*) FROM files f WHERE f.media_item_id = m.id AND f.role = 'part'),
-		(SELECT COUNT(*) FROM files f WHERE f.media_item_id = m.id AND f.role = 'extra')
+		(SELECT COUNT(*) FROM files f WHERE f.media_item_id = m.id AND f.role = 'extra'),
+		(SELECT COUNT(DISTINCT f.edition) FROM files f WHERE f.media_item_id = m.id AND f.role = 'copy')
 		FROM media_items m
 		LEFT JOIN files best ON best.id = (SELECT f.id FROM files f WHERE f.media_item_id = m.id AND f.role <> 'extra'
 		  ORDER BY COALESCE(f.height, 0) DESC, f.size DESC LIMIT 1)
@@ -59,7 +61,7 @@ func (d *DB) ManageRows(ctx context.Context, libraryID int64) ([]ManageRow, erro
 		var r ManageRow
 		if err := rows.Scan(&r.ID, &r.Kind, &r.Title, &r.Year, &r.ParsedTitle, &r.ParsedYear, &r.MatchStatus, &r.ImdbID,
 			&r.HasPoster, &r.CustomPoster, &r.CustomBackdrop, &r.UpdatedAt, &r.AddedAt, &r.FileCount, &r.EpisodeCount,
-			&r.Size, &r.MaxHeight, &r.MinHeight, &r.VideoCodec, &r.SameImdb, &r.Parts, &r.Extras); err != nil {
+			&r.Size, &r.MaxHeight, &r.MinHeight, &r.VideoCodec, &r.SameImdb, &r.Parts, &r.Extras, &r.Editions); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
