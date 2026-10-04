@@ -1,4 +1,5 @@
 import { useRef, useState, type PointerEvent } from "react";
+import type { PreviewFrame } from "../../lib/trickplay";
 import type { Segment } from "../../lib/types";
 
 const SLIDE = 10; // px a touch must move along the bar before it scrubs
@@ -25,6 +26,7 @@ export default function SeekBar({
   breaks,
   marks,
   label,
+  preview,
   onSeek,
   onBreakMenu,
 }: {
@@ -37,6 +39,8 @@ export default function SeekBar({
   breaks?: Segment[];
   marks?: number[];
   label: (t: number) => string;
+  /** A thumbnail of the video at bar time t, shown over the pointer. */
+  preview?: (t: number) => PreviewFrame | null;
   onSeek: (t: number) => void;
   /** Right-click (or long-press) on a break: x is the pointer's offset in the bar, in px. */
   onBreakMenu?: (b: Segment, x: number) => void;
@@ -57,6 +61,7 @@ export default function SeekBar({
   };
 
   const shown = drag ?? value;
+  const thumb = hover !== null ? preview?.(hover) : null;
   return (
     <div
       ref={ref}
@@ -134,6 +139,20 @@ export default function SeekBar({
         className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 scale-0 rounded-full bg-player-fg shadow transition-transform group-hover/seek:scale-100 pointer-coarse:scale-100"
         style={{ left: pct(shown), transform: drag !== null ? "translate(-50%,-50%) scale(1)" : undefined }}
       />
+      {hover !== null && thumb && (
+        // Kept inside the bar's ends, so it isn't cut off at the screen's edge.
+        <div
+          className="pointer-events-none absolute bottom-full mb-9 -translate-x-1/2 overflow-hidden rounded border border-player-fg/25 bg-player-bg shadow-lg"
+          style={{
+            left: `clamp(${thumb.width / 2}px, ${pct(hover)}, calc(100% - ${thumb.width / 2}px))`,
+            width: thumb.width,
+            height: thumb.height,
+            backgroundImage: `url(${thumb.url})`,
+            backgroundSize: thumb.size,
+            backgroundPosition: thumb.position,
+          }}
+        />
+      )}
       {hover !== null && (
         <div className="pointer-events-none absolute -top-8 -translate-x-1/2 rounded bg-player-bg/85 px-2 py-0.5 text-xs tabular-nums text-player-fg" style={{ left: pct(hover) }}>
           {label(hover)}

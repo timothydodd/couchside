@@ -36,11 +36,12 @@ func (d *DB) Enqueue(ctx context.Context, kind string, refID int64, label string
 
 // encodeKinds are the job kinds handled by the separate encode pool, so
 // hour-long encodes and commercial detection never block scans and metadata.
-const encodeKinds = "'optimize', 'commercials'"
+const encodeKinds = "'optimize', 'commercials', 'trickplay'"
 
 // ClaimJob atomically moves the oldest queued job to running. Scans go first
 // so new files are discovered before we spend time on thumbnails, and quick
-// commercial detection goes ahead of long encodes. encode
+// commercial detection goes ahead of long encodes, with preview thumbnails
+// (nobody is waiting for those) last. encode
 // selects between the encode pool and the general pool.
 func (d *DB) ClaimJob(ctx context.Context, encode bool) (*Job, error) {
 	cond := "kind NOT IN (" + encodeKinds + ")"
@@ -50,7 +51,7 @@ func (d *DB) ClaimJob(ctx context.Context, encode bool) (*Job, error) {
 	j, err := scanJob(d.sql.QueryRowContext(ctx, `UPDATE jobs SET status = 'running', attempts = attempts + 1,
 		started_at = unixepoch(), error = '', progress = NULL, result = ''
 		WHERE id = (SELECT id FROM jobs WHERE status = 'queued' AND `+cond+`
-		  ORDER BY CASE kind WHEN 'scan' THEN 0 WHEN 'match' THEN 1 WHEN 'artwork' THEN 2 WHEN 'commercials' THEN 3 ELSE 4 END, id LIMIT 1)
+		  ORDER BY CASE kind WHEN 'scan' THEN 0 WHEN 'match' THEN 1 WHEN 'artwork' THEN 2 WHEN 'commercials' THEN 3 WHEN 'trickplay' THEN 5 ELSE 4 END, id LIMIT 1)
 		RETURNING `+jobCols))
 	if err == sql.ErrNoRows {
 		return nil, nil

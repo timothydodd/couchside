@@ -408,6 +408,12 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 			return false, err
 		}
 	}
+	// A new or changed file in a library with preview thumbnails on.
+	if lib.Trickplay && f.Problem == "" {
+		if err := w.Enqueue(ctx, KindTrickplay, fileID, "Preview thumbnails "+filepath.Base(path)); err != nil {
+			return false, err
+		}
+	}
 	return true, nil
 }
 

@@ -13,6 +13,7 @@ const KINDS: Record<string, { label: string; Icon: LucideIcon }> = {
   still: { label: "Thumbnail", Icon: Image },
   optimize: { label: "Encode", Icon: Cpu },
   commercials: { label: "Commercials", Icon: Scissors },
+  trickplay: { label: "Thumbnails", Icon: Image },
 };
 
 const STATUS: Record<Job["status"], { label: string; tone: Tone }> = {

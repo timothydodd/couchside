@@ -19,15 +19,17 @@ type Library struct {
 	CreatedAt  int64  `json:"createdAt"`
 	ItemCount  int    `json:"itemCount"`
 	FileCount  int    `json:"fileCount"`
+	// Trickplay: make seek-bar preview thumbnails for this library's files.
+	Trickplay bool `json:"trickplay"`
 }
 
 const libraryCols = `l.id, l.name, l.path, l.kind, l.last_scan_at, l.created_at,
 	(SELECT COUNT(*) FROM media_items m WHERE m.library_id = l.id),
-	(SELECT COUNT(*) FROM files f WHERE f.library_id = l.id)`
+	(SELECT COUNT(*) FROM files f WHERE f.library_id = l.id), l.trickplay`
 
 func scanLibrary(r interface{ Scan(...any) error }) (Library, error) {
 	var l Library
-	err := r.Scan(&l.ID, &l.Name, &l.Path, &l.Kind, &l.LastScanAt, &l.CreatedAt, &l.ItemCount, &l.FileCount)
+	err := r.Scan(&l.ID, &l.Name, &l.Path, &l.Kind, &l.LastScanAt, &l.CreatedAt, &l.ItemCount, &l.FileCount, &l.Trickplay)
 	return l, err
 }
 
@@ -103,4 +105,10 @@ func (d *DB) DeleteLibrary(ctx context.Context, id int64) error {
 func (d *DB) MarkLibraryScanned(ctx context.Context, id, at int64) error {
 	_, err := d.sql.ExecContext(ctx, `UPDATE libraries SET last_scan_at = ? WHERE id = ?`, at, id)
 	return err
+}
+
+// SetLibraryTrickplay turns preview thumbnails on or off for a library.
+func (d *DB) SetLibraryTrickplay(ctx context.Context, id int64, on bool) error {
+	res, err := d.sql.ExecContext(ctx, `UPDATE libraries SET trickplay = ? WHERE id = ?`, on, id)
+	return affected(res, err)
 }

@@ -73,7 +73,11 @@ func (s *Server) updateLibrary(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	var in struct{ Name, Path string }
+	var in struct {
+		Name, Path string
+		// Trickplay turns seek-bar preview thumbnails on or off; left out, it stays.
+		Trickplay *bool
+	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, err)
 		return
@@ -108,6 +112,19 @@ func (s *Server) updateLibrary(w http.ResponseWriter, r *http.Request) {
 		if err := s.worker.Enqueue(ctx, worker.KindScan, id, "Scan "+in.Name); err != nil {
 			writeErr(w, err)
 			return
+		}
+	}
+	if in.Trickplay != nil && *in.Trickplay != old.Trickplay {
+		if err := s.db.SetLibraryTrickplay(ctx, id, *in.Trickplay); err != nil {
+			writeErr(w, err)
+			return
+		}
+		// On: make them for the files already there. Off leaves what's made.
+		if *in.Trickplay {
+			if _, err := s.worker.QueueTrickplay(ctx, id); err != nil {
+				writeErr(w, err)
+				return
+			}
 		}
 	}
 	lib, err := s.db.Library(ctx, id)

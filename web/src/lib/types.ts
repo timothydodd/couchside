@@ -322,6 +322,8 @@ export interface Home {
 }
 
 export interface Library {
+  /** Seek-bar preview thumbnails are made for this library's files. */
+  trickplay: boolean;
   id: number;
   name: string;
   path: string;

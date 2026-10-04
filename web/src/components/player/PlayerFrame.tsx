@@ -7,6 +7,7 @@ import SettingsMenu, { type SettingSection } from "./SettingsMenu";
 import { useMediaState } from "./useMediaState";
 import { useBreakSkip } from "./useBreakSkip";
 import { fmtClock, fmtTime } from "../../lib/format";
+import type { PreviewFrame } from "../../lib/trickplay";
 import type { BreakMode, Segment } from "../../lib/types";
 
 /**
@@ -49,6 +50,8 @@ export interface PlayerFrameProps {
   settings: SettingSection[];
   /** Commercial breaks to mark and skip (vod only). */
   breaks?: Segment[];
+  /** A thumbnail of this file at time t (seconds), for the seek bar (vod only). */
+  preview?: (t: number) => PreviewFrame | null;
   breakMode?: BreakMode;
   /** Offered on a right-click on a break in the seek bar; omitted, there's no menu. */
   onNotCommercial?: (b: Segment) => void;
@@ -424,6 +427,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           breaks={off ? brk.breaks?.map((b) => ({ start: b.start + off, end: b.end + off })) : brk.breaks}
           marks={parts?.starts}
           label={label}
+          preview={p.preview ? (t) => p.preview!(t - off) : undefined}
           onSeek={(t) => {
             brk.allow(t - off);
             seekBar(t);

@@ -76,6 +76,11 @@ func (d *DB) File(ctx context.Context, id int64) (File, error) {
 // quality) first, then extras by title.
 const fileRoleOrder = ` ORDER BY CASE f.role WHEN 'part' THEN 0 WHEN 'copy' THEN 1 ELSE 2 END, f.part_no, f.size DESC, f.extra_title`
 
+// LibraryFiles returns every file in a library.
+func (d *DB) LibraryFiles(ctx context.Context, libraryID int64) ([]File, error) {
+	return d.queryFiles(ctx, `WHERE f.library_id = ? ORDER BY f.id`, libraryID)
+}
+
 // ItemFiles returns all of an item's files, in fileRoleOrder.
 func (d *DB) ItemFiles(ctx context.Context, itemID int64) ([]File, error) {
 	return d.queryFiles(ctx, `WHERE f.media_item_id = ?`+fileRoleOrder, itemID)

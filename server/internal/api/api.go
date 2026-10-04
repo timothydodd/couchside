@@ -222,6 +222,8 @@ func (s *Server) userRoutes(r chi.Router) {
 	r.Post("/files/{id}/hls", s.createHLS)
 	r.Get("/files/{id}/streams", s.fileStreams)
 	r.Get("/files/{id}/commercials", s.commercials)
+	r.Get("/files/{id}/trickplay", s.trickplay)
+	r.Get("/files/{id}/trickplay/{name}", s.trickplayFile)
 	r.Post("/files/{id}/commercials", s.findCommercials)
 	r.Get("/hls/{sid}/index.m3u8", s.hlsPlaylist)
 	r.Get("/hls/{sid}/{seg}", s.hlsSegment)

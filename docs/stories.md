@@ -56,7 +56,7 @@ from the start.
 | F1  | Next Up, and remove from Continue Watching             | Feature   | S         | Done |
 | F2  | Watchlist                                              | Feature   | S         | Done |
 | F3  | Database backup and restore                            | Feature   | S         | Done |
-| F4  | Seek-bar preview thumbnails                            | Feature   | M         |      |
+| F4  | Seek-bar preview thumbnails                            | Feature   | M         | Done |
 | F5  | Skip intro and credits                                 | Feature   | M to L    |      |
 | F6  | Per-profile libraries and rating limit                 | Feature   | M         |      |
 | F7  | Versions and editions                                  | Feature   | S to M    |      |
@@ -663,20 +663,19 @@ browser. The restore command hasn't been run against a real data folder.
 
 ## F4 · Seek-bar preview thumbnails
 
-**Why.** Standard in Plex, Emby and Jellyfin (judgement).
+**Done.** Tested with real ffmpeg, and seen working in a browser. The Roku's
+use of the BIF file is in R18.
 
-**Scope**
-- A `trickplay` job in the encode pool, lowest priority: one frame every 10s
-  at 320 wide, tiled into sprite sheets, with an index, in
-  `$CACHE/files/<id>/trick/`. Off by default; on per library.
-- It reads the whole file, which is slow over SMB (the subtitle work measured
-  7 minutes for 30 GB): run one at a time, use GPU decode where there is one,
-  and drop the result when the file changes, as optimized copies do.
-- `GET /api/files/{id}/trickplay` (index) and the sheets. `SeekBar` already
-  tracks hover time; draw the frame above it, and while scrubbing on touch.
-- Roku: write a BIF file as well, which its Video node shows natively.
-
-**Done when** hovering the seek bar shows the frame at that time.
+- A `trickplay` job in the encode pool, after everything else there: one
+  frame every 10 seconds at 320 wide, decoded from keyframes only, tiled 10
+  by 10 into JPEG sheets, with an `index.json` and an `index.bif`, in
+  `$CACHE/files/<id>/trick/`. Thumbnails made from a file that has since
+  changed aren't used.
+- Off by default; a checkbox on a library (Libraries → Edit) turns it on,
+  queues the files already there, and the scan queues new ones.
+- `GET /api/files/{id}/trickplay` (the index) and `/trickplay/{n}.jpg` or
+  `/trickplay/index.bif`.
+- The web player shows the frame above the seek bar's time label.
 
 ## F5 · Skip intro and credits
 

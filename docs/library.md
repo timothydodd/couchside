@@ -86,3 +86,11 @@ single other copy Part 1.
 - Title pages with seasons and episodes, cast (click someone to see everything
   of theirs in your library), parts and extras.
 - An Activity page for background jobs and streams, with retry and cancel.
+
+## Preview thumbnails
+
+Tick **Preview thumbnails on the seek bar** when adding or editing a library
+and the player shows a frame of the film as you move along the seek bar.
+Making them reads each file from start to end once (a few minutes for a large
+film on a network share), so it's off by default. The jobs run after
+everything else and are listed in Activity as Thumbnails.

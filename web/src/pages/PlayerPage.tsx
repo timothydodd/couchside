@@ -7,6 +7,7 @@ import { InfoRows, type SettingSection } from "../components/player/SettingsMenu
 import { ApiError, api, useApi } from "../lib/api";
 import { fmtClock, fmtResolution } from "../lib/format";
 import { hlsEngine } from "../lib/hls";
+import { previewFrame, type TrickIndex } from "../lib/trickplay";
 import { chooseSource, fmtMbps, hlsCopyCaps, presetById, presetSource, presetsFor, sourceKey, stepDown, type Quality, type Source } from "../lib/playback";
 import { audioLabel, subtitleDetail, subtitleLabel, type AudioTrack, type SubtitleTrack } from "../lib/tracks";
 import { PROBLEM_TEXT, type BreakMode, type Commercials, type HlsSession, type PlayInfo, type Segment } from "../lib/types";
@@ -39,6 +40,8 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   // useApi hands back the previous file's info for a render after fileId changes.
   const info = loaded?.fileId === fileId ? loaded : undefined;
   const { data: streams, error: streamsError } = useApi<{ audio: AudioTrack[]; subtitles: SubtitleTrack[] }>(`/api/files/${fileId}/streams`);
+  // Seek-bar thumbnails, when this file's library makes them (404 otherwise).
+  const { data: trick } = useApi<TrickIndex>(`/api/files/${fileId}/trickplay`);
   const [breakPoll, setBreakPoll] = useState(false);
   const { data: comm, reload: reloadComm } = useApi<Commercials>(`/api/files/${fileId}/commercials`, { pollMs: breakPoll ? 5000 : undefined });
   const prefs = usePrefs();
@@ -459,6 +462,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
       }
       settings={settings}
       breaks={comm?.status === "done" ? comm.segments : undefined}
+      preview={trick ? (t) => (info?.durationSec && t > info.durationSec ? null : previewFrame(fileId, trick, t)) : undefined}
       breakMode={breakMode}
       onBack={exit}
       loading={errorText ? null : loading}
