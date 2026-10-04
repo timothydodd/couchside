@@ -49,7 +49,7 @@ func (s *Server) deviceStart(w http.ResponseWriter, r *http.Request) {
 		retryLater(w, wait)
 		return
 	}
-	s.auth.picks.Fail(ip) // every code counts, like every passwordless pick
+	s.auth.picks.Fail(ip)                                 // every code counts, like every passwordless pick
 	secret, user := auth.NewToken(), auth.SetupCode()[:9] // "ABCD-EFGH"
 	now := time.Now()
 	s.device.mu.Lock()
