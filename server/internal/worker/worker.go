@@ -182,6 +182,10 @@ func (w *Worker) handle(ctx context.Context, j *db.Job) error {
 		return w.optimize(ctx, j.ID, j.RefID)
 	case KindCommercials:
 		return w.commercials(ctx, j.ID, j.RefID)
+	case KindTrickplay:
+		return w.trickplay(ctx, j.RefID)
+	case KindIntros:
+		return w.intros(ctx, j.ID, j.RefID)
 	}
 	return fmt.Errorf("unknown job kind %q", j.Kind)
 }

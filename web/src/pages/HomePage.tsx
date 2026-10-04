@@ -2,14 +2,19 @@ import { FolderPlus, Info, Play, Sofa } from "lucide-react";
 import Link from "../components/Link";
 import { ContinueCard, PosterRow, Row } from "../components/Rows";
 import { EmptyState, ErrorNote, Spinner, StatTile } from "../components/ui";
-import { backdropUrl, useApi } from "../lib/api";
+import { api, backdropUrl, useApi } from "../lib/api";
+import { attempt } from "../lib/notices";
 import type { Home, ItemSummary } from "../lib/types";
 import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
 
 export default function HomePage() {
-  const { data, error, loading } = useApi<Home>("/api/home", { pollMs: 15000 });
+  const { data, error, loading, reload } = useApi<Home>("/api/home", { pollMs: 15000 });
+  const remove = attempt("Couldn't remove it", async (itemId: number) => {
+    await api(`/api/home/continue/${itemId}`, { method: "DELETE" });
+    await reload();
+  });
   const status = useStatus((s) => s.status);
   const go = useRouter((s) => s.go);
   const admin = useIsAdmin();
@@ -65,10 +70,11 @@ export default function HomePage() {
       {!!data?.continueWatching.length && (
         <Row title="Continue watching">
           {data.continueWatching.map((p) => (
-            <ContinueCard key={p.fileId} p={p} />
+            <ContinueCard key={p.fileId} p={p} onRemove={() => void remove(p.itemId)} />
           ))}
         </Row>
       )}
+      <PosterRow title="My list" items={data?.watchlist ?? []} />
       <PosterRow
         title="Recently added movies"
         items={data?.recentMovies ?? []}

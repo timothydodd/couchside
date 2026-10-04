@@ -17,6 +17,8 @@ export interface ItemSummary {
   updatedAt: number;
   fileCount: number;
   watchedCount: number;
+  /** On this profile's "My list". */
+  inWatchlist: boolean;
   lastAddedAt: number;
 }
 
@@ -56,6 +58,8 @@ export interface MediaFile {
   partNo: number;
   extraTitle: string;
   rolePinned: boolean;
+  /** Which cut ("Extended"); "" for the ordinary one. */
+  edition: string;
 }
 
 export interface EpisodeRow {
@@ -80,6 +84,8 @@ export interface ItemDetail {
   seasons?: { season: number; episodes: EpisodeRow[] }[];
   cast: CreditRow[];
   crew: CreditRow[];
+  /** The copy of a movie this profile chose to watch; 0 = none chosen. */
+  versionFileId: number;
 }
 
 /** One person in a title's credits. role is the character, or the job(s) for crew. */
@@ -115,6 +121,8 @@ export interface PlayInfo {
   hasBackdrop: boolean;
   updatedAt: number;
   nextFileId: number | null;
+  /** On Home because the episode before it was finished, not because this one was started. */
+  nextUp?: boolean;
   progress: number;
   container: string;
   videoCodec: string;
@@ -153,6 +161,14 @@ export interface Commercials {
 /** How the player treats commercial breaks. */
 export type BreakMode = "auto" | "button" | "off";
 
+/** A file's intro or end credits (GET /api/files/{id}/segments). */
+export interface MarkedSegment {
+  kind: "intro" | "credits";
+  start: number;
+  end: number;
+  source: "chapters" | "detected" | "manual";
+}
+
 /** Avatar colours, named after the theme tokens they use. */
 export type ProfileColor = "accent" | "pink" | "cyan" | "secondary" | "good" | "warning" | "critical";
 
@@ -160,12 +176,21 @@ export type ProfileColor = "accent" | "pink" | "cyan" | "secondary" | "good" | "
 export interface Prefs {
   autoplayNext?: boolean; // default true
   commercials?: BreakMode; // default "auto"
+  intros?: BreakMode; // skip intros: default "button"
   subtitleLang?: string; // turn on text subtitles in this language; "" = only forced ones (default)
   liveHeight?: number; // live TV and in-progress recording quality, default 720
   livePassthrough?: boolean; // TV apps play broadcasts they can decode untouched; default true
 }
 
+/** Ratings an account can be limited to, mildest first (the server's db.RatingLimits). */
+export const RATING_LIMITS = ["G", "PG", "PG-13", "R"] as const;
+
 export interface Profile {
+  /** Signing in with the password also needs a code from an authenticator app. */
+  twoStep?: boolean;
+  /** Account manager only: the libraries it's limited to (empty = all) and its rating limit ("" = any). */
+  libraries?: number[];
+  maxRating?: string;
   id: number;
   name: string;
   color: ProfileColor;
@@ -311,11 +336,17 @@ export interface NowPlaying {
 
 export interface Home {
   continueWatching: PlayInfo[];
+  /** The profile's "My list", newest first. */
+  watchlist: ItemSummary[];
   recentMovies: ItemSummary[];
   recentSeries: ItemSummary[];
 }
 
 export interface Library {
+  /** Seek-bar preview thumbnails are made for this library's files. */
+  trickplay: boolean;
+  /** Intros are looked for in this (TV) library's seasons. */
+  intros: boolean;
   id: number;
   name: string;
   path: string;
@@ -481,6 +512,8 @@ export interface Recording {
   error: string;
   startedAt: number | null;
   finishedAt: number | null;
+  /** Failed, but its pieces are still on disk and can be joined. */
+  recoverable?: boolean;
   fileId: number | null;
   ruleId: number | null;
   /** Profile that scheduled it (or owns its series rule); 0 = admins only. */
@@ -536,6 +569,8 @@ export interface LibraryMatch {
 
 /** GET /api/libraries/{id}/manage: one movie or show with its file facts. */
 export interface ManageRow {
+  /** Different cuts among a movie's copies. */
+  editions: number;
   id: number;
   kind: ItemKind;
   title: string;
@@ -620,10 +655,14 @@ export interface AuthInfo {
   setupRequired: boolean;
   user: Profile | null;
   accessExpiresAt?: number;
+  /** Seconds until the access token runs out. */
+  expiresIn?: number;
   /** Profiles this browser holds a session for (switch without a password). */
   signedIn: ProfileStub[];
   /** This connection is plain HTTP from an internet address. */
   insecure?: boolean;
+  /** The label of the "sign in through a provider" button, when single sign-on is set up. */
+  oidc?: string;
 }
 
 export type ProfileStub = Pick<Profile, "id" | "name" | "color" | "hasPassword">;
@@ -632,6 +671,8 @@ export type ProfileStub = Pick<Profile, "id" | "name" | "color" | "hasPassword">
 export interface SignedIn {
   user: Profile;
   accessExpiresAt: number;
+  /** Seconds until the access token runs out (missing from servers before 0.13). */
+  expiresIn?: number;
   sessionId: string;
 }
 

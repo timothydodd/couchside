@@ -5,6 +5,7 @@ import { api } from "../../lib/api";
 import { fmtBytes, fmtRuntime, relPath } from "../../lib/format";
 import { codecLabel, qualityLabel, qualityTone } from "../../lib/quality";
 import type { DeleteResult, FileRole, ItemKind, ManageFile } from "../../lib/types";
+import { errText } from "../../lib/errors";
 
 const MOVIE_GROUPS: { role: FileRole; label: string }[] = [
   { role: "copy", label: "Copies" },
@@ -21,12 +22,15 @@ const MOVIE_GROUPS: { role: FileRole; label: string }[] = [
 export default function FileList({
   kind,
   files,
+  error,
   libraryPath,
   onDeleted,
   onChanged,
 }: {
   kind: ItemKind;
   files?: ManageFile[];
+  /** Why the files couldn't be loaded, when they couldn't. */
+  error?: string | null;
   libraryPath: string;
   onDeleted: (r: DeleteResult) => void;
   onChanged: () => void;
@@ -55,7 +59,7 @@ export default function FileList({
     try {
       onDeleted(await api<DeleteResult>(`/api/files/${f.id}`, { method: "DELETE" }));
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errText(e));
     } finally {
       setBusy(null);
       setConfirm(null);
@@ -68,7 +72,7 @@ export default function FileList({
       await api(`/api/files/${f.id}/role`, { method: "PUT", json: { role, partNo, extraTitle } });
       onChanged();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errText(e));
     }
   };
 
@@ -84,7 +88,11 @@ export default function FileList({
         </p>
       )}
       {!files ? (
-        <Spinner />
+        error ? (
+          <ErrorNote>Couldn't load the files: {error}</ErrorNote>
+        ) : (
+          <Spinner />
+        )
       ) : (
         <div className="flex flex-col gap-2">
           {[...groups.entries()].map(([k, g]) => (

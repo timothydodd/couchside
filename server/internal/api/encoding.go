@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -33,6 +34,11 @@ func (s *Server) createHLS(w http.ResponseWriter, r *http.Request) {
 		CopyAudio    bool `json:"copyAudio"`
 		AudioIndex   int  `json:"audioIndex"`
 		BurnSubtitle *int `json:"burnSubtitle"`
+		// Codecs (ffprobe names) the client plays as is, beyond 8-bit H.264.
+		VideoCodecs []string `json:"videoCodecs"`
+		// Surround codecs the client plays ("ac3", "eac3"): such a track is
+		// copied, and other multichannel audio converted to one, not to stereo.
+		AudioCodecs []string `json:"audioCodecs"`
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, err)
@@ -67,7 +73,7 @@ func (s *Server) createHLS(w http.ResponseWriter, r *http.Request) {
 	sess, err := s.tc.Create(r.Context(), transcode.Request{
 		FileID: id, Title: title, Path: f.Path, Duration: dur,
 		Height: in.Height, BitrateK: in.BitrateK, AllowCopyVideo: in.CopyVideo, AllowCopyAudio: in.CopyAudio,
-		AudioIndex: max(0, in.AudioIndex), BurnSubtitle: burn,
+		AudioIndex: max(0, in.AudioIndex), BurnSubtitle: burn, VideoCodecs: in.VideoCodecs, AudioCodecs: in.AudioCodecs,
 	})
 	if err != nil {
 		if errors.Is(err, transcode.ErrBusy) {
@@ -83,13 +89,13 @@ func (s *Server) createHLS(w http.ResponseWriter, r *http.Request) {
 		"mode":      sess.Mode,
 		"height":    sess.Height,
 		"copyVideo": sess.CopyVideo,
-		"copyAudio": sess.CopyAudio,
-		"hdr":       sess.HDR,
-		"hw":        sess.HW,
-		"hwDecode":  sess.HWDecode,
-		"audio":     sess.Audio,
-		"burnSub":   sess.BurnSub,
-		"bitrateK":  sess.BitrateK,
+		"copyAudio": sess.CopyAudio, "audioOut": sess.AudioOut,
+		"hdr":      sess.HDR,
+		"hw":       sess.HW,
+		"hwDecode": sess.HWDecode,
+		"audio":    sess.Audio,
+		"burnSub":  sess.BurnSub,
+		"bitrateK": sess.BitrateK,
 	})
 }
 
@@ -125,7 +131,9 @@ func (s *Server) hlsSegment(w http.ResponseWriter, r *http.Request) {
 		if r.Context().Err() != nil {
 			return // player moved on (seek/close); nothing to report
 		}
-		writeErr(w, httpError{http.StatusInternalServerError, err.Error()})
+		// err carries ffmpeg's last lines, which name files on the server.
+		slog.Error("hls segment", "session", chi.URLParam(r, "sid"), "segment", n, "err", err)
+		writeErr(w, httpError{http.StatusInternalServerError, "the server couldn't convert this video; the server log has the reason"})
 		return
 	}
 	w.Header().Set("Content-Type", "video/mp2t")
@@ -197,12 +205,11 @@ func (s *Server) optimizeFile(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) enqueueOptimize(w http.ResponseWriter, r *http.Request, files []db.File) {
 	for _, f := range files {
-		if err := s.db.Enqueue(r.Context(), worker.KindOptimize, f.ID, "Encode "+filepath.Base(f.Path)); err != nil {
+		if err := s.worker.Enqueue(r.Context(), worker.KindOptimize, f.ID, "Encode "+filepath.Base(f.Path)); err != nil {
 			writeErr(w, err)
 			return
 		}
 	}
-	s.worker.Wake()
 	writeJSON(w, http.StatusAccepted, map[string]int{"queued": len(files)})
 }
 

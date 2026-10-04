@@ -76,8 +76,30 @@ single other copy Part 1.
 
 ## Browsing
 
-- Home: a hero for the newest title, Continue Watching, and recently added rows.
+- Home: a hero for the newest title, Continue Watching (what you're part way
+  through, plus the next episode of a show whose last one you finished; the X
+  on a card removes it until you watch it again), My list, and recently added
+  rows.
+- **My list:** the button on a title's page saves it to your profile's list,
+  which is a row on Home and a filter in Movies and TV Shows.
 - Movies and TV grids with search, genre and watched filters, and sorting.
 - Title pages with seasons and episodes, cast (click someone to see everything
   of theirs in your library), parts and extras.
 - An Activity page for background jobs and streams, with retry and cancel.
+
+## Preview thumbnails
+
+Tick **Preview thumbnails on the seek bar** when adding or editing a library
+and the player shows a frame of the film as you move along the seek bar.
+Making them reads each file from start to end once (a few minutes for a large
+film on a network share), so it's off by default. The jobs run after
+everything else and are listed in Activity as Thumbnails.
+
+## Versions
+
+Keep more than one copy of a film (a 4K and a 1080p, or two cuts) and its
+page gets a version chooser next to Play; what you pick is remembered for
+your profile. A cut is recognised from the file name: Plex's
+`{edition-Final Cut}` tag, or a word after the year such as `Extended`,
+`Director's Cut`, `Unrated`, `Theatrical` or `IMAX`. Different cuts aren't
+counted as duplicates.

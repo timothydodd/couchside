@@ -4,6 +4,7 @@ import AuthShell from "../components/auth/AuthShell";
 import NewPassword from "../components/auth/NewPassword";
 import { ErrorNote } from "../components/ui";
 import { authError, useAuth } from "../stores/auth";
+import { attempt } from "../lib/notices";
 
 /** After an admin sets a temporary password, the user picks their own before anything else. */
 export default function ChangePasswordPage() {
@@ -44,7 +45,7 @@ export default function ChangePasswordPage() {
         <button type="submit" className="btn-primary justify-center" disabled={busy || !current || !password}>
           <KeyRound size={15} /> Save password
         </button>
-        <button type="button" className="btn-quiet justify-center" onClick={() => void logout()}>
+        <button type="button" className="btn-quiet justify-center" onClick={attempt("Couldn't sign out", () => logout())}>
           <LogOut size={14} /> Sign out
         </button>
       </form>

@@ -149,10 +149,11 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 		if !parse.IsVideo(name) || strings.HasPrefix(name, ".") {
 			return nil
 		}
-		// A recording in progress isn't an episode yet; its parts are joined
-		// into the final file, which the scan after it finishes picks up.
+		// A recording's parts aren't episodes: they're joined into the final
+		// file, which the scan after it finishes picks up. That holds for a
+		// recording whose join failed too (its parts wait for Recover).
 		if m := rePartFile.FindStringIndex(path); m != nil {
-			if active, err := w.db.RecordingPathActive(ctx, path[:m[0]]+".ts"); err != nil || active {
+			if owned, err := w.db.RecordingOwnsPath(ctx, path[:m[0]]+".ts"); err != nil || owned {
 				return err
 			}
 		}
@@ -226,6 +227,11 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 	if err := w.retryMatches(ctx, lib); err != nil {
 		return summary, err
 	}
+	if lib.Intros && lib.Kind == "tv" {
+		if _, err := w.QueueIntros(ctx, lib.ID); err != nil {
+			return summary, err
+		}
+	}
 	return summary, w.db.MarkLibraryScanned(ctx, lib.ID, time.Now().Unix())
 }
 
@@ -298,7 +304,15 @@ func relPath(lib db.Library, path string) string {
 // refreshRole brings an unchanged movie file's guessed role (part, extra) up
 // to date with the parser, so detection reaches files indexed before it.
 func (w *Worker) refreshRole(ctx context.Context, lib db.Library, path string, st *db.FileStamp) error {
-	if lib.Kind == "tv" || st.RolePinned {
+	if lib.Kind == "tv" {
+		return nil
+	}
+	if e := parse.Edition(path); e != st.Edition {
+		if err := w.db.SetFileEdition(ctx, st.ID, e); err != nil {
+			return err
+		}
+	}
+	if st.RolePinned {
 		return nil
 	}
 	r := parse.MovieRoleIn(relPath(lib, path), st.ParsedTitle, videosIn(lib))
@@ -383,6 +397,9 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 		if err := w.db.SetDetectedRole(ctx, fileID, role.Kind, role.Part, role.Extra); err != nil {
 			return false, err
 		}
+		if err := w.db.SetFileEdition(ctx, fileID, parse.Edition(path)); err != nil {
+			return false, err
+		}
 	}
 	// A changed file makes its optimized copy stale. One re-indexed only
 	// because its name parses differently, or re-scanned by hand, keeps it.
@@ -404,6 +421,12 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 	}
 	if w.comskip != "" && f.Problem == "" {
 		if err := w.autoCommercials(ctx, fileID, path); err != nil {
+			return false, err
+		}
+	}
+	// A new or changed file in a library with preview thumbnails on.
+	if lib.Trickplay && f.Problem == "" {
+		if err := w.Enqueue(ctx, KindTrickplay, fileID, "Preview thumbnails "+filepath.Base(path)); err != nil {
 			return false, err
 		}
 	}

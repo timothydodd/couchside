@@ -95,7 +95,7 @@ func (d *DB) ItemsByID(ctx context.Context, ids []int64) ([]ItemSummary, error) 
 		return []ItemSummary{}, nil
 	}
 	in, args := inList(ids)
-	items, err := d.querySummaries(ctx, `SELECT `+summaryCols(ctx)+` FROM media_items m WHERE m.id IN `+in, args...)
+	items, err := d.querySummaries(ctx, `SELECT `+summaryCols(ctx)+` FROM media_items m WHERE m.id IN `+in+visible(ctx, "m"), args...)
 	if err != nil {
 		return nil, err
 	}

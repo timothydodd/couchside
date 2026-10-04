@@ -1,21 +1,15 @@
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { MobileTabBar, MobileTopBar } from "./components/MobileNav";
 import Sidebar from "./components/Sidebar";
 import StatusBar from "./components/StatusBar";
-import { EmptyState } from "./components/ui";
-import ActivityPage from "./pages/ActivityPage";
+import { EmptyState, Spinner } from "./components/ui";
+import { lazyPage } from "./lib/lazyPage";
 import HomePage from "./pages/HomePage";
 import ItemPage from "./pages/ItemPage";
-import LibrariesPage from "./pages/LibrariesPage";
 import LibraryPage from "./pages/LibraryPage";
-import LibraryManagePage from "./pages/LibraryManagePage";
-import PlayerPage from "./pages/PlayerPage";
-import LiveTvPage from "./pages/LiveTvPage";
-import LivePlayerPage from "./pages/LivePlayerPage";
-import RecordingPlayerPage from "./pages/RecordingPlayerPage";
+import LinkPage from "./pages/LinkPage";
 import PersonPage from "./pages/PersonPage";
 import SearchPage from "./pages/SearchPage";
-import SettingsPage from "./pages/SettingsPage";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
 import SetupPage from "./pages/SetupPage";
 import SignInPage from "./pages/SignInPage";
@@ -23,6 +17,17 @@ import { useAuth, useIsAdmin } from "./stores/auth";
 import { useProfile } from "./stores/profile";
 import { startStatus } from "./stores/status";
 import { useRouter } from "./stores/router";
+
+// Loaded on first use: the players, Live TV and the admin pages are most of
+// the code, and plenty of visits never open them.
+const ActivityPage = lazyPage(() => import("./pages/ActivityPage"));
+const LibrariesPage = lazyPage(() => import("./pages/LibrariesPage"));
+const LibraryManagePage = lazyPage(() => import("./pages/LibraryManagePage"));
+const PlayerPage = lazyPage(() => import("./pages/PlayerPage"));
+const LiveTvPage = lazyPage(() => import("./pages/LiveTvPage"));
+const LivePlayerPage = lazyPage(() => import("./pages/LivePlayerPage"));
+const RecordingPlayerPage = lazyPage(() => import("./pages/RecordingPlayerPage"));
+const SettingsPage = lazyPage(() => import("./pages/SettingsPage"));
 
 export default function App() {
   const auth = useAuth();
@@ -58,9 +63,14 @@ function Signed() {
   if (!loaded) return null;
 
   // The player takes over the whole window.
-  if (route.name === "play") return <PlayerPage fileId={route.fileId} />;
-  if (route.name === "watch") return <LivePlayerPage channel={route.channel} />;
-  if (route.name === "recording") return <RecordingPlayerPage id={route.id} />;
+  if (route.name === "play" || route.name === "watch" || route.name === "recording")
+    return (
+      <Suspense fallback={<div className="h-full bg-player-bg" />}>
+        {route.name === "play" && <PlayerPage fileId={route.fileId} />}
+        {route.name === "watch" && <LivePlayerPage channel={route.channel} />}
+        {route.name === "recording" && <RecordingPlayerPage id={route.id} />}
+      </Suspense>
+    );
 
   return (
     <div className="flex h-full flex-col">
@@ -72,6 +82,13 @@ function Signed() {
           key={route.name === "livetv" || route.name === "search" ? route.name : path}
           className={`min-w-0 flex-1 ${route.name === "movies" || route.name === "tv" || route.name === "livetv" ? "overflow-hidden" : "overflow-auto"}`}
         >
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center">
+                <Spinner size={22} />
+              </div>
+            }
+          >
           {route.name === "home" && <HomePage />}
           {route.name === "movies" && <LibraryPage kind="movie" />}
           {route.name === "tv" && <LibraryPage kind="series" />}
@@ -84,7 +101,9 @@ function Signed() {
           {route.name === "settings" && <SettingsPage />}
           {route.name === "search" && <SearchPage q={route.q} />}
           {route.name === "person" && <PersonPage id={route.id} />}
+          {route.name === "link" && <LinkPage />}
           {route.name === "notfound" && <EmptyState title="Nothing here">That page doesn't exist.</EmptyState>}
+          </Suspense>
         </main>
       </div>
       <StatusBar />

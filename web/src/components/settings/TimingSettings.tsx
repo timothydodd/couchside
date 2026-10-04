@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, useApi } from "../../lib/api";
+import { errText } from "../../lib/errors";
 
 interface Timing {
   padBefore: number;
@@ -46,7 +47,7 @@ function TimingForm() {
       setMsg({ tone: "good", text: draft.dvr ? "Saved. Upcoming recordings use the new padding." : "Saved." });
       await reload();
     } catch (e) {
-      setMsg({ tone: "critical", text: e instanceof Error ? e.message : String(e) });
+      setMsg({ tone: "critical", text: errText(e) });
     } finally {
       setBusy(false);
     }

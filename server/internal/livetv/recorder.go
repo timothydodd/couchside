@@ -114,11 +114,10 @@ func (s *Service) LiveFile(id, name string) (string, error) { return s.live.file
 func (s *Service) LeaveLive(id string)                      { s.live.leave(id) }
 func (s *Service) LiveSessions() []*LiveSession             { return s.live.sessionsList() }
 
-// Record schedules a guide program. Returns the recording id and how many
-// other recordings overlap it (more than the tuner count means a conflict).
-// Record schedules a guide program for owner (see db.ScheduleRecording).
-// existing is true when the airing was already set to record, in which case
-// nothing changed.
+// Record schedules a guide program for owner (see db.ScheduleRecording). It
+// returns the recording id and how many other recordings overlap it (more
+// than the tuner count means a conflict). existing is true when the airing
+// was already set to record, in which case nothing changed.
 func (s *Service) Record(ctx context.Context, programID, owner int64) (id int64, overlap int, existing bool, err error) {
 	p, err := s.db.Program(ctx, programID)
 	if err != nil {
@@ -178,7 +177,13 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	// if it's a .ts file (recording folders may be shared with a TV library).
 	if r.Path != "" && strings.HasSuffix(r.Path, ".ts") {
 		if err := os.Remove(r.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
+			slog.Error("delete recording", "id", id, "err", err) // the error names the path
+			return usererr.New("the recording's file couldn't be deleted; the server log has the reason")
+		}
+		if r.Status == "failed" {
+			for _, p := range partFiles(r.Path) { // pieces a failed join left behind
+				_ = os.Remove(p)
+			}
 		}
 		if lib, _ := s.db.LibraryContaining(ctx, r.Path); lib != nil {
 			removeEmptyParents(filepath.Dir(r.Path), lib.Path)
@@ -334,7 +339,9 @@ func (s *Service) record(ctx, parent context.Context, r db.Recording, path strin
 	}
 	if err := joinParts(parent, s.cfg.FFmpeg, parts, path); err != nil {
 		slog.Error("dvr: couldn't join recording parts; they're still on disk", "title", r.Title, "parts", parts, "err", err)
-		_ = s.db.FinishRecording(parent, r.ID, "failed", parts[0], 0, "Couldn't finish the file: "+err.Error())
+		// The row keeps the final path: that's what ties the parts to this
+		// recording (the scan skips them, Delete removes them, Recover joins them).
+		_ = s.db.FinishRecording(parent, r.ID, "failed", path, 0, "Couldn't finish the file: "+err.Error())
 		return
 	}
 	size := int64(0)
@@ -373,6 +380,42 @@ func joinParts(ctx context.Context, ffmpeg string, parts []string, dst string) e
 	return os.Rename(tmp, dst)
 }
 
+// Recoverable reports whether a failed recording still has pieces on disk
+// that Recover could join.
+func (s *Service) Recoverable(r db.Recording) bool {
+	return r.Status == "failed" && r.Path != "" && len(partFiles(r.Path)) > 0
+}
+
+// Recover joins the pieces of a recording whose file couldn't be finished
+// (a full disk, usually) into the recording it should have been.
+func (s *Service) Recover(ctx context.Context, id int64) error {
+	r, err := s.db.Recording(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !s.Recoverable(r) {
+		return usererr.New("nothing of this recording is left on disk to recover")
+	}
+	s.recoverMu.Lock() // one at a time: a second click mustn't join the same pieces
+	defer s.recoverMu.Unlock()
+	if !s.Recoverable(r) {
+		return nil // the first click did it
+	}
+	if err := joinParts(ctx, s.cfg.FFmpeg, existingParts(r.Path), r.Path); err != nil {
+		slog.Error("dvr: recover recording", "title", r.Title, "path", r.Path, "err", err)
+		return usererr.New("the pieces still couldn't be joined (is the disk full?); the server log has the reason")
+	}
+	size := int64(0)
+	if st, err := os.Stat(r.Path); err == nil {
+		size = st.Size()
+	}
+	if err := s.db.FinishRecording(ctx, id, "completed", r.Path, size, "Recovered after it couldn't be finished; parts may be missing"); err != nil {
+		return err
+	}
+	s.scanRecordings(ctx)
+	return nil
+}
+
 // recoverInterrupted handles recordings cut off by a restart. Parts captured
 // so far are kept; if the program is still airing, recording resumes and all
 // parts are joined into the one file at the end, otherwise they're joined now.
@@ -394,7 +437,7 @@ func (s *Service) recoverInterrupted(ctx context.Context) {
 		}
 		if err := joinParts(ctx, s.cfg.FFmpeg, parts, r.Path); err != nil {
 			slog.Error("dvr: couldn't join recording parts; they're still on disk", "title", r.Title, "parts", parts, "err", err)
-			_ = s.db.FinishRecording(ctx, r.ID, "failed", "", 0, "Interrupted by a server restart")
+			_ = s.db.FinishRecording(ctx, r.ID, "failed", r.Path, 0, "Interrupted by a server restart, and its pieces couldn't be joined")
 			continue
 		}
 		size := int64(0)

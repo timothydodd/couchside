@@ -2,7 +2,7 @@ import { useState } from "react";
 import { MoreHorizontal, Pencil, Plus, RadioTower, Trash2 } from "lucide-react";
 import ChannelEditor from "./ChannelEditor";
 import Link from "../Link";
-import { MenuButton } from "../ui";
+import { ErrorNote, MenuButton } from "../ui";
 import { api, useApi } from "../../lib/api";
 import type { VirtualChannel, VirtualConfig } from "../../lib/types";
 import { useStatus } from "../../stores/status";
@@ -13,7 +13,7 @@ import { attempt } from "../../lib/notices";
  * in Live TV and the guide, with or without a tuner. Admin only.
  */
 export default function VirtualChannels() {
-  const { data, reload } = useApi<VirtualChannel[]>("/api/livetv/virtual");
+  const { data, error, reload } = useApi<VirtualChannel[]>("/api/livetv/virtual");
   const [editing, setEditing] = useState<VirtualChannel | "new" | null>(null);
   const saved = () => {
     void reload();
@@ -36,6 +36,7 @@ export default function VirtualChannels() {
           <Plus size={15} /> New channel
         </button>
       </div>
+      {error && !data && <ErrorNote>Couldn't load your channels: {error}</ErrorNote>}
       {data && data.length === 0 && (
         <p className="text-sm text-content-muted">
           None yet. Try a movie night, a sitcom marathon or a decade channel, with old commercials if you have a folder of them.

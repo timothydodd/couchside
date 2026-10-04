@@ -10,9 +10,8 @@ import (
 )
 
 // Profile is one person using Couchside: profiles keep watch history,
-// favourite channels and preferences apart. With accounts on (COUCHSIDE_AUTH),
-// a profile is also the user that signs in; the account fields mean nothing
-// otherwise.
+// favourite channels and preferences apart. A profile is also the account
+// that signs in, with or without a password.
 type Profile struct {
 	ID        int64           `json:"id"`
 	Name      string          `json:"name"`
@@ -27,6 +26,9 @@ type Profile struct {
 	HasPassword        bool   `json:"hasPassword"`
 	// PasswordLocked: only an admin can set or change this account's password.
 	PasswordLocked bool `json:"passwordLocked"`
+	// TwoStep: signing in with the password also needs a code from the
+	// profile's authenticator app.
+	TwoStep bool `json:"twoStep"`
 }
 
 var (
@@ -57,13 +59,13 @@ func watchJoin(ctx context.Context) string {
 	return fmt.Sprintf(" LEFT JOIN watch_state w ON w.file_id = f.id AND w.profile_id = %d ", ProfileID(ctx))
 }
 
-const profileCols = `id, name, color, prefs, created_at, role, can_record, disabled, must_change_password, password_hash <> '', password_locked`
+const profileCols = `id, name, color, prefs, created_at, role, can_record, disabled, must_change_password, password_hash <> '', password_locked, totp_enabled`
 
 func scanProfile(r interface{ Scan(...any) error }) (Profile, error) {
 	var p Profile
 	var prefs string
 	err := r.Scan(&p.ID, &p.Name, &p.Color, &prefs, &p.CreatedAt, &p.Role, &p.CanRecord, &p.Disabled, &p.MustChangePassword,
-		&p.HasPassword, &p.PasswordLocked)
+		&p.HasPassword, &p.PasswordLocked, &p.TwoStep)
 	p.Prefs = json.RawMessage(prefs)
 	return p, err
 }

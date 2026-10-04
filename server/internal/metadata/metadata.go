@@ -73,8 +73,12 @@ func (c *Chain) Names() []string {
 	return out
 }
 
-// Lookup returns the details and the provider that supplied them.
-func (c *Chain) Lookup(ctx context.Context, kind Kind, title string, year int, imdbID string) (*Details, Provider, error) {
+// Lookup returns the details and the provider that supplied them. skipped is
+// set when an earlier provider failed (an outage, a rate limit) and a later
+// one answered: the answer is real but may lack what the earlier provider
+// alone has (cast, crew, backdrops), so the caller shouldn't treat those as
+// gone. err means no provider matched and at least one couldn't be asked.
+func (c *Chain) Lookup(ctx context.Context, kind Kind, title string, year int, imdbID string) (d *Details, p Provider, skipped, err error) {
 	var errs []error
 	for _, p := range c.Providers {
 		var d *Details
@@ -89,10 +93,10 @@ func (c *Chain) Lookup(ctx context.Context, kind Kind, title string, year int, i
 			continue
 		}
 		if d != nil {
-			return d, p, nil
+			return d, p, errors.Join(errs...), nil
 		}
 	}
-	return nil, nil, errors.Join(errs...)
+	return nil, nil, nil, errors.Join(errs...)
 }
 
 // SearchResult is one candidate when picking a match by hand.

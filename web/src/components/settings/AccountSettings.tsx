@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { KeyRound, LogOut } from "lucide-react";
+import { KeyRound, LogOut, Tv } from "lucide-react";
+import Link from "../Link";
 import NewPassword from "../auth/NewPassword";
 import SessionList from "./SessionList";
+import TwoStep from "./TwoStep";
 import { ErrorNote } from "../ui";
 import { api } from "../../lib/api";
 import { authError, useAuth } from "../../stores/auth";
@@ -57,7 +59,10 @@ export default function AccountSettings() {
             {user?.role === "admin" ? " (admin)" : ""}.
           </div>
         </div>
-        <button className="btn-ghost !text-xs" onClick={() => void logout()}>
+        <Link to="/link" className="btn-ghost !text-xs" title="Enter the code a TV app is showing to sign it in as you">
+          <Tv size={13} /> Sign in a TV
+        </Link>
+        <button className="btn-ghost !text-xs" onClick={attempt("Couldn't sign out", () => logout())}>
           <LogOut size={13} /> Sign out
         </button>
       </div>
@@ -92,6 +97,8 @@ export default function AccountSettings() {
           </div>
         </form>
       )}
+
+      {!locked && <TwoStep hasPassword={hasPassword} />}
 
       <div className="mb-2 mt-6 flex items-center justify-between">
         <div className="field-label !mb-0">Signed-in devices</div>

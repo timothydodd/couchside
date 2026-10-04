@@ -7,23 +7,23 @@ import (
 )
 
 type SeriesRule struct {
-	ID          int64   `json:"id"`
-	SeriesID    string  `json:"seriesId"`
-	Title       string  `json:"title"`
+	ID          int64    `json:"id"`
+	SeriesID    string   `json:"seriesId"`
+	Title       string   `json:"title"`
 	ImageURL    ImageURL `json:"imageUrl"`
-	Mode        string  `json:"mode"`
-	Channel     string  `json:"channel"`
-	MediaItemID *int64  `json:"mediaItemId"`
-	KeepLast    int     `json:"keepLast"`
-	Enabled     bool    `json:"enabled"`
-	LastRunAt   *int64  `json:"lastRunAt"`
-	LastSummary string  `json:"lastSummary"`
-	CreatedAt   int64   `json:"createdAt"`
-	LibraryName *string `json:"libraryTitle"` // title of the linked library show
-	Scheduled   int     `json:"scheduled"`    // upcoming recordings from this rule
-	Recorded    int     `json:"recorded"`     // completed recordings from this rule
-	NextAt      *int64  `json:"nextAt"`       // next scheduled start
-	OwnerID     int64   `json:"ownerId"`      // profile that made it; 0 = admins only
+	Mode        string   `json:"mode"`
+	Channel     string   `json:"channel"`
+	MediaItemID *int64   `json:"mediaItemId"`
+	KeepLast    int      `json:"keepLast"`
+	Enabled     bool     `json:"enabled"`
+	LastRunAt   *int64   `json:"lastRunAt"`
+	LastSummary string   `json:"lastSummary"`
+	CreatedAt   int64    `json:"createdAt"`
+	LibraryName *string  `json:"libraryTitle"` // title of the linked library show
+	Scheduled   int      `json:"scheduled"`    // upcoming recordings from this rule
+	Recorded    int      `json:"recorded"`     // completed recordings from this rule
+	NextAt      *int64   `json:"nextAt"`       // next scheduled start
+	OwnerID     int64    `json:"ownerId"`      // profile that made it; 0 = admins only
 }
 
 const ruleCols = `r.id, r.series_id, r.title, r.image_url, r.mode, r.channel, r.media_item_id, r.keep_last, r.enabled,
@@ -222,7 +222,7 @@ func (d *DB) LibraryEpisodeKeys(ctx context.Context, itemID int64) (map[string]b
 
 // SeriesCandidates finds library shows whose title normalizes to the given one.
 func (d *DB) SeriesByTitle(ctx context.Context) ([]ItemSummary, error) {
-	return d.querySummaries(ctx, `SELECT `+summaryCols(ctx)+` FROM media_items m WHERE m.kind = 'series'`)
+	return d.querySummaries(ctx, `SELECT `+summaryCols(ctx)+` FROM media_items m WHERE m.kind = 'series'`+visible(ctx, "m"))
 }
 
 func episodeKey(season, ep int) string {

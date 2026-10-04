@@ -27,8 +27,12 @@ Couchside is built for a home network. If you expose it to the internet:
   profile without a password.
 - **Give every admin a password**, and untick "Can set and change their own
   password" on shared profiles.
-- **Know what's public:** posters, backdrops and episode stills are served
-  without signing in, so TVs can load them. Everything else needs a session.
+- **Know what's public:** artwork is served without signing in, so TVs can
+  load it: posters, backdrops, episode stills, cast photos, and the cache of
+  guide and provider images (`/api/artwork/remote`, which fetches only from
+  the image hosts Couchside uses, into a capped cache). So is
+  `/api/discovery` (the server's name, version and sign-in mode). Everything
+  else needs a session.
 - **Name your proxy** in `COUCHSIDE_TRUSTED_PROXIES`. Forwarding headers are
   believed only from the addresses listed there, so sign-in throttling counts
   each visitor's real address. Left empty, it sees the proxy's address and

@@ -13,5 +13,5 @@ export const SECTIONS: { id: SettingsSection; label: string; to: string; Icon: L
   { id: "accounts", label: "Accounts", to: "/settings/accounts", Icon: Users, blurb: "Who can sign in, and what they can do." },
   { id: "metadata", label: "Metadata", to: "/settings/metadata", Icon: Database, blurb: "Where titles, plots and artwork come from." },
   { id: "livetv", label: "Live TV", to: "/settings/livetv", Icon: Radio, blurb: "Tuner, guide, recordings folder and your own channels." },
-  { id: "advanced", label: "Advanced", to: "/settings/advanced", Icon: SlidersHorizontal, blurb: "Recording padding and commercial-skip timing." },
+  { id: "advanced", label: "Advanced", to: "/settings/advanced", Icon: SlidersHorizontal, blurb: "Recording padding, commercial-skip timing and backups." },
 ];

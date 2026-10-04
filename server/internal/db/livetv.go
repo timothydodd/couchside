@@ -279,9 +279,10 @@ type Recording struct {
 	StartedAt    *int64   `json:"startedAt"`
 	FinishedAt   *int64   `json:"finishedAt"`
 	CreatedAt    int64    `json:"createdAt"`
-	FileID       *int64   `json:"fileId"`  // library file once the recording has been scanned
-	RuleID       *int64   `json:"ruleId"`  // series rule that scheduled it
-	OwnerID      int64    `json:"ownerId"` // profile that scheduled it (or owns its rule); 0 = admins only
+	Recoverable  bool     `json:"recoverable"` // failed, with pieces on disk that can be joined (set by the API)
+	FileID       *int64   `json:"fileId"`      // library file once the recording has been scanned
+	RuleID       *int64   `json:"ruleId"`      // series rule that scheduled it
+	OwnerID      int64    `json:"ownerId"`     // profile that scheduled it (or owns its rule); 0 = admins only
 }
 
 const recCols = `r.id, r.channel, r.channel_name, r.title, r.episode_title, r.episode_num, r.synopsis, r.image_url,
@@ -334,6 +335,15 @@ func (d *DB) DueRecordings(ctx context.Context, now int64) ([]Recording, error) 
 
 func (d *DB) RecordingsWithStatus(ctx context.Context, status string) ([]Recording, error) {
 	return d.queryRecordings(ctx, `WHERE r.status = ?`, status)
+}
+
+// RecordingOwnsPath reports whether any recording, whatever its status, has
+// this as its file. The scan asks before indexing "<name>.partN.ts" pieces:
+// they belong to a recording in progress, or to one whose join failed.
+func (d *DB) RecordingOwnsPath(ctx context.Context, path string) (bool, error) {
+	var n int
+	err := d.sql.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM recordings WHERE path = ?)`, path).Scan(&n)
+	return n > 0, err
 }
 
 // RecordingPathActive reports whether a scheduled or in-progress recording

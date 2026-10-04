@@ -3,6 +3,7 @@ import { ArrowDownToLine, Pause, Play } from "lucide-react";
 import { SearchInput, Segmented } from "../ui";
 import { api } from "../../lib/api";
 import type { LogEntry } from "../../lib/types";
+import { errText } from "../../lib/errors";
 
 const KEEP = 2000; // lines held in the page, like the server
 const LEVELS = [
@@ -29,7 +30,11 @@ export default function Console() {
   useEffect(() => {
     if (paused) return;
     let stop = false;
+    let timer = 0;
+    // One request at a time: the next is sent 2s after the last answered. Two
+    // overlapping polls ask for the same lines and both add them.
     const poll = async () => {
+      if (document.visibilityState !== "visible") return;
       try {
         const r = await api<{ entries: LogEntry[]; last: number; gap: boolean }>(`/api/system/logs?after=${last.current}`);
         if (stop) return;
@@ -43,14 +48,17 @@ export default function Console() {
           return all.length > KEEP ? all.slice(all.length - KEEP) : all;
         });
       } catch (e) {
-        if (!stop) setError(e instanceof Error ? e.message : String(e));
+        if (!stop) setError(errText(e));
       }
     };
-    void poll();
-    const t = setInterval(() => void poll(), 2000);
+    const loop = async () => {
+      await poll();
+      if (!stop) timer = window.setTimeout(() => void loop(), 2000);
+    };
+    void loop();
     return () => {
       stop = true;
-      clearInterval(t);
+      clearTimeout(timer);
     };
   }, [paused]);
 

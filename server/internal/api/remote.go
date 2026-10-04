@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/timothydodd/couchside/internal/keylock"
 	"github.com/timothydodd/couchside/internal/remoteimg"
 )
 
@@ -27,9 +28,13 @@ import (
 // each image is fetched once, kept under $CACHE/remote and served from there.
 // Only remoteimg.Hosts are fetched, so the endpoint can't be used as a proxy.
 
+// remoteMaxTotal is the cache's size cap. A fetch that takes it past the cap
+// drops the least recently used images straight away (the route needs no
+// sign-in, so the daily prune alone would let anyone fill the volume).
+var remoteMaxTotal int64 = 2 << 30
+
 const (
 	remoteMaxBytes = 10 << 20
-	remoteMaxTotal = 2 << 30             // the cache's size cap; the prune drops least recently used past it
 	remoteKeep     = 90 * 24 * time.Hour // unused images are pruned after this long
 	remoteTouch    = 24 * time.Hour      // how often a served image's "last used" time is refreshed
 	remoteMissFor  = 10 * time.Minute    // a failed fetch isn't retried for this long
@@ -134,15 +139,10 @@ func (c *missCache) add(key string) {
 
 // remoteLocks makes concurrent requests for one image share a single fetch
 // (a guide page asks for dozens of logos at once).
-var remoteLocks sync.Map
+var remoteLocks keylock.Map[string]
 
 func (s *Server) fetchRemote(ctx context.Context, key, path string) error {
-	mu, _ := remoteLocks.LoadOrStore(path, &sync.Mutex{})
-	mu.(*sync.Mutex).Lock()
-	defer func() {
-		mu.(*sync.Mutex).Unlock()
-		remoteLocks.Delete(path)
-	}()
+	defer remoteLocks.Lock(path)()
 	if _, err := os.Stat(path); err == nil {
 		return nil // another request fetched it while we waited
 	}
@@ -191,13 +191,28 @@ func (s *Server) fetchRemote(ctx context.Context, key, path string) error {
 	if remoteimg.Sniff(head[:hn]) == "" {
 		return errors.New("not an image")
 	}
-	return os.Rename(tmp.Name(), path)
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return err
+	}
+	if s.remoteSize.Add(n) > remoteMaxTotal && s.remotePruning.TryLock() {
+		s.pruneRemoteLocked()
+		s.remotePruning.Unlock()
+	}
+	return nil
 }
 
 // pruneRemote deletes cached remote images nobody has asked for in a while
 // (guide art comes and goes with the listings), then the least recently
-// used ones while the cache is over remoteMaxTotal.
+// used ones while the cache is over remoteMaxTotal, down to nine tenths of it
+// so a full cache isn't walked again on the next fetch. It also sets
+// remoteSize, which fetches add to in between.
 func (s *Server) pruneRemote() {
+	s.remotePruning.Lock()
+	defer s.remotePruning.Unlock()
+	s.pruneRemoteLocked()
+}
+
+func (s *Server) pruneRemoteLocked() {
 	type entry struct {
 		path string
 		size int64
@@ -228,7 +243,7 @@ func (s *Server) pruneRemote() {
 	if total > remoteMaxTotal {
 		sort.Slice(keep, func(i, j int) bool { return keep[i].used.Before(keep[j].used) })
 		for _, e := range keep {
-			if total <= remoteMaxTotal {
+			if total <= remoteMaxTotal/10*9 {
 				break
 			}
 			if os.Remove(e.path) == nil {
@@ -237,6 +252,7 @@ func (s *Server) pruneRemote() {
 			}
 		}
 	}
+	s.remoteSize.Store(total)
 	if removed > 0 {
 		slog.Info("pruned cached images", "count", removed)
 	}

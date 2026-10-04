@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -38,6 +39,71 @@ type Responder struct {
 	// SSDP's group on the default multicast interface.
 	Group     string
 	Interface string
+
+	mu       sync.Mutex
+	signIn   string // SignIn's last answer, reused for signInFor
+	signInAt time.Time
+	recent   map[string]time.Time // when each address was last answered
+	busy     int                  // replies being sent
+}
+
+// Anyone on the LAN (or a spoofed source address) can send searches, and
+// each answer is a goroutine, a settings read and a packet bigger than the
+// one that asked for it. So: one answer per address per second, a few dozen
+// at once, and the sign-in mode read at most every few seconds.
+const (
+	replyEvery   = time.Second
+	maxReplies   = 32
+	maxAddresses = 1024
+	signInFor    = 5 * time.Second
+)
+
+// admit reports whether a search from ip gets an answer, and counts it in.
+// done must be called when the answer has been sent.
+func (d *Responder) admit(ip string, now time.Time) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.busy >= maxReplies {
+		return false
+	}
+	if at, ok := d.recent[ip]; ok && now.Sub(at) < replyEvery {
+		return false
+	}
+	if d.recent == nil {
+		d.recent = map[string]time.Time{}
+	}
+	if len(d.recent) >= maxAddresses {
+		for k, at := range d.recent {
+			if now.Sub(at) >= replyEvery {
+				delete(d.recent, k)
+			}
+		}
+		if len(d.recent) >= maxAddresses {
+			return false // a flood of addresses: sit it out
+		}
+	}
+	d.recent[ip] = now
+	d.busy++
+	return true
+}
+
+func (d *Responder) done() {
+	d.mu.Lock()
+	d.busy--
+	d.mu.Unlock()
+}
+
+// signInMode is SignIn's answer, asked for at most every signInFor.
+func (d *Responder) signInMode(ctx context.Context) string {
+	if d.SignIn == nil {
+		return "password"
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.signIn == "" || time.Since(d.signInAt) >= signInFor {
+		d.signIn, d.signInAt = d.SignIn(ctx), time.Now()
+	}
+	return d.signIn
 }
 
 // Run answers searches until ctx ends. It returns an error only when it
@@ -80,7 +146,13 @@ func (d *Responder) Run(ctx context.Context) error {
 		if !ok {
 			continue
 		}
-		go d.reply(ctx, src, st, mx)
+		if !d.admit(src.IP.String(), time.Now()) {
+			continue
+		}
+		go func() {
+			defer d.done()
+			d.reply(ctx, src, st, mx)
+		}()
 	}
 }
 
@@ -126,10 +198,7 @@ func (d *Responder) response(ctx context.Context, st string, local net.IP) []byt
 	if base == "" {
 		base = "http://" + net.JoinHostPort(local.String(), strconv.Itoa(d.Port))
 	}
-	signIn := "password"
-	if d.SignIn != nil {
-		signIn = d.SignIn(ctx)
-	}
+	signIn := d.signInMode(ctx)
 	var b strings.Builder
 	b.WriteString("HTTP/1.1 200 OK\r\n")
 	fmt.Fprintf(&b, "CACHE-CONTROL: max-age=%d\r\n", maxAge)

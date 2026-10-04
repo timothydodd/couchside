@@ -3,4 +3,12 @@ web/dist
 server/data
 deploy
 .git
+.github
 *.md
+# Never needed in the image, and .env holds the NAS password.
+.env*
+site
+branding
+docs
+scripts
+docker-compose*.yml

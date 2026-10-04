@@ -4,23 +4,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Couchside privacy policy</title>
-<meta name="theme-color" content="#0D1418">
+<link rel="canonical" href="https://couchside.app/privacy.html">
+<meta name="theme-color" content="#111315">
 <meta name="description" content="What Couchside and its apps collect, store and send: no accounts with us, no analytics, nothing leaves your server but metadata lookups.">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/logo-32.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<meta property="og:title" content="Couchside">
-<meta property="og:description" content="Fast, light and local: your movies, shows and live TV with a proper DVR, served from your own server.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://couchside.app/privacy.html">
+<meta name="twitter:card" content="summary">
+<meta property="og:title" content="Couchside privacy policy">
+<meta property="og:description" content="What Couchside and its apps collect, store and send: no accounts with us, no analytics, nothing leaves your server but metadata lookups.">
 <meta property="og:image" content="https://couchside.app/icons/logo-512.png">
 <style>
-  /* Tokens from docs/style.md: one dark theme, seafoam on slate. */
+  /* Tokens from docs/style.md: one dark theme, seafoam on neutral grey. */
   :root {
     color-scheme: dark;
-    --bg-page: #0D1418; --bg-surface: #151F24; --bg-raised: #1D292E;
-    --text-primary: #EDF4F2; --text-secondary: #9DAEAA; --text-muted: #869894;
-    --border: #55696F; --border-light: #304047;
-    --accent: #63D6BE; --accent-hover: #7DE3CE; --text-on-accent: #0D1418;
-    --brand-gradient: linear-gradient(90deg, #63D6BE, #62A9D1);
+    --bg-page: #111315; --bg-surface: #181B1F; --bg-raised: #22262B;
+    --text-primary: #ECEFF3; --text-secondary: #B3BAC4; --text-muted: #8C949F;
+    --border: #626A75; --border-light: #262A30;
+    --accent: #5AF6B9; --accent-hover: #8CF9CF; --text-on-accent: #04261A;
+    --brand-gradient: linear-gradient(90deg, #5AF6B9, #5B93FF);
   }
   * { box-sizing: border-box; }
   body {
@@ -112,7 +116,9 @@
     <li><strong>Live TV and DVR:</strong> the channel guide, scheduled and
     finished recordings, and series recording rules.</li>
     <li><strong>Logs:</strong> the server's log records sign-ins (name, IP
-    address and device) and errors. It goes wherever you run the server.</li>
+    address and device) and errors. It goes wherever you run the server, and
+    the server keeps its last 2000 lines in memory so admins can read them in
+    Settings &rarr; Console.</li>
   </ul>
   <p>Who's watching what right now is kept in memory only, for the server's
   Settings page, and forgotten when the server restarts.</p>

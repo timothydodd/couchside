@@ -4,13 +4,11 @@ import PlayerFrame from "../components/player/PlayerFrame";
 import { InfoRows, type SettingSection } from "../components/player/SettingsMenu";
 import { ApiError, api } from "../lib/api";
 import { fmtTime } from "../lib/format";
-import { nativeHls } from "../lib/playback";
+import { hlsEngine } from "../lib/hls";
 import type { Recording } from "../lib/types";
 import { useProfile } from "../stores/profile";
 import { useRouter } from "../stores/router";
 
-let hlsModule: Promise<typeof HlsType> | null = null;
-const loadHls = () => (hlsModule ??= import("hls.js/light").then((m) => m.default));
 
 interface Session {
   sessionId: string;
@@ -33,7 +31,9 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(true);
+  const [nonce, setNonce] = useState(0); // "Try again"
   const resumeAt = useRef(0);
+  const recovered = useRef(0); // decode-error recoveries used: a stream that keeps failing stops
 
   const exit = () => back("/livetv/recordings");
 
@@ -63,21 +63,25 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
       sid = s.sessionId;
       if (cancelled) return leave();
       setSession(s);
-      const Hls = await loadHls().catch(() => null);
+      const engine = await hlsEngine("streams");
       if (cancelled) return;
-      if (!Hls || !Hls.isSupported()) {
-        if (!nativeHls()) return setError("This browser can't play streams.");
+      if ("error" in engine) return setError(engine.error);
+      if ("native" in engine) {
         v.src = s.playlist;
         v.addEventListener("loadedmetadata", () => (v.currentTime = resumeAt.current), { once: true });
         void v.play().catch(() => {});
         return;
       }
+      const { Hls } = engine;
       const player = new Hls({ startPosition: resumeAt.current, maxBufferLength: 30, backBufferLength: 3600 });
       hls = player;
       hlsRef.current = player;
       player.on(Hls.Events.ERROR, (_e, data) => {
         if (!data.fatal) return;
-        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) return player.recoverMediaError();
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && recovered.current < 2) {
+          recovered.current++;
+          return player.recoverMediaError();
+        }
         setError(`Playback stopped (${data.details}).`);
       });
       player.loadSource(s.playlist);
@@ -94,7 +98,7 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
       v.removeAttribute("src");
       v.load();
     };
-  }, [id, height]);
+  }, [id, height, nonce]);
 
   const rec = session?.recording;
   const startAt = rec ? rec.startedAt ?? rec.startAt - rec.padBefore : 0;
@@ -129,8 +133,8 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
       videoRef={videoRef}
       badge={
         <>
-          <span className="inline-flex items-center gap-1 rounded bg-critical px-1.5 py-px text-[10px] font-bold tracking-wide text-white">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> RECORDING
+          <span className="inline-flex items-center gap-1 rounded bg-critical px-1.5 py-px text-[10px] font-bold tracking-wide text-player-fg">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-on-accent" /> RECORDING
           </span>
           {rec && <span>{rec.channel} {rec.channelName}</span>}
         </>
@@ -142,7 +146,25 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
       settings={settings}
       onBack={exit}
       loading={starting && !error ? "Starting from the beginning…" : null}
-      error={error ? { title: "Can't play this recording", message: error } : null}
+      error={
+        error
+          ? {
+              title: "Can't play this recording",
+              message: error,
+              actions: (
+                <button
+                  className="btn-primary"
+                  onClick={() => {
+                    recovered.current = 0;
+                    setNonce((n) => n + 1);
+                  }}
+                >
+                  Try again
+                </button>
+              ),
+            }
+          : null
+      }
       videoProps={{ onPlaying: () => setStarting(false), onEnded: exit }}
     />
   );

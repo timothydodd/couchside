@@ -18,8 +18,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/timothydodd/couchside/internal/keylock"
 	"github.com/timothydodd/couchside/internal/parse"
 	"github.com/timothydodd/couchside/internal/probe"
+	"github.com/timothydodd/couchside/internal/transcode"
 )
 
 // subtitleTrack is one choice in the player's Subtitles menu.
@@ -121,7 +123,8 @@ func (s *Server) fileStreams(w http.ResponseWriter, r *http.Request) {
 	}
 	st, err := probe.ListStreams(r.Context(), s.cfg.FFprobe, f.Path)
 	if err != nil {
-		writeErr(w, httpError{http.StatusBadGateway, err.Error()})
+		slog.Warn("list streams", "file", f.Path, "err", err)
+		writeErr(w, httpError{http.StatusBadGateway, "couldn't read this file's audio and subtitle tracks"})
 		return
 	}
 	subs := []subtitleTrack{}
@@ -158,10 +161,21 @@ const SubtitleChunk = 90
 var (
 	// "s2.vtt" = whole embedded track, "s2.c5.vtt" = chunk 5 of it, "x0.vtt" = sidecar file
 	reSubKey = regexp.MustCompile(`^([sx])(\d+)(?:\.c(\d+))?\.vtt$`)
-	subLocks sync.Map // cache path → *sync.Mutex, so one conversion runs per track
+	subLocks keylock.Map[string] // by cache path, so one conversion runs per track
 	// subSlots caps conversions running at once; others wait while their
 	// request lasts.
 	subSlots = make(chan struct{}, 3)
+	// Whole tracks being converted in the background (?async=1), and ones
+	// that failed lately, by cache path.
+	subWorking sync.Map
+	subFailed  sync.Map // cache path → time.Time
+)
+
+const (
+	// A whole embedded track means reading the whole file: about 7 minutes
+	// for a 30 GB remux over SMB. In the background it gets this long.
+	subWholeTimeout = 30 * time.Minute
+	subFailedFor    = 10 * time.Minute // a failed background conversion isn't started again for this long
 )
 
 const subsKeep = 30 * 24 * time.Hour // converted subtitles unused this long are pruned
@@ -225,13 +239,37 @@ func (s *Server) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 		chunkTag = "-" + hex.EncodeToString(sum[:6])
 	}
 	cache := filepath.Join(s.cfg.CacheDir, "subs", fmt.Sprintf("%d-%s%d-%d%s.vtt", id, m[1], n, f.Mtime, chunkTag))
-	lk, _ := subLocks.LoadOrStore(cache, &sync.Mutex{})
-	mu := lk.(*sync.Mutex)
-	mu.Lock()
-	defer func() {
-		mu.Unlock()
-		subLocks.Delete(cache)
-	}()
+	// A TV app can't keep a request open for the minutes a whole embedded
+	// track takes, and its player fetches the track's URL by itself. With
+	// ?async=1 the conversion runs in the background: 202 until it's done
+	// (ask again in a few seconds), then the track.
+	// ?prepare=1 asks the same without wanting the track itself: the answer
+	// is {"ready": bool} (a sidecar or a cached track is ready at once), for
+	// an app that then hands the plain URL to its player.
+	q := r.URL.Query()
+	if prepare := q.Get("prepare") == "1"; prepare || q.Get("async") == "1" {
+		_, err := os.Stat(cache)
+		if err != nil && m[1] == "s" && m[3] == "" {
+			if at, failed := subFailed.Load(cache); failed && time.Since(at.(time.Time)) < subFailedFor {
+				writeErr(w, httpError{http.StatusUnprocessableEntity, "couldn't convert subtitles; see the server log"})
+				return
+			}
+			s.convertInBackground(id, chunk(m), cache, input)
+			w.Header().Set("Retry-After", "5")
+			if prepare {
+				writeJSON(w, http.StatusOK, map[string]bool{"ready": false})
+			} else {
+				writeJSON(w, http.StatusAccepted, map[string]string{"status": "converting"})
+			}
+			return
+		}
+		if prepare {
+			// Ready, or quick to make when the player asks (a sidecar, a chunk).
+			writeJSON(w, http.StatusOK, map[string]bool{"ready": true})
+			return
+		}
+	}
+	defer subLocks.Lock(cache)()
 	if info, err := os.Stat(cache); err == nil {
 		if time.Since(info.ModTime()) > 24*time.Hour {
 			now := time.Now()
@@ -251,21 +289,12 @@ func (s *Server) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 		// Embedded tracks mean reading through the whole file; give it time.
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Minute)
 		defer cancel()
-		tmp := cache + ".tmp"
-		args := append([]string{"-hide_banner", "-nostdin", "-loglevel", "error", "-y"}, input...)
-		args = append(args, "-c:s", "webvtt", "-f", "webvtt", tmp)
-		if out, err := exec.CommandContext(ctx, s.cfg.FFmpeg, args...).CombinedOutput(); err != nil {
-			os.Remove(tmp)
-			slog.Warn("subtitle conversion failed", "file", id, "track", chunk(m), "err", err, "ffmpeg", tail(string(out), 400))
+		if err := s.convertSub(ctx, id, chunk(m), cache, input); err != nil {
 			msg := "couldn't convert subtitles; see the server log"
 			if ctx.Err() != nil {
 				msg = "couldn't convert subtitles: timed out reading the file"
 			}
 			writeErr(w, httpError{http.StatusUnprocessableEntity, msg})
-			return
-		}
-		if err := os.Rename(tmp, cache); err != nil {
-			writeErr(w, err)
 			return
 		}
 	}
@@ -274,15 +303,53 @@ func (s *Server) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, cache)
 }
 
-func chunk(m []string) string { return m[1] + m[2] + m[3] }
-
-func tail(s string, n int) string {
-	s = strings.TrimSpace(s)
-	if len(s) > n {
-		return s[len(s)-n:]
+// convertSub runs ffmpeg to write one WebVTT file into the cache. The caller
+// holds the track's lock and a conversion slot.
+func (s *Server) convertSub(ctx context.Context, fileID int64, track, cache string, input []string) error {
+	tmp := cache + ".tmp"
+	args := append([]string{"-hide_banner", "-nostdin", "-loglevel", "error", "-y"}, input...)
+	args = append(args, "-c:s", "webvtt", "-f", "webvtt", tmp)
+	if out, err := exec.CommandContext(ctx, s.cfg.FFmpeg, args...).CombinedOutput(); err != nil {
+		os.Remove(tmp)
+		slog.Warn("subtitle conversion failed", "file", fileID, "track", track, "err", err, "ffmpeg", transcode.Tail(string(out), 400))
+		return err
 	}
-	return s
+	return os.Rename(tmp, cache)
 }
+
+// convertInBackground converts a whole track without a request waiting on
+// it. Asking again while it runs starts nothing new.
+func (s *Server) convertInBackground(fileID int64, track, cache string, input []string) {
+	if _, running := subWorking.LoadOrStore(cache, true); running {
+		return
+	}
+	go func() {
+		defer subWorking.Delete(cache)
+		defer subLocks.Lock(cache)()
+		if _, err := os.Stat(cache); err == nil {
+			return // a waiting request made it meanwhile
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), subWholeTimeout)
+		defer cancel()
+		if err := os.MkdirAll(filepath.Dir(cache), 0o755); err != nil {
+			slog.Warn("subtitle cache", "err", err)
+			return
+		}
+		select {
+		case subSlots <- struct{}{}:
+			defer func() { <-subSlots }()
+		case <-ctx.Done():
+			return
+		}
+		if err := s.convertSub(ctx, fileID, track, cache, input); err != nil {
+			subFailed.Store(cache, time.Now())
+			return
+		}
+		subFailed.Delete(cache)
+	}()
+}
+
+func chunk(m []string) string { return m[1] + m[2] + m[3] }
 
 // pruneSubs deletes converted subtitles nobody has loaded in subsKeep.
 func (s *Server) pruneSubs() {

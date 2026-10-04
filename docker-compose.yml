@@ -1,13 +1,15 @@
 # Run Couchside against media on a NAS SMB share.
 #   1. copy .env.example to .env and fill it in (.env is gitignored)
-#   2. docker compose up -d --build
+#   2. docker compose up -d
 #   3. open http://localhost:8080 -> Libraries -> add /media/Movies and "/media/TV Shows"
 #
 # Docker Desktop can't see mapped drive letters, so the share is mounted
 # directly over SMB. It's writable so recordings can go into TV Shows.
+#
+# This runs the published image. To build your own from a checkout, add the
+# dev file: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 services:
   couchside:
-    build: .
     image: ghcr.io/timothydodd/couchside:latest
     container_name: couchside
     ports:

@@ -4,12 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"time"
 )
 
 // watchedAt is the fraction of a file after which it counts as watched.
 const watchedAt = 0.92
 
+// SaveProgress and SetWatched write the watch state of the profile in ctx.
 func (d *DB) SaveProgress(ctx context.Context, fileID int64, position, duration float64) error {
 	watched := duration > 0 && position/duration >= watchedAt
 	_, err := d.sql.ExecContext(ctx, `INSERT INTO watch_state (profile_id, file_id, position_sec, duration_sec, watched, updated_at)
@@ -19,8 +21,6 @@ func (d *DB) SaveProgress(ctx context.Context, fileID int64, position, duration 
 		ProfileID(ctx), fileID, position, duration, watched)
 	return err
 }
-
-// SaveProgress and SetWatched write the watch state of the profile in ctx.
 
 // SetWatched marks files watched (position cleared) or unwatched (state removed).
 func (d *DB) SetWatched(ctx context.Context, fileIDs []int64, watched bool) error {
@@ -58,17 +58,20 @@ type PlayInfo struct {
 	HasBackdrop bool     `json:"hasBackdrop"`
 	UpdatedAt   int64    `json:"updatedAt"`
 	NextFileID  *int64   `json:"nextFileId"`
-	Progress    float64  `json:"progress"`
-	Container   string   `json:"container"`
-	VideoCodec  string   `json:"videoCodec"`
-	AudioCodec  string   `json:"audioCodec"`
-	Width       *int     `json:"width"`
-	Height      *int     `json:"height"`
-	Optimized   bool     `json:"optimized"`
-	Problem     string   `json:"problem"`
-	Role        string   `json:"role"` // copy | part | extra
-	PartNo      int      `json:"partNo"`
-	ExtraTitle  string   `json:"extraTitle"`
+	// NextUp: on Home's Continue Watching row because the episode before it
+	// was finished, not because this one was started.
+	NextUp     bool    `json:"nextUp,omitempty"`
+	Progress   float64 `json:"progress"`
+	Container  string  `json:"container"`
+	VideoCodec string  `json:"videoCodec"`
+	AudioCodec string  `json:"audioCodec"`
+	Width      *int    `json:"width"`
+	Height     *int    `json:"height"`
+	Optimized  bool    `json:"optimized"`
+	Problem    string  `json:"problem"`
+	Role       string  `json:"role"` // copy | part | extra
+	PartNo     int     `json:"partNo"`
+	ExtraTitle string  `json:"extraTitle"`
 	// Parts is the whole movie, in order, when this file is one part of it,
 	// so the player can draw one timeline across them.
 	Parts []PartRef `json:"parts,omitempty"`
@@ -87,18 +90,19 @@ const playCols = `f.id, m.id, m.kind, m.title, e.season, e.episode, COALESCE(e.t
 	f.problem, COALESCE(e.air_date, ''), f.role, f.part_no, f.extra_title`
 
 func playFrom(ctx context.Context) string {
-	return ` FROM files f JOIN media_items m ON m.id = f.media_item_id
+	return ` FROM files f JOIN media_items m ON m.id = f.media_item_id` + visible(ctx, "m") + `
 	LEFT JOIN episodes e ON e.id = f.episode_id ` + watchJoin(ctx)
 }
 
-func scanPlay(r interface{ Scan(...any) error }) (PlayInfo, error) {
+// scanPlay reads playCols, then any further columns the query selected into extra.
+func scanPlay(r interface{ Scan(...any) error }, extra ...any) (PlayInfo, error) {
 	var p PlayInfo
 	var season, episode sql.NullInt64
 	var epTitle, airDate string
-	err := r.Scan(&p.FileID, &p.ItemID, &p.Kind, &p.Title, &season, &episode, &epTitle, &p.PositionSec,
+	err := r.Scan(append([]any{&p.FileID, &p.ItemID, &p.Kind, &p.Title, &season, &episode, &epTitle, &p.PositionSec,
 		&p.DurationSec, &p.Watched, &p.HasStill, &p.HasBackdrop, &p.UpdatedAt,
 		&p.Container, &p.VideoCodec, &p.AudioCodec, &p.Width, &p.Height, &p.Optimized, &p.Problem, &airDate,
-		&p.Role, &p.PartNo, &p.ExtraTitle)
+		&p.Role, &p.PartNo, &p.ExtraTitle}, extra...)...)
 	if err != nil {
 		return p, err
 	}
@@ -184,23 +188,124 @@ func (d *DB) addParts(ctx context.Context, p *PlayInfo) error {
 	return nil
 }
 
-// ContinueWatching lists partly watched files, most recent first.
+// nextUpSeries is how many recently watched series are checked for a next episode.
+const nextUpSeries = 40
+
+// ContinueWatching is Home's row: files the profile is part way through, and
+// for each series whose last finished episode has an unwatched one after it,
+// that next episode (NextUp). Most recent activity first. Titles the profile
+// removed from the row (HideFromHome) stay out until they're watched again.
 func (d *DB) ContinueWatching(ctx context.Context, limit int) ([]PlayInfo, error) {
-	rows, err := d.sql.QueryContext(ctx, `SELECT `+playCols+playFrom(ctx)+`WHERE w.watched = 0 AND w.position_sec > 30
-		ORDER BY w.updated_at DESC LIMIT ?`, limit)
+	type entry struct {
+		p  PlayInfo
+		at int64 // when the profile last watched this title
+	}
+	var all []entry
+	started := map[int64]bool{} // titles with a file in progress
+
+	rows, err := d.sql.QueryContext(ctx, `SELECT `+playCols+`, w.updated_at`+playFrom(ctx)+`WHERE w.watched = 0 AND w.position_sec > 30
+		ORDER BY w.updated_at DESC LIMIT ?`, limit*2)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := []PlayInfo{}
 	for rows.Next() {
-		p, err := scanPlay(rows)
+		var e entry
+		if e.p, err = scanPlay(rows, &e.at); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		all = append(all, e)
+		started[e.p.ItemID] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// The episode each series was last finished at, most recent first.
+	type last struct {
+		series          int64
+		season, episode int64
+		at              int64
+	}
+	var lasts []last
+	seen := map[int64]bool{}
+	rows, err = d.sql.QueryContext(ctx, `SELECT e.series_id, e.season, e.episode, w.updated_at
+		FROM watch_state w JOIN files f ON f.id = w.file_id JOIN episodes e ON e.id = f.episode_id
+		WHERE w.profile_id = ? AND w.watched = 1 ORDER BY w.updated_at DESC, e.season DESC, e.episode DESC LIMIT 2000`, ProfileID(ctx))
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() && len(lasts) < nextUpSeries {
+		var l last
+		if err := rows.Scan(&l.series, &l.season, &l.episode, &l.at); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if !seen[l.series] {
+			seen[l.series] = true
+			lasts = append(lasts, l)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for _, l := range lasts {
+		if started[l.series] {
+			continue // already in the row with the episode being watched
+		}
+		p, err := scanPlay(d.sql.QueryRowContext(ctx, `SELECT `+playCols+playFrom(ctx)+`
+			WHERE m.id = ? AND (e.season, e.episode) > (?, ?) AND f.problem = '' AND f.role <> 'extra' AND COALESCE(w.watched, 0) = 0
+			ORDER BY e.season, e.episode, f.size DESC LIMIT 1`, l.series, l.season, l.episode))
+		if err == sql.ErrNoRows {
+			continue // caught up
+		}
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, p)
+		p.NextUp = true
+		all = append(all, entry{p, l.at})
 	}
-	return out, rows.Err()
+
+	hidden := map[int64]int64{}
+	rows, err = d.sql.QueryContext(ctx, `SELECT item_id, hidden_at FROM home_hidden WHERE profile_id = ?`, ProfileID(ctx))
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var item, at int64
+		if err := rows.Scan(&item, &at); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		hidden[item] = at
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	sort.SliceStable(all, func(i, j int) bool { return all[i].at > all[j].at })
+	out := []PlayInfo{}
+	for _, e := range all {
+		if at, ok := hidden[e.p.ItemID]; ok && e.at <= at {
+			continue
+		}
+		if len(out) == limit {
+			break
+		}
+		out = append(out, e.p)
+	}
+	return out, nil
+}
+
+// HideFromHome takes a title off the profile's Continue Watching row until
+// the profile watches it again. The resume point is kept.
+func (d *DB) HideFromHome(ctx context.Context, itemID int64) error {
+	_, err := d.sql.ExecContext(ctx, `INSERT INTO home_hidden (profile_id, item_id, hidden_at) VALUES (?, ?, unixepoch())
+		ON CONFLICT (profile_id, item_id) DO UPDATE SET hidden_at = excluded.hidden_at`, ProfileID(ctx), itemID)
+	return err
 }
 
 // FormatAirDate renders "2024-11-10 03:30" as "Nov 10, 2024 3:30 AM".

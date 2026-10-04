@@ -1,15 +1,16 @@
 package livetv
 
 import (
-	"net/url"
 	"context"
 	"log/slog"
+	"net/url"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/metadata"
+	"github.com/timothydodd/couchside/internal/probe"
 	"github.com/timothydodd/couchside/internal/transcode"
 	"github.com/timothydodd/couchside/internal/usererr"
 )
@@ -55,18 +56,30 @@ type Service struct {
 	virtualErr   map[int64]string // why a virtual channel has no schedule
 	wakeVirtual  chan struct{}
 	virtualCount int        // how many virtual channels there are
+	recoverMu    sync.Mutex // joining a failed recording's pieces (Recover)
 	virtualMu    sync.Mutex // one schedule extension at a time (loop, saves and tune-ins race)
 }
 
 // HasTuner reports whether an HDHomeRun is configured. Without one, Live TV
 // is just Couchside's own virtual channels (if any).
-func (s *Service) HasTuner() bool { return s.hdhr != nil }
+func (s *Service) HasTuner() bool { return s != nil && s.hdhr != nil }
 
 // configured is whether Live TV has anything to show. Called with mu held.
 func (s *Service) configured() bool { return s.hdhr != nil || s.virtualCount > 0 }
 
 func New(cfg Config, d *db.DB, enc transcode.Encoder, work Enqueuer, cacheDir string) (*Service, error) {
 	lm, err := newLiveManager(enc, filepath.Join(cacheDir, "live"), cfg.MaxEncodes)
+	if err == nil && cfg.FFprobe != "" {
+		lm.pieceInfo = func(ctx context.Context, path string) pieceVideo {
+			ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+			defer cancel()
+			info, err := probe.Probe(ctx, cfg.FFprobe, path)
+			if err != nil {
+				return pieceVideo{} // play it as plain SDR on the CPU; a missing file fails in ffmpeg
+			}
+			return pieceVideo{HDR: info.HDR(), Codec: info.VideoCodec}
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -246,6 +259,15 @@ func (s *Service) refreshGuide(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// Couchside's own channels write their own guide. A tuner channel that
+	// turns up with one's number isn't in the lineup (ReplaceChannels skips
+	// it), and its listings would replace the virtual channel's.
+	virtual := map[string]bool{}
+	if vcs, err := s.db.VirtualChannels(ctx); err == nil {
+		for _, vc := range vcs {
+			virtual[vc.Number] = true
+		}
+	}
 	horizon := time.Now().Add(26 * time.Hour).Unix()
 	var start, total int64
 	for page := 0; page < 10; page++ {
@@ -257,6 +279,9 @@ func (s *Service) refreshGuide(ctx context.Context) error {
 		var progs []db.Program
 		var maxEnd int64
 		for _, c := range chans {
+			if virtual[c.GuideNumber] {
+				continue
+			}
 			if page == 0 {
 				_ = s.db.SetChannelGuideInfo(ctx, c.GuideNumber, c.Affiliate, c.ImageURL)
 			}

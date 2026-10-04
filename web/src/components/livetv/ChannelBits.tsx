@@ -4,6 +4,7 @@ import { api } from "../../lib/api";
 import type { TvChannel } from "../../lib/types";
 import { WEAK_SIGNAL } from "./filters";
 import { notify } from "../../lib/notices";
+import { errText } from "../../lib/errors";
 
 /** Four bars from the tuner's signal-quality reading; amber when marginal. */
 export function SignalBars({ c }: { c: TvChannel }) {
@@ -38,7 +39,7 @@ export function PinButton({ c, onChange, className = "" }: { c: TvChannel; onCha
       await api(`/api/livetv/channels/${c.number}/pin`, { method: "PUT", json: { pinned: !c.pinned } });
       onChange();
     } catch (e) {
-      notify(`Couldn't change favourites: ${e instanceof Error ? e.message : String(e)}`);
+      notify(`Couldn't change favourites: ${errText(e)}`);
     } finally {
       setBusy(false);
     }

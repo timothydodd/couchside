@@ -4,6 +4,7 @@ import FolderPicker from "../FolderPicker";
 import { api, useApi } from "../../lib/api";
 import { fmtAgo, fmtDay, fmtTime } from "../../lib/format";
 import type { LiveTvStatus } from "../../lib/types";
+import { errText } from "../../lib/errors";
 
 /** The tuner, guide and DVR folder. Without a tuner it says how to add one. */
 export default function LiveTvSettings() {
@@ -18,7 +19,7 @@ export default function LiveTvSettings() {
       await api("/api/livetv/refresh", { method: "POST" });
       await reload();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errText(e));
     } finally {
       setBusy(false);
     }
@@ -103,7 +104,7 @@ function RecordingsFolder({ onSaved }: { onSaved: () => void }) {
       await reload();
       onSaved();
     } catch (e) {
-      setMsg({ tone: "critical", text: e instanceof Error ? e.message : String(e) });
+      setMsg({ tone: "critical", text: errText(e) });
     } finally {
       setBusy(false);
     }

@@ -91,3 +91,6 @@ export function titleLink(id: string): string | null {
   const m = id.match(/^tmdb:(movie|tv):(\d+)$/);
   return m ? `https://www.themoviedb.org/${m[1]}/${m[2]}` : null;
 }
+
+/** A version as shown: "v0.12.0" for a release, the build's own name ("dev") otherwise. */
+export const fmtVersion = (v: string): string => (/^\d/.test(v) ? `v${v}` : v);

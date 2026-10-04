@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -40,7 +42,7 @@ type Server struct {
 	worker    *worker.Worker
 	providers *metadata.Chain
 	tc        *transcode.Manager
-	tv        *livetv.Service // nil when no tuner is configured
+	tv        *livetv.Service // always set by main (its virtual channels need no tuner; HasTuner gates DVR); nil only in tests
 	version   string
 	presence  *presence
 	sys       sysstat.Sampler
@@ -48,7 +50,13 @@ type Server struct {
 	logs      *logbuf.Buffer   // recent log lines, for System → Console; nil without one
 	index     searchIndex
 	auth      *authState
-	proxies   []netip.Prefix // COUCHSIDE_TRUSTED_PROXIES
+
+	oidc   oidcState   // sign-ins through an identity provider, in progress
+	device deviceState // codes TVs are showing
+
+	remoteSize    atomic.Int64 // bytes in the remote image cache, as of the last prune plus fetches since
+	remotePruning sync.Mutex
+	proxies       []netip.Prefix // COUCHSIDE_TRUSTED_PROXIES
 }
 
 func init() {
@@ -73,6 +81,7 @@ func New(d *db.DB, cfg config.Config, w *worker.Worker, providers *metadata.Chai
 // Run does the server's background upkeep until ctx ends.
 func (s *Server) Run(ctx context.Context) {
 	go s.history.Run(ctx)
+	go s.runBackups(ctx)
 	go func() {
 		t := time.NewTicker(24 * time.Hour)
 		defer t.Stop()
@@ -91,13 +100,13 @@ func (s *Server) Run(ctx context.Context) {
 	if _, err := s.setupNeeded(ctx); err != nil {
 		slog.Error("accounts", "err", err)
 	}
-	s.pruneSessions(ctx)
 	if s.cfg.Auth {
 		// Passwords are required now; sessions from passwordless days end.
 		if err := s.endPasswordlessSessions(ctx); err != nil {
 			slog.Error("accounts", "err", err)
 		}
 	}
+	s.pruneSessions(ctx) // loops until ctx ends
 }
 
 // pruneTables drops rows that would otherwise only grow: finished jobs after
@@ -112,8 +121,15 @@ func (s *Server) pruneTables(ctx context.Context) {
 	if err != nil {
 		slog.Warn("prune provider cache", "err", err)
 	}
-	if jobs+cached > 0 {
-		slog.Info("pruned old rows", "jobs", jobs, "providerResponses", cached)
+	people, err := s.db.PrunePeople(ctx)
+	if err != nil {
+		slog.Warn("prune people", "err", err)
+	}
+	for _, id := range people {
+		_ = os.Remove(worker.PersonPhotoPath(s.cfg.CacheDir, id))
+	}
+	if jobs+cached+int64(len(people)) > 0 {
+		slog.Info("pruned old rows", "jobs", jobs, "providerResponses", cached, "people", len(people))
 	}
 }
 
@@ -140,12 +156,21 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/refresh", s.refresh)
 		r.Post("/auth/setup", s.setup)
 		r.Post("/auth/pick", s.pick)
+		r.Get("/auth/oidc/start", s.oidcStart)
+		r.Get("/auth/oidc/callback", s.oidcCallback)
+		r.Post("/auth/device", s.deviceStart)
+		r.Post("/auth/device/token", s.deviceToken)
 
 		r.Group(func(r chi.Router) {
 			r.Use(s.authenticate, s.presence.track)
 			// Your own account; reachable while a temporary password still has to be changed.
 			r.Post("/auth/logout", s.logout)
 			r.Post("/auth/password", s.changePassword)
+			r.Post("/auth/device/approve", s.deviceApprove)
+			r.Get("/auth/totp", s.totpStatus)
+			r.Post("/auth/totp/setup", s.totpSetup)
+			r.Post("/auth/totp/enable", s.totpEnable)
+			r.Post("/auth/totp/disable", s.totpDisable)
 			r.Get("/auth/sessions", s.mySessions)
 			r.Post("/auth/sessions/others/end", s.endOtherSessions)
 			r.Delete("/auth/sessions/{sid}", s.endSession)
@@ -168,6 +193,9 @@ func (s *Server) Handler() http.Handler {
 	// with accounts on, so TV apps' image nodes needn't send a token.
 	r.Get("/api/artwork/items/{id}/{kind}", s.itemArtwork)
 	r.Get("/api/artwork/files/{id}/still", s.fileStill)
+	// Preview thumbnails are pictures like stills: the Roku fetches its BIF
+	// by itself, without the stream's headers.
+	r.Get("/api/files/{id}/trickplay/{name}", s.trickplayFile)
 	r.Get("/api/artwork/people/{id}", s.personPhoto)
 	r.Get("/api/artwork/remote", s.remoteImage)
 	r.Group(func(r chi.Router) {
@@ -189,6 +217,7 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) userRoutes(r chi.Router) {
 	r.Get("/status", s.status)
 	r.Get("/home", s.home)
+	r.Delete("/home/continue/{id}", s.hideFromHome)
 	r.Get("/search", s.search)
 
 	r.Get("/profiles", s.listProfiles)
@@ -199,6 +228,9 @@ func (s *Server) userRoutes(r chi.Router) {
 	r.Get("/items/{id}", s.getItem)
 	r.Get("/people/{id}", s.person)
 	r.Post("/items/{id}/watched", s.itemWatched)
+	r.Put("/items/{id}/version", s.setVersion)
+	r.Put("/items/{id}/watchlist", s.setWatchlist)
+	r.Delete("/items/{id}/watchlist", s.setWatchlist)
 
 	r.Get("/files/{id}", s.playInfo)
 	r.Put("/files/{id}/progress", s.saveProgress)
@@ -206,6 +238,8 @@ func (s *Server) userRoutes(r chi.Router) {
 	r.Post("/files/{id}/hls", s.createHLS)
 	r.Get("/files/{id}/streams", s.fileStreams)
 	r.Get("/files/{id}/commercials", s.commercials)
+	r.Get("/files/{id}/segments", s.segments)
+	r.Get("/files/{id}/trickplay", s.trickplay)
 	r.Post("/files/{id}/commercials", s.findCommercials)
 	r.Get("/hls/{sid}/index.m3u8", s.hlsPlaylist)
 	r.Get("/hls/{sid}/{seg}", s.hlsSegment)
@@ -231,6 +265,7 @@ func (s *Server) recorderRoutes(r chi.Router) {
 	r.Post("/dvr/recordings", s.dvrRecord)
 	r.Post("/dvr/recordings/{id}/cancel", s.dvrCancel)
 	r.Delete("/dvr/recordings/{id}", s.dvrDelete)
+	r.Post("/dvr/recordings/{id}/recover", s.dvrRecover)
 	r.Post("/dvr/rules", s.ruleCreate)
 	r.Put("/dvr/rules/{id}", s.ruleUpdate)
 	r.Delete("/dvr/rules/{id}", s.ruleDelete)
@@ -241,12 +276,23 @@ func (s *Server) adminRoutes(r chi.Router) {
 	r.Get("/system", s.system)
 	r.Get("/system/history", s.systemHistory)
 	r.Get("/system/logs", s.systemLogs)
+	r.Post("/items/{id}/intros", s.findIntros)
+	r.Put("/files/{id}/segments/{kind}", s.setSegment)
+	r.Delete("/files/{id}/segments/{kind}", s.setSegment)
+	r.Get("/system/backups", s.listBackups)
+	r.Post("/system/backups", s.createBackup)
+	r.Get("/system/backups/{name}", s.downloadBackup)
+	r.Delete("/system/backups/{name}", s.deleteBackup)
+	r.Put("/settings/backup", s.setBackupSettings)
 
 	r.Get("/accounts", s.listAccounts)
 	r.Put("/settings/passwordless", s.setPasswordless)
+	r.Get("/settings/oidc", s.getOIDC)
+	r.Put("/settings/oidc", s.setOIDC)
 	r.Post("/accounts", s.createAccount)
 	r.Put("/accounts/{id}", s.updateAccount)
 	r.Post("/accounts/{id}/password", s.resetPassword)
+	r.Post("/accounts/{id}/totp/reset", s.resetTOTP)
 	r.Delete("/accounts/{id}", s.deleteAccount)
 	r.Get("/accounts/{id}/sessions", s.accountSessions)
 
@@ -298,7 +344,8 @@ func (s *Server) adminRoutes(r chi.Router) {
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	if err := s.db.Ping(r.Context()); err != nil {
-		http.Error(w, "db: "+err.Error(), http.StatusServiceUnavailable)
+		slog.Error("health check", "err", err)
+		http.Error(w, "database unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	w.Write([]byte("ok"))
@@ -314,6 +361,9 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeErr(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, context.Canceled):
+		// The client went away mid-request; there's nobody to answer and nothing wrong.
+		w.WriteHeader(499)
 	case errors.Is(err, db.ErrNotFound):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 	default:
@@ -339,6 +389,16 @@ type httpError struct {
 func (e httpError) Error() string { return e.msg }
 
 func badRequest(msg string) error { return httpError{http.StatusBadRequest, msg} }
+
+// userFault answers a message written for the user (usererr) as a 400. Any
+// other error is returned as it is, so writeErr logs it and says "internal
+// error": its text may hold paths or SQL.
+func userFault(err error) error {
+	if usererr.Is(err) {
+		return badRequest(err.Error())
+	}
+	return err
+}
 
 func idParam(r *http.Request) (int64, error) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)

@@ -4,6 +4,7 @@ import AuthShell from "../components/auth/AuthShell";
 import ProfileAvatar from "../components/ProfileAvatar";
 import { ErrorNote, WarningNote } from "../components/ui";
 import type { ProfileStub } from "../lib/types";
+import { ApiError } from "../lib/api";
 import { authError, useAuth } from "../stores/auth";
 import { useRouter } from "../stores/router";
 
@@ -15,13 +16,22 @@ import { useRouter } from "../stores/router";
  * sidebar.
  */
 export default function SignInPage({ switching = false }: { switching?: boolean }) {
-  const { passwordless, profiles, signedIn, user, insecure, login, pick, switchTo } = useAuth();
+  const { passwordless, profiles, signedIn, user, insecure, oidc, login, pick, switchTo } = useAuth();
+  // What the provider's sign-in came back with, when it failed (shown once).
+  const [ssoError] = useState(() => {
+    const e = new URLSearchParams(location.search).get("signin_error");
+    if (e) history.replaceState(null, "", location.pathname);
+    return e;
+  });
   const back = useRouter((s) => s.back);
   const tiles = passwordless ? profiles : signedIn;
   const [asking, setAsking] = useState<ProfileStub | null>(null); // the profile whose password we want
   const [form, setForm] = useState(!passwordless && signedIn.length === 0);
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  // Two-step sign-in: asked for once the password has been accepted.
+  const [needCode, setNeedCode] = useState(false);
+  const [code, setCode] = useState("");
   const [busy, setBusy] = useState<number | "form" | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -31,6 +41,11 @@ export default function SignInPage({ switching = false }: { switching?: boolean 
     try {
       await fn();
     } catch (e) {
+      if (e instanceof ApiError && e.code === "totp_required") {
+        setNeedCode(true);
+        setBusy(null);
+        return;
+      }
       setErr(authError(e));
       setBusy(null);
     }
@@ -77,6 +92,17 @@ export default function SignInPage({ switching = false }: { switching?: boolean 
           </WarningNote>
         </div>
       )}
+      {ssoError && (
+        <div className="mt-6 w-full max-w-sm">
+          <ErrorNote>{ssoError}</ErrorNote>
+        </div>
+      )}
+      {oidc && !switching && !asking && (
+        // A full navigation: the provider's pages take over, then send the browser back signed in.
+        <a className="btn-primary mt-6 justify-center" href="/api/auth/oidc/start">
+          <LogIn size={15} /> {oidc}
+        </a>
+      )}
       {tiles.length > 0 && !asking && (
         <div className="mt-8 flex flex-wrap justify-center gap-6">
           {tiles.map((p) => (
@@ -109,7 +135,7 @@ export default function SignInPage({ switching = false }: { switching?: boolean 
           className="card mt-8 flex w-full max-w-sm flex-col gap-4 p-6"
           onSubmit={(e) => {
             e.preventDefault();
-            void run("form", () => login(name, password));
+            void run("form", () => login(name, password, needCode ? code : undefined));
           }}
         >
           {asking ? (
@@ -134,8 +160,23 @@ export default function SignInPage({ switching = false }: { switching?: boolean 
               onChange={(e) => setPassword(e.target.value)}
             />
           </label>
+          {needCode && (
+            <label className="block">
+              <span className="field-label">Code from your authenticator app</span>
+              <input
+                className="field mono w-full text-center"
+                autoComplete="one-time-code"
+                inputMode="text"
+                autoFocus
+                placeholder="123456"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+              />
+              <span className="mt-1 block text-xs text-content-muted">Lost your phone? A recovery code works here too.</span>
+            </label>
+          )}
           {err && <ErrorNote>{err}</ErrorNote>}
-          <button type="submit" className="btn-primary justify-center" disabled={busy !== null || !name.trim() || !password}>
+          <button type="submit" className="btn-primary justify-center" disabled={busy !== null || !name.trim() || !password || (needCode && !code.trim())}>
             <LogIn size={15} /> Sign in
           </button>
           {asking ? (

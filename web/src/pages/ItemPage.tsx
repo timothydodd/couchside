@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, Eye, EyeOff, Play, RotateCcw, Star, Trash2, Wand2 } from "lucide-react";
+import { ArrowLeft, Bookmark, BookmarkCheck, Check, Eye, EyeOff, Play, RotateCcw, Star, Trash2, Wand2 } from "lucide-react";
 import { CastRow, CrewLine } from "../components/Credits";
 import Link from "../components/Link";
 import { PosterArt } from "../components/PosterCard";
@@ -13,6 +13,7 @@ import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
 import { attempt } from "../lib/notices";
+import { errText } from "../lib/errors";
 
 export default function ItemPage({ id }: { id: number }) {
   const { data, error, loading, reload } = useApi<ItemDetail>(`/api/items/${id}`);
@@ -26,12 +27,34 @@ export default function ItemPage({ id }: { id: number }) {
       </div>
     );
   }
-  if (!data) return <EmptyState title="Title not found">{error}</EmptyState>;
+  if (!data) {
+    // Only a 404 means it isn't there; anything else is a failed request.
+    const missing = !error || /not found/i.test(error);
+    return (
+      <EmptyState title={missing ? "Title not found" : "Couldn't load this title"}>
+        {!missing && error}
+        {!missing && (
+          <div className="mt-3">
+            <button className="btn-ghost" onClick={() => void reload()}>
+              Try again
+            </button>
+          </div>
+        )}
+      </EmptyState>
+    );
+  }
 
   const { item, files, seasons } = data;
   const isSeries = item.kind === "series";
   const next = isSeries ? nextEpisode(seasons ?? []) : null;
-  const feature = featureFiles(files);
+  // A movie with more than one copy (4K and 1080p, two cuts): the profile's choice, or the biggest.
+  const versions = isSeries ? [] : files.filter((f) => f.role === "copy" && !f.problem);
+  const chosen = versions.find((f) => f.id === data.versionFileId);
+  const feature = featureFiles(files, chosen);
+  const setVersion = attempt("Couldn't change the version", async (fileId: number) => {
+    await api(`/api/items/${id}/version`, { method: "PUT", json: { fileId } });
+    await reload();
+  });
   const extras = files.filter((f) => f.role === "extra");
   // A split movie resumes in its first unfinished part, at a time on the whole movie's clock.
   const movieAt = feature.findIndex((f) => !f.watched);
@@ -41,6 +64,10 @@ export default function ItemPage({ id }: { id: number }) {
   const resumeAt = isSeries ? next?.positionSec : movieAt >= 0 ? partOffset + movieFile.positionSec : 0;
   const allWatched = item.fileCount > 0 && item.watchedCount >= item.fileCount;
 
+  const setListed = attempt("Couldn't change your list", async (on: boolean) => {
+    await api(`/api/items/${id}/watchlist`, { method: on ? "PUT" : "DELETE" });
+    await reload();
+  });
   const setWatched = attempt("Couldn't change watched", async (watched: boolean) => {
     await api(`/api/items/${item.id}/watched`, { method: "POST", json: { watched } });
     await reload();
@@ -113,6 +140,25 @@ export default function ItemPage({ id }: { id: number }) {
                     : "Play"}
               </Link>
             )}
+            {versions.length > 1 && feature.length === 1 && (
+              <select
+                className="field !py-2"
+                aria-label="Version to watch"
+                title="Which copy plays. Your choice is remembered for this title."
+                value={feature[0].id}
+                onChange={(e) => void setVersion(Number(e.target.value))}
+              >
+                {versions.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {versionLabel(f)}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button className="btn-ghost !py-2" aria-pressed={item.inWatchlist} onClick={() => void setListed(!item.inWatchlist)}>
+              {item.inWatchlist ? <BookmarkCheck size={15} className="text-accent" /> : <Bookmark size={15} />}
+              {item.inWatchlist ? "On my list" : "My list"}
+            </button>
             <button className="btn-ghost !py-2" onClick={() => void setWatched(!allWatched)}>
               {allWatched ? <EyeOff size={15} /> : <Eye size={15} />}
               {allWatched ? "Mark unwatched" : "Mark watched"}
@@ -152,11 +198,16 @@ export default function ItemPage({ id }: { id: number }) {
 }
 
 /** The files that make up a movie: its parts in order (the best copy of each), or its best copy. */
-function featureFiles(files: MediaFile[]): MediaFile[] {
+function featureFiles(files: MediaFile[], chosen?: MediaFile): MediaFile[] {
   const parts = files.filter((f) => f.role === "part" && !f.problem); // server order: part number, then biggest
   if (parts.length) return parts.filter((f, i) => i === 0 || parts[i - 1].partNo !== f.partNo);
-  const copy = files.find((f) => f.role === "copy");
+  const copy = chosen ?? files.find((f) => f.role === "copy");
   return copy ? [copy] : [];
+}
+
+/** A copy of a movie, as the version chooser names it: "4K · HEVC · Extended · 54 GB". */
+function versionLabel(f: MediaFile): string {
+  return [fmtResolution(f.width, f.height), f.videoCodec.toUpperCase(), f.edition, fmtBytes(f.size)].filter(Boolean).join(" · ");
 }
 
 /** First episode that isn't finished: resume it, or start the next one. */
@@ -190,7 +241,7 @@ function MatchPanel({ id, status, imdbId, parsed, onDone }: { id: number; status
       setValue("");
       onDone();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errText(e));
     } finally {
       setBusy(false);
     }

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/timothydodd/couchside/internal/db"
+	"github.com/timothydodd/couchside/internal/parse"
 	"github.com/timothydodd/couchside/internal/probe"
 	"github.com/timothydodd/couchside/internal/usererr"
 )
@@ -297,9 +298,6 @@ func (p *picker) next() vprogram {
 
 // --- filler --------------------------------------------------------------------
 
-var videoExts = map[string]bool{".mp4": true, ".m4v": true, ".mkv": true, ".mov": true, ".avi": true, ".ts": true,
-	".mpg": true, ".mpeg": true, ".webm": true, ".wmv": true, ".flv": true}
-
 // fillerClips lists the clips in a folder (and below), probing any it hasn't seen.
 func (s *Service) fillerClips(ctx context.Context, folder string) ([]db.FillerClip, error) {
 	known, err := s.db.FillerClips(ctx)
@@ -308,7 +306,7 @@ func (s *Service) fillerClips(ctx context.Context, folder string) ([]db.FillerCl
 	}
 	var out []db.FillerClip
 	err = filepath.WalkDir(folder, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !videoExts[strings.ToLower(filepath.Ext(p))] {
+		if err != nil || d.IsDir() || !parse.IsVideo(p) {
 			return nil
 		}
 		info, err := d.Info()
@@ -328,6 +326,24 @@ func (s *Service) fillerClips(ctx context.Context, folder string) ([]db.FillerCl
 		return nil
 	})
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	// Forget clips that have left the folder. Not when the walk found none:
+	// that's an unmounted share, and probing them all again is slow.
+	if err == nil && len(out) > 0 {
+		here := map[string]bool{}
+		for _, c := range out {
+			here[c.Path] = true
+		}
+		prefix := strings.TrimRight(folder, `/\`) + string(filepath.Separator)
+		var gone []string
+		for p := range known {
+			if strings.HasPrefix(p, prefix) && !here[p] {
+				gone = append(gone, p)
+			}
+		}
+		if len(gone) > 0 {
+			_ = s.db.DeleteFillerClips(ctx, gone)
+		}
+	}
 	return out, err
 }
 
@@ -368,6 +384,11 @@ var ErrNothingToPlay = usererr.New("nothing in the library matches this channel"
 func (s *Service) extendVirtual(ctx context.Context, vc db.VirtualChannel, now time.Time) error {
 	s.virtualMu.Lock()
 	defer s.virtualMu.Unlock()
+	return s.extendVirtualLocked(ctx, vc, now)
+}
+
+// extendVirtualLocked is extendVirtual with virtualMu held.
+func (s *Service) extendVirtualLocked(ctx context.Context, vc db.VirtualChannel, now time.Time) error {
 	// Re-read: the channel's state may have moved on while waiting for the lock.
 	if cur, err := s.db.VirtualChannel(ctx, vc.ID); err == nil {
 		vc = cur
@@ -534,6 +555,8 @@ func (s *Service) extendAllVirtual(ctx context.Context) {
 		}
 	}
 	_ = s.db.PrunePlayout(ctx, now.Add(-6*time.Hour).UnixMilli())
+	// The guide refresh prunes listings too, but it only runs with a tuner.
+	_ = s.db.PrunePrograms(ctx, now.Add(-6*time.Hour).Unix())
 }
 
 func (s *Service) setVirtualErr(id int64, err error) {
@@ -604,6 +627,11 @@ func (s *Service) SaveVirtual(ctx context.Context, id int64, number, name string
 			return 0, err
 		}
 	} else {
+		// Under virtualMu, with the rebuild: a schedule extension already
+		// running has read the old settings, and would otherwise put 36 hours
+		// of the old schedule back after the update cleared it.
+		s.virtualMu.Lock()
+		defer s.virtualMu.Unlock()
 		old, err := s.db.VirtualChannel(ctx, id)
 		if err != nil {
 			return 0, err
@@ -612,6 +640,13 @@ func (s *Service) SaveVirtual(ctx context.Context, id int64, number, name string
 			return 0, err
 		}
 		s.live.stopKey("vc:" + old.Number)
+		vc, err := s.db.VirtualChannel(ctx, id)
+		if err == nil {
+			err = s.extendVirtualLocked(ctx, vc, time.Now())
+			s.setVirtualErr(id, err)
+		}
+		s.RebuildVirtual() // recounts channels too
+		return id, nil
 	}
 	vc, err := s.db.VirtualChannel(ctx, id)
 	if err == nil {
@@ -628,7 +663,10 @@ func (s *Service) DeleteVirtual(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
-	if err := s.db.DeleteVirtualChannel(ctx, id); err != nil {
+	s.virtualMu.Lock() // not while its schedule is being extended
+	err = s.db.DeleteVirtualChannel(ctx, id)
+	s.virtualMu.Unlock()
+	if err != nil {
 		return err
 	}
 	s.live.stopKey("vc:" + vc.Number)

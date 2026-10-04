@@ -44,6 +44,26 @@ func (d *DB) SetCredits(ctx context.Context, itemID int64, credits []Credit) err
 	return tx.Commit()
 }
 
+// PrunePeople drops people no title credits any more (their titles were
+// removed or re-matched) and returns their ids, so the caller can remove
+// their cached photos.
+func (d *DB) PrunePeople(ctx context.Context) ([]int64, error) {
+	rows, err := d.sql.QueryContext(ctx, `DELETE FROM people WHERE id NOT IN (SELECT person_id FROM item_credits) RETURNING id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // CreditRow is a person as a title's page lists them.
 type CreditRow struct {
 	PersonID int64  `json:"personId"`
@@ -108,7 +128,7 @@ func (d *DB) PersonItems(ctx context.Context, personID int64) ([]PersonItem, err
 	rows, err := d.sql.QueryContext(ctx, `SELECT `+summaryCols(ctx)+`,
 		(SELECT group_concat(CASE WHEN c.kind = 'cast' AND c.role = '' THEN 'Cast' ELSE c.role END, '|')
 		 FROM item_credits c WHERE c.item_id = m.id AND c.person_id = ?)
-		FROM media_items m WHERE m.id IN (SELECT item_id FROM item_credits WHERE person_id = ?)
+		FROM media_items m WHERE m.id IN (SELECT item_id FROM item_credits WHERE person_id = ?)`+visible(ctx, "m")+`
 		ORDER BY COALESCE(m.year, 0) DESC, m.sort_title`, personID, personID)
 	if err != nil {
 		return nil, err

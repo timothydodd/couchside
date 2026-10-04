@@ -4,7 +4,7 @@ import type { Browse } from "../lib/types";
 
 /** Browse subfolders under the server's media root. */
 export default function FolderPicker({ path, onPick }: { path: string; onPick: (p: string) => void }) {
-  const { data, error } = useApi<Browse>(`/api/fs?path=${encodeURIComponent(path)}`);
+  const { data, error } = useApi<Browse>(`/api/fs?path=${encodeURIComponent(path)}`, { keep: true });
   if (error) return null; // typed path isn't browsable; the text field still works
   if (!data) return null;
   return (

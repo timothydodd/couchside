@@ -9,7 +9,7 @@ UI that are stored in its database. Release builds work with none of them set.
 | --- | --- | --- |
 | `COUCHSIDE_MEDIA_ROOT` | none | Libraries must live under it; enables the folder picker |
 | `COUCHSIDE_ADDR` | `:8080` | Listen address |
-| `COUCHSIDE_DATA_DIR` | `./data` | SQLite database |
+| `COUCHSIDE_DATA_DIR` | `./data` | SQLite database, plus `auth.key` (signs sessions) and `server.id`: back up all three |
 | `COUCHSIDE_CACHE_DIR` | `$DATA_DIR/cache` | Artwork, stills, subtitles, optimized copies |
 | `COUCHSIDE_WEB_DIR` | none | Serve the UI from this folder instead of the one built into release binaries |
 | `COUCHSIDE_WORKERS` | `2` | Background jobs at once (scans, matching, artwork) |
@@ -43,19 +43,50 @@ UI that are stored in its database. Release builds work with none of them set.
 
 ## Settings in the UI
 
-Admins see everything on the Settings page; other accounts see only their own
-preferences.
+Every profile has **Settings** for its own preferences. Admins also get the
+server's pages, listed under Settings in the sidebar (tabs on a phone).
 
-- **Server load** (top of the page): CPU and memory, ffmpeg load, and
-  **Connected**: who has the app open and what each person is watching.
-- **Your settings** (per profile): next-episode autoplay, subtitle language,
-  commercial skipping, live TV quality, and passthrough on TVs.
-- **Your account:** change your password.
+- **Your settings** (every profile): next-episode autoplay, subtitle
+  language, commercial skipping, live TV quality, and passthrough on TVs.
+  **Your account** below it changes your password and signs out devices.
+- **System:** CPU and memory right now, ffmpeg's share, and **Connected**
+  (who has the app open and what they're watching); the same **over time**
+  (15 minutes to 24 hours, kept in memory since the server started); which
+  encoder is in use and whether GPU decoding passed its start-up test; and
+  the server's folders and version.
+- **Console:** the server's log as it happens (the last 2000 lines), filtered
+  by level or text. It includes sign-in names and addresses.
 - **Accounts:** passwordless sign-in, and the account manager
   ([accounts.md](accounts.md)).
 - **Metadata:** whether TMDB and OMDb are set up.
-- **Live TV & DVR:** refresh the guide, and where recordings are saved.
-- **Transcoding:** which encoder is in use and whether GPU decoding works.
-- **Advanced** (collapsed): recording padding, and how far into and before the
-  end of a commercial break skipping starts and stops (1 second each by
-  default, so a skip never cuts into the show).
+- **Live TV:** refresh the guide, where recordings are saved, and **Your
+  channels** (channels made from the library).
+- **Advanced:** recording padding, how far into and before the end of a
+  commercial break skipping starts and stops (1 second each by default, so a
+  skip never cuts into the show), and how close two breaks must be to count
+  as one (60 seconds). **Backups** is here too (below).
+
+The search box in the sidebar (press `/`) finds movies, shows, episodes,
+channels and guide listings.
+
+## Backups
+
+Couchside copies its database to `backups/` in the data folder once a day and
+keeps the last 7 (Settings → Advanced changes both, makes one on demand, and
+downloads or deletes them). Each is a zip of the database, `auth.key` and
+`server.id`. Before a new version changes the database's tables it also saves
+a copy there (`couchside-upgrade-….db`; the last 3 are kept).
+
+A backup holds password hashes and the key that signs sessions: keep
+downloaded ones somewhere private. Media, artwork and recordings aren't in
+it; artwork is fetched again, and the rest are your files.
+
+The backups folder is on the same disk as the database. For protection from
+losing that disk, copy the newest backup somewhere else.
+
+**Restoring.** Stop Couchside, then run `couchside restore <file>` with the
+data folder mounted (a zip or a `.db`; a name without a folder is looked for
+in `backups/`). The database it replaces is kept as
+`couchside.db.before-restore`. In Kubernetes: scale the Deployment to 0, run a
+one-off pod of the same image with the data volume and `restore` as its
+argument, then scale back up.

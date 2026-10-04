@@ -7,6 +7,7 @@ import { api, useApi } from "../../lib/api";
 import { fmtTime } from "../../lib/format";
 import type { Library, Program, VirtualChannel, VirtualConfig, VirtualOptions } from "../../lib/types";
 import { useDialog } from "../../lib/dialog";
+import { errText } from "../../lib/errors";
 
 const BLANK: VirtualConfig = {
   libraries: [],
@@ -48,7 +49,8 @@ const KINDS: { id: "" | "movie" | "series"; label: string }[] = [
  * the next few hours. Shown in the side drawer from Settings.
  */
 export default function ChannelEditor({ channel, onClose, onSaved }: { channel?: VirtualChannel; onClose: () => void; onSaved: () => void }) {
-  const { data: opts } = useApi<VirtualOptions>("/api/livetv/virtual/options");
+  // Fresh: the next free number changes every time a channel is made.
+  const { data: opts, error: optsError } = useApi<VirtualOptions>("/api/livetv/virtual/options", { fresh: true });
   const { data: libraries } = useApi<Library[]>("/api/libraries");
   const [number, setNumber] = useState(channel?.number ?? "");
   const [name, setName] = useState(channel?.name ?? "");
@@ -58,9 +60,14 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Suggest a number once. After that the field is the user's: emptying it
+  // to type another mustn't fill it in again.
+  const suggested = useRef(false);
   useEffect(() => {
-    if (!channel && opts && !number) setNumber(opts.nextNumber);
-  }, [opts, channel, number]);
+    if (channel || !opts || suggested.current) return;
+    suggested.current = true;
+    setNumber((n) => n || opts.nextNumber);
+  }, [opts, channel]);
   const dialog = useRef<HTMLElement>(null);
   useDialog(dialog, onClose);
 
@@ -77,6 +84,10 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
   const sent: VirtualConfig = ads ? cfg : { ...cfg, filler: { ...cfg.filler, folder: "" } };
 
   const save = async () => {
+    if (ads && !cfg.filler.folder.trim()) {
+      setErr("Choose the folder your commercials are in, or turn commercials off.");
+      return;
+    }
     setBusy(true);
     setErr(null);
     try {
@@ -90,7 +101,7 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
         onClose();
       }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errText(e));
     } finally {
       setBusy(false);
     }
@@ -98,7 +109,7 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
 
   return (
     <>
-      <div className="fixed inset-0 z-30 bg-black/30" onClick={onClose} />
+      <div className="fixed inset-0 z-30 bg-backdrop/30" onClick={onClose} />
       <aside className="side-panel max-w-xl" role="dialog" aria-modal="true" ref={dialog} aria-label={channel ? `Edit ${channel.name}` : "New channel"}>
         <div className="flex items-center gap-3 px-4 py-4">
           <div className="min-w-0 flex-1">
@@ -170,6 +181,7 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
                 <p className="mt-1 text-xs text-content-muted">{cfg.libraries.length ? "Only these libraries." : "All libraries."}</p>
               </div>
             )}
+            {optsError && !opts && <ErrorNote>Couldn't load your library's genres, years and titles: {optsError}</ErrorNote>}
             {opts && opts.genres.length > 0 && (
               <>
                 <GenreChips label="Any of these genres" all={opts.genres} value={cfg.genres} onChange={(genres) => set({ genres })} />
@@ -406,7 +418,7 @@ function Preview({ config }: { config: VirtualConfig }) {
           setErr(null);
         }
       } catch (e) {
-        if (!stale) setErr(e instanceof Error ? e.message : String(e));
+        if (!stale) setErr(errText(e));
       } finally {
         if (!stale) setLoading(false);
       }

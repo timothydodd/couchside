@@ -6,8 +6,10 @@ import SeekBar from "./SeekBar";
 import SettingsMenu, { type SettingSection } from "./SettingsMenu";
 import { useMediaState } from "./useMediaState";
 import { useBreakSkip } from "./useBreakSkip";
+import { useIntroSkip } from "./useIntroSkip";
 import { fmtClock, fmtTime } from "../../lib/format";
-import type { BreakMode, Segment } from "../../lib/types";
+import type { PreviewFrame } from "../../lib/trickplay";
+import type { BreakMode, MarkedSegment, Segment } from "../../lib/types";
 
 /**
  * How the timeline behaves:
@@ -49,6 +51,13 @@ export interface PlayerFrameProps {
   settings: SettingSection[];
   /** Commercial breaks to mark and skip (vod only). */
   breaks?: Segment[];
+  /** The file's intro and end credits (vod only), and how to treat the intro. */
+  segments?: MarkedSegment[];
+  introMode?: BreakMode;
+  /** What the button offered during the credits does (the next episode, or leave); omitted, no button. */
+  onCredits?: { label: string; go: () => void };
+  /** A thumbnail of this file at time t (seconds), for the seek bar (vod only). */
+  preview?: (t: number) => PreviewFrame | null;
   breakMode?: BreakMode;
   /** Offered on a right-click on a break in the seek bar; omitted, there's no menu. */
   onNotCommercial?: (b: Segment) => void;
@@ -77,12 +86,14 @@ export default function PlayerFrame(p: PlayerFrameProps) {
   const root = useRef<HTMLDivElement>(null);
   const st = useMediaState(videoRef);
   const brk = useBreakSkip(videoRef, st.time, timeline.kind === "vod" ? p.breaks : undefined, p.breakMode ?? "off");
+  const seg = useIntroSkip(videoRef, st.time, timeline.kind === "vod" ? p.segments : undefined, p.introMode ?? "button");
   const [chrome, setChrome] = useState(true);
   const [menu, setMenu] = useState(false);
   const [breakMenu, setBreakMenu] = useState<{ b: Segment; x: number } | null>(null);
   const [full, setFull] = useState(false);
   const [volOpen, setVolOpen] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const tap = useRef<{ touch: boolean; shown: boolean }>({ touch: false, shown: true });
 
   const v = () => videoRef.current;
   const isLive = timeline.kind !== "vod";
@@ -163,16 +174,29 @@ export default function PlayerFrame(p: PlayerFrameProps) {
       /* ignore */
     }
   };
+  // iPhone Safari can't make an element full screen, only the video itself
+  // (its own player, without these controls).
   const toggleFull = useCallback(() => {
     if (document.fullscreenElement) void document.exitFullscreen();
-    else void root.current?.requestFullscreen().catch(() => {});
-  }, []);
+    else if (root.current?.requestFullscreen) void root.current.requestFullscreen().catch(() => {});
+    else (videoRef.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null)?.webkitEnterFullscreen?.();
+  }, [videoRef]);
 
   useEffect(() => {
     const onFs = () => setFull(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onFs);
-    return () => document.removeEventListener("fullscreenchange", onFs);
-  }, []);
+    // iPhone's own full-screen player doesn't fire fullscreenchange.
+    const el = videoRef.current;
+    const begin = () => setFull(true);
+    const end = () => setFull(false);
+    el?.addEventListener("webkitbeginfullscreen", begin);
+    el?.addEventListener("webkitendfullscreen", end);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFs);
+      el?.removeEventListener("webkitbeginfullscreen", begin);
+      el?.removeEventListener("webkitendfullscreen", end);
+    };
+  }, [videoRef]);
 
   // restore volume once
   useEffect(() => {
@@ -186,13 +210,23 @@ export default function PlayerFrame(p: PlayerFrameProps) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- keyboard ---------------------------------------------------------------------
+  // The handler reads this render's state, so it's kept in a ref and the
+  // listener is added once, not on every render (about four a second).
+  const keyHandler = useRef<(e: KeyboardEvent) => void>(() => {});
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
+    const onKey = (e: KeyboardEvent) => keyHandler.current(e);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  {
+    keyHandler.current = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.closest("input, select, textarea")) return;
+      // The page's own shortcuts first: they may use a modifier (Ctrl+Up
+      // changes channel).
+      if (p.onKey?.(e)) return poke();
       // Alt+Left is the browser's Back, Ctrl+F its Find: leave those alone.
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       poke();
-      if (p.onKey?.(e)) return;
       const el = v();
       switch (e.key) {
         case " ":
@@ -225,7 +259,8 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           toggleFull();
           break;
         case "s":
-          brk.skip();
+          if (brk.current) brk.skip();
+          else seg.intro?.skip();
           break;
         case "Escape":
           if (menu) setMenu(false);
@@ -233,9 +268,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           break;
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
+  }
 
   // --- timeline math ------------------------------------------------------------------
   let min = 0;
@@ -282,16 +315,26 @@ export default function PlayerFrame(p: PlayerFrameProps) {
     <div
       ref={root}
       data-theme="dark"
-      className="fixed inset-0 z-50 select-none bg-[var(--player-bg)] text-white"
+      className="fixed inset-0 z-50 select-none bg-[var(--player-bg)] text-player-fg"
       style={{ cursor: show ? "auto" : "none" }}
-      onMouseMove={poke}
+      onPointerMove={poke}
+      onPointerDown={poke}
     >
       <video
         ref={videoRef}
         className="h-full w-full"
         autoPlay
         playsInline
-        onClick={() => (menu ? setMenu(false) : toggle())}
+        onPointerDown={(e) => (tap.current = { touch: e.pointerType === "touch", shown: show })}
+        onClick={() => {
+          if (menu) setMenu(false);
+          else if (!tap.current.touch) toggle();
+          // On a touch screen a tap shows or hides the controls; it doesn't pause.
+          else if (tap.current.shown && !st.paused) {
+            clearTimeout(hideTimer.current);
+            setChrome(false);
+          }
+        }}
         onDoubleClick={toggleFull}
         {...p.videoProps}
       >
@@ -301,13 +344,13 @@ export default function PlayerFrame(p: PlayerFrameProps) {
       {/* center: loading / paused */}
       {(p.loading || (st.waiting && !st.paused)) && !p.error && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3">
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/20 border-t-white/90" />
-          {p.loading && <div className="text-sm text-white/80">{p.loading}</div>}
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-player-fg/20 border-t-white/90" />
+          {p.loading && <div className="text-sm text-player-fg/80">{p.loading}</div>}
         </div>
       )}
       {st.paused && !p.loading && !p.error && st.width > 0 && (
         <button
-          className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur transition-transform hover:scale-105"
+          className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-player-bg/55 text-player-fg backdrop-blur transition-transform hover:scale-105"
           onClick={toggle}
           aria-label="Play"
         >
@@ -317,18 +360,18 @@ export default function PlayerFrame(p: PlayerFrameProps) {
 
       {/* top bar */}
       <div
-        className={`absolute inset-x-0 top-0 flex items-start gap-3 bg-gradient-to-b from-black/85 via-black/45 to-transparent px-5 pb-14 pt-4 transition-opacity duration-300 ${
+        className={`absolute inset-x-0 top-0 flex items-start gap-3 bg-gradient-to-b from-player-bg/85 via-player-bg/45 to-transparent player-top pb-14 transition-opacity duration-300 ${
           show ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
-        <button onClick={p.onBack} className="mt-0.5 rounded-md p-1.5 text-white/85 hover:bg-white/10 hover:text-white" aria-label="Back">
+        <button onClick={p.onBack} className="mt-0.5 rounded-md p-1.5 text-player-fg/85 hover:bg-player-fg/10 hover:text-player-fg pointer-coarse:p-2.5" aria-label="Back">
           <ArrowLeft size={19} />
         </button>
         {p.logo && <img src={p.logo} alt="" className="channel-logo mt-0.5 max-h-9 max-w-16" />}
         <div className="min-w-0 flex-1">
-          {p.badge && <div className="mb-0.5 flex items-center gap-2 text-xs text-white/70">{p.badge}</div>}
+          {p.badge && <div className="mb-0.5 flex items-center gap-2 text-xs text-player-fg/70">{p.badge}</div>}
           <div className="truncate text-lg font-semibold leading-tight">{p.title}</div>
-          {p.subtitle && <div className="truncate text-xs text-white/65">{p.subtitle}</div>}
+          {p.subtitle && <div className="truncate text-xs text-player-fg/65">{p.subtitle}</div>}
         </div>
         <div className="flex items-center gap-1">{p.topActions}</div>
       </div>
@@ -364,9 +407,23 @@ export default function PlayerFrame(p: PlayerFrameProps) {
         </div>
       )}
 
+      {!brk.current && !brk.skipped && !p.error && (seg.intro || (seg.inCredits && p.onCredits)) && (
+        <div className="absolute bottom-28 right-5 z-20" onClick={(e) => e.stopPropagation()}>
+          {seg.intro ? (
+            <button className="player-pill" onClick={seg.intro.skip} title="Skip intro (S)">
+              Skip intro <ChevronsRight size={16} />
+            </button>
+          ) : (
+            <button className="player-pill" onClick={p.onCredits!.go}>
+              {p.onCredits!.label} <ChevronsRight size={16} />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* bottom controls */}
       <div
-        className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/55 to-transparent px-5 pb-3 pt-16 transition-opacity duration-300 ${
+        className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-player-bg/90 via-player-bg/55 to-transparent player-controls pt-16 transition-opacity duration-300 ${
           show ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -392,6 +449,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           breaks={off ? brk.breaks?.map((b) => ({ start: b.start + off, end: b.end + off })) : brk.breaks}
           marks={parts?.starts}
           label={label}
+          preview={p.preview ? (t) => p.preview!(t - off) : undefined}
           onSeek={(t) => {
             brk.allow(t - off);
             seekBar(t);
@@ -399,7 +457,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           onBreakMenu={p.onNotCommercial ? (b, x) => setBreakMenu({ b, x }) : undefined}
         />
         </div>
-        <div className="mt-1 flex items-center gap-1">
+        <div className="mt-1 flex items-center gap-1 pointer-coarse:mt-3">
           <CtlButton label={st.paused ? "Play (Space)" : "Pause (Space)"} onClick={toggle}>
             {st.paused ? <Play size={20} className="fill-current" /> : <Pause size={20} className="fill-current" />}
           </CtlButton>
@@ -409,7 +467,8 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           <CtlButton label="Forward 30 seconds (L)" onClick={() => skip(30)} disabled={atLive}>
             <RotateCw size={18} />
           </CtlButton>
-          <div className="relative flex items-center" onMouseEnter={() => setVolOpen(true)} onMouseLeave={() => setVolOpen(false)}>
+          {/* phones have volume buttons, and iOS ignores the page's volume */}
+          <div className="relative flex items-center max-md:hidden" onMouseEnter={() => setVolOpen(true)} onMouseLeave={() => setVolOpen(false)}>
             <CtlButton label="Mute (M)" onClick={() => { const el = v(); if (el) el.muted = !el.muted; }}>
               <VolIcon size={19} />
             </CtlButton>
@@ -424,18 +483,18 @@ export default function PlayerFrame(p: PlayerFrameProps) {
               aria-label="Volume"
             />
           </div>
-          <span className="ml-2 whitespace-nowrap text-xs tabular-nums text-white/80">{timeText}</span>
+          <span className="ml-2 min-w-0 truncate text-xs tabular-nums text-player-fg/80">{timeText}</span>
           <div className="flex-1" />
           {timeline.kind === "recording" && (
             <CtlButton label="Start over" onClick={() => seekTo(0)} wide>
-              <SkipBack size={15} /> <span className="text-xs">Start over</span>
+              <SkipBack size={15} /> <span className="hidden text-xs sm:inline">Start over</span>
             </CtlButton>
           )}
           {isLive && (
             <button
               onClick={goLive}
               className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-bold tracking-wide ${
-                atLive ? "bg-critical text-white" : "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+                atLive ? "bg-critical text-on-accent" : "bg-player-fg/10 text-player-fg/80 hover:bg-player-fg/20 hover:text-player-fg"
               }`}
               title={atLive ? "You're watching live" : "Jump to live"}
             >
@@ -493,8 +552,8 @@ function CtlButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className={`flex items-center gap-1.5 rounded-md ${wide ? "px-2.5" : "px-2"} py-1.5 text-white/85 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent ${
-        active ? "bg-white/10 text-white" : ""
+      className={`player-btn ${wide ? "px-2.5" : "px-2"} ${
+        active ? "bg-player-fg/10 text-player-fg" : ""
       }`}
     >
       {children}
@@ -509,8 +568,9 @@ export function TopButton({ label, onClick, children, danger, disabled }: { labe
       onClick={onClick}
       disabled={disabled}
       title={label}
-      className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm disabled:opacity-40 ${
-        danger ? "bg-critical/90 text-white hover:bg-critical" : "text-white/85 hover:bg-white/10 hover:text-white"
+      aria-label={label}
+      className={`flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm disabled:opacity-40 ${
+        danger ? "bg-critical/90 text-on-accent hover:bg-critical" : "text-player-fg/85 hover:bg-player-fg/10 hover:text-player-fg"
       }`}
     >
       {children}
@@ -521,12 +581,14 @@ export function TopButton({ label, onClick, children, danger, disabled }: { labe
 /** The menu a right-click on a commercial break opens, just above the seek bar. */
 function BreakMenu({ x, onPick, onClose }: { x: number; onPick: () => void; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose); // a new function each render: don't re-subscribe for it
+  close.current = onClose;
   useEffect(() => {
-    const away = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && onClose();
+    const away = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && close.current();
     const esc = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.stopPropagation(); // close the menu, not the player
-      onClose();
+      close.current();
     };
     window.addEventListener("pointerdown", away, true);
     window.addEventListener("keydown", esc, true);
@@ -534,7 +596,7 @@ function BreakMenu({ x, onPick, onClose }: { x: number; onPick: () => void; onCl
       window.removeEventListener("pointerdown", away, true);
       window.removeEventListener("keydown", esc, true);
     };
-  }, [onClose]);
+  }, []);
   return (
     <div ref={ref} className="absolute bottom-6 z-30 -translate-x-1/2" style={{ left: x }} role="menu">
       <button className="player-pill !py-1.5 !text-xs" role="menuitem" autoFocus onClick={onPick}>

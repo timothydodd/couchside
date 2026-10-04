@@ -1,28 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type HlsType from "hls.js";
 import PlayerFrame from "../components/player/PlayerFrame";
+import { useProgressReports } from "../components/player/useProgressReports";
+import { useTextSubtitles } from "../components/player/useTextSubtitles";
 import { InfoRows, type SettingSection } from "../components/player/SettingsMenu";
 import { ApiError, api, useApi } from "../lib/api";
 import { fmtClock, fmtResolution } from "../lib/format";
-import { chooseSource, fmtMbps, hlsCopyCaps, nativeHls, presetById, presetSource, presetsFor, sourceKey, stepDown, type Quality, type Source } from "../lib/playback";
+import { errText } from "../lib/errors";
+import { hlsEngine } from "../lib/hls";
+import { previewFrame, type TrickIndex } from "../lib/trickplay";
+import { chooseSource, fmtMbps, hlsCopyCaps, presetById, presetSource, presetsFor, sourceKey, stepDown, type Quality, type Source } from "../lib/playback";
 import { audioLabel, subtitleDetail, subtitleLabel, type AudioTrack, type SubtitleTrack } from "../lib/tracks";
-import { parseVtt } from "../lib/vtt";
-import { PROBLEM_TEXT, type BreakMode, type Commercials, type HlsSession, type PlayInfo, type Segment } from "../lib/types";
+import { PROBLEM_TEXT, type MarkedSegment, type BreakMode, type Commercials, type HlsSession, type PlayInfo, type Segment } from "../lib/types";
 import { BREAK_MODES, sameLanguage } from "../lib/prefs";
 import { useIsAdmin } from "../stores/auth";
 import { usePrefs, useProfile } from "../stores/profile";
 import { useRouter } from "../stores/router";
 
-const REPORT_EVERY_MS = 10_000;
 const STALL_MIN_MS = 1500;
 const STALL_WINDOW_MS = 60_000;
 const STALLS_TO_STEP = 3;
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
-const SUB_CHUNK = 90; // seconds per embedded-subtitle chunk (server's SubtitleChunk)
 const BROADCAST = new Set(["ts", "mpg", "mpeg", "wtv"]); // containers worth offering commercial detection for
 
-let hlsModule: Promise<typeof HlsType> | null = null;
-const loadHls = () => (hlsModule ??= import("hls.js/light").then((m) => m.default));
 
 type Sub = { kind: "off" } | { kind: "text"; track: SubtitleTrack } | { kind: "burn"; track: SubtitleTrack };
 
@@ -37,10 +37,13 @@ let partStart: { fileId: number; at: number } | null = null;
  */
 export default function PlayerPage({ fileId }: { fileId: number }) {
   // Fresh, never cached: the resume point is read once from this.
-  const { data: loaded, error: infoError } = useApi<PlayInfo>(`/api/files/${fileId}`, { fresh: true });
+  const { data: loaded, error: infoError, reload: reloadInfo } = useApi<PlayInfo>(`/api/files/${fileId}`, { fresh: true });
   // useApi hands back the previous file's info for a render after fileId changes.
   const info = loaded?.fileId === fileId ? loaded : undefined;
-  const { data: streams } = useApi<{ audio: AudioTrack[]; subtitles: SubtitleTrack[] }>(`/api/files/${fileId}/streams`);
+  const { data: streams, error: streamsError } = useApi<{ audio: AudioTrack[]; subtitles: SubtitleTrack[] }>(`/api/files/${fileId}/streams`);
+  const { data: marks, reload: reloadMarks } = useApi<{ segments: MarkedSegment[] }>(`/api/files/${fileId}/segments`);
+  // Seek-bar thumbnails, when this file's library makes them (404 otherwise).
+  const { data: trick } = useApi<TrickIndex>(`/api/files/${fileId}/trickplay`);
   const [breakPoll, setBreakPoll] = useState(false);
   const { data: comm, reload: reloadComm } = useApi<Commercials>(`/api/files/${fileId}/commercials`, { pollMs: breakPoll ? 5000 : undefined });
   const prefs = usePrefs();
@@ -80,7 +83,11 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
     if (needServer) return quality === "auto" ? { kind: "hls", height: stepHeight } : presetSource(quality);
     return chooseSource(info, quality, forceHls, stepHeight);
   }, [info, quality, forceHls, stepHeight, needServer]);
-  const key = source ? `${sourceKey(source)}:${audio ?? "d"}:${burnIndex ?? "n"}:${nonce}` : null;
+  // A server stream is made for one audio track, so one for "the default
+  // track" waits until the track list says which that is (or has failed to
+  // load): made sooner, it would play track 0 while the menu shows the default.
+  const audioKey = audio ?? (source?.kind !== "hls" ? "d" : streams ? `d${defaultAudio}` : streamsError ? "d0" : "wait");
+  const key = source ? `${sourceKey(source)}:${audioKey}:${burnIndex ?? "n"}:${nonce}` : null;
 
   useEffect(() => {
     startAt.current = null;
@@ -132,7 +139,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   // --- attach the source ---------------------------------------------------------------
   useEffect(() => {
     const v = videoRef.current;
-    if (!v || !info || !source || !key) return;
+    if (!v || !info || !source || !key || audioKey === "wait") return;
     let cancelled = false;
     let hls: HlsType | null = null;
     let sessionId: string | null = null;
@@ -170,14 +177,15 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
         if (cancelled) return void fetch(`/api/hls/${s.sessionId}`, { method: "DELETE", keepalive: true });
         sessionId = s.sessionId;
         setSession(s);
-        const Hls = await loadHls().catch(() => null);
+        const engine = await hlsEngine("streaming video");
         if (cancelled) return;
-        if (!Hls || !Hls.isSupported()) {
-          if (!nativeHls()) return setFatal("This browser can't play streaming video.");
+        if ("error" in engine) return setFatal(engine.error);
+        if ("native" in engine) {
           v.src = s.playlist;
           v.addEventListener("loadedmetadata", seekOnLoad, { once: true });
           return;
         }
+        const { Hls } = engine;
         const policy = {
           maxTimeToFirstByteMs: 90_000,
           maxLoadTimeMs: 120_000,
@@ -246,64 +254,8 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   }, [rate, sub, key]);
 
   // --- text subtitles --------------------------------------------------------------------
-  // Sidecar files load whole. Embedded tracks load in 90-second chunks around the
-  // playhead: extracting a whole track means reading the entire file, which
-  // takes minutes for a big remux on a NAS.
-  const subTrack = useRef<TextTrack | null>(null);
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    subTrack.current ??= v.addTextTrack("subtitles", "couchside");
-    const track = subTrack.current;
-    for (const c of Array.from(track.cues ?? [])) track.removeCue(c);
-    track.mode = sub.kind === "text" ? "showing" : "disabled";
-    if (sub.kind !== "text") return;
-
-    let cancelled = false;
-    const seen = new Set<string>();
-    const loaded = new Set<number>();
-    const add = (body: string) => {
-      if (cancelled) return;
-      for (const c of parseVtt(body)) {
-        const id = `${c.start.toFixed(2)}|${c.text}`;
-        if (seen.has(id)) continue;
-        seen.add(id);
-        const cue = new VTTCue(c.start, c.end, c.text);
-        cue.snapToLines = false; // sit a little above the control bar
-        cue.line = 86;
-        cue.lineAlign = "end";
-        track.addCue(cue);
-      }
-    };
-    const base = `/api/files/${fileId}/subtitles/${sub.track.key}`;
-    if (sub.track.external) {
-      void fetch(`${base}.vtt`).then((r) => (r.ok ? r.text() : "")).then(add).catch(() => {});
-      return () => {
-        cancelled = true;
-      };
-    }
-    const load = (k: number) => {
-      if (k < 0 || loaded.has(k)) return;
-      loaded.add(k);
-      void fetch(`${base}.c${k}.vtt`)
-        .then((r) => (r.ok ? r.text() : Promise.reject(r.status)))
-        .then(add)
-        .catch(() => loaded.delete(k)); // retry on a later tick
-    };
-    const around = () => {
-      const k = Math.floor(v.currentTime / SUB_CHUNK);
-      load(k);
-      load(k + 1);
-    };
-    around();
-    v.addEventListener("timeupdate", around);
-    v.addEventListener("seeked", around);
-    return () => {
-      cancelled = true;
-      v.removeEventListener("timeupdate", around);
-      v.removeEventListener("seeked", around);
-    };
-  }, [sub, fileId]);
+  const textTrack = sub.kind === "text" ? sub.track : null;
+  useTextSubtitles(videoRef, fileId, textTrack);
 
   // --- errors and stalls ---------------------------------------------------------------
   const onVideoError = () => {
@@ -349,46 +301,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   // Reports also tell the server who's watching what, and how (Settings shows it).
   const modeRef = useRef("");
   modeRef.current = describe(source, session);
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    // The last real position. By the time this effect's cleanup sends the
-    // final report, the source effect has already reset the element.
-    let last = { position: 0, duration: 0 };
-    const remember = () => {
-      if (v.duration && isFinite(v.duration)) last = { position: v.currentTime, duration: v.duration };
-    };
-    const report = (keepalive = false, stopped = false) => {
-      remember();
-      const { position, duration } = last;
-      if (!duration || position < 1) return;
-      const state = stopped ? "stopped" : v.paused ? "paused" : "playing";
-      const body = { position, duration, state, mode: modeRef.current };
-      const url = `/api/files/${fileId}/progress`;
-      // While the page lives, api() renews an expired token and retries;
-      // a keepalive report on the way out can't wait for that.
-      const sent = keepalive
-        ? fetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), keepalive })
-        : api(url, { method: "PUT", json: body });
-      void sent.catch(() => {});
-    };
-    const t = setInterval(() => !v.paused && report(), REPORT_EVERY_MS);
-    v.addEventListener("timeupdate", remember);
-    const onPause = () => report();
-    const onHide = () => document.visibilityState === "hidden" && report(true);
-    const onPageHide = () => report(true, true);
-    v.addEventListener("pause", onPause);
-    document.addEventListener("visibilitychange", onHide);
-    window.addEventListener("pagehide", onPageHide);
-    return () => {
-      clearInterval(t);
-      report(true, true);
-      v.removeEventListener("timeupdate", remember);
-      v.removeEventListener("pause", onPause);
-      document.removeEventListener("visibilitychange", onHide);
-      window.removeEventListener("pagehide", onPageHide);
-    };
-  }, [fileId]);
+  useProgressReports(videoRef, fileId, modeRef);
 
   // --- parts: a movie split across files plays as one timeline -----------------------
   const parts = useMemo(() => {
@@ -456,6 +369,26 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   };
   const chooseBreakMode = (m: BreakMode) => useProfile.getState().setPrefs({ commercials: m });
 
+  // --- intro and credits -----------------------------------------------------------------
+  const intro = marks?.segments.find((s) => s.kind === "intro");
+  const credits = marks?.segments.find((s) => s.kind === "credits");
+  const mark = async (what: string) => {
+    const v = videoRef.current;
+    if (!v) return;
+    const t = v.currentTime;
+    const url = (kind: string) => `/api/files/${fileId}/segments/${kind}`;
+    try {
+      if (what === "intro-start") await api(url("intro"), { method: "PUT", json: { start: t, end: intro && intro.end > t + 1 ? intro.end : t + 60 } });
+      else if (what === "intro-end") await api(url("intro"), { method: "PUT", json: { start: intro && intro.start < t - 1 ? intro.start : Math.max(0, t - 60), end: t } });
+      else if (what === "credits") await api(url("credits"), { method: "PUT", json: { start: t, end: isFinite(v.duration) ? v.duration : t + 3600 } });
+      else await api(url(what === "clear-intro" ? "intro" : "credits"), { method: "DELETE" });
+      await reloadMarks();
+      flash(what.startsWith("clear") ? "Mark cleared." : "Marked. Everyone watching this file gets the skip button.");
+    } catch (e) {
+      flash(`Couldn't save the mark: ${errText(e)}`);
+    }
+  };
+
   // --- settings ------------------------------------------------------------------------
   const mode = describe(source, session);
   const qualityLabel = (q: Quality) => (q === "auto" ? "Auto" : (presetById(q)?.label ?? q));
@@ -522,6 +455,21 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
     },
     commercialsSection(comm, breakMode, !!info && BROADCAST.has(info.container), chooseBreakMode, findCommercials, isAdmin),
     {
+      // Admins mark where the intro and credits are, at the playhead.
+      id: "marks",
+      label: "Intro and credits",
+      hidden: !isAdmin,
+      value: [intro && "Intro", credits && "Credits"].filter(Boolean).join(", ") || "Not marked",
+      options: [
+        { id: "intro-start", label: "The intro starts here", detail: intro ? `Now ${fmtClock(intro.start)} to ${fmtClock(intro.end)}` : undefined },
+        { id: "intro-end", label: "The intro ends here" },
+        { id: "credits", label: "The credits start here", detail: credits ? `Now at ${fmtClock(credits.start)}` : undefined },
+        ...(intro ? [{ id: "clear-intro", label: "Clear the intro mark" }] : []),
+        ...(credits ? [{ id: "clear-credits", label: "Clear the credits mark" }] : []),
+      ],
+      onSelect: (id) => void mark(id),
+    },
+    {
       id: "speed",
       label: "Playback speed",
       value: rate === 1 ? "Normal" : `${rate}×`,
@@ -551,13 +499,23 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
       }
       settings={settings}
       breaks={comm?.status === "done" ? comm.segments : undefined}
+      segments={marks?.segments}
+      introMode={prefs.intros ?? "button"}
+      onCredits={
+        parts
+          ? undefined
+          : info?.nextFileId
+            ? { label: "Next episode", go: () => void onEnded() }
+            : { label: "Skip credits", go: () => void onEnded() }
+      }
+      preview={trick ? (t) => (info?.durationSec && t > info.durationSec ? null : previewFrame(fileId, trick, t)) : undefined}
       breakMode={breakMode}
       onBack={exit}
       loading={errorText ? null : loading}
       notice={notice}
       noticeAction={notice ? noticeAction : null}
       onNotCommercial={isAdmin && comm?.status === "done" ? notCommercial : undefined}
-      error={errorText ? { title: "Can't play this right now", message: errorText, actions: <button className="btn-primary" onClick={() => switchTo(() => setNonce((n) => n + 1))}>Try again</button> } : null}
+      error={errorText ? { title: "Can't play this right now", message: errorText, actions: <button className="btn-primary" onClick={() => (info ? switchTo(() => setNonce((n) => n + 1)) : void reloadInfo())}>Try again</button> } : null}
       videoProps={{ onError: onVideoError, onWaiting, onPlaying, onSeeking: () => (waitingSince.current = null), onEnded: () => void onEnded() }}
     />
   );

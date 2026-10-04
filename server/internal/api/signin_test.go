@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -155,5 +157,144 @@ func TestInternalErrorsStayInTheLog(t *testing.T) {
 	writeErr(rec, usererr.New("all tuners are busy"))
 	if !strings.Contains(rec.Body.String(), "all tuners are busy") {
 		t.Fatalf("user-facing error hidden: %s", rec.Body)
+	}
+}
+
+// COUCHSIDE_AUTH=true on a server that was passwordless: sessions of profiles
+// without a password end when the server starts, not when it stops.
+func TestRunEndsPasswordlessSessionsAtStart(t *testing.T) {
+	s, _, admin := passwordlessServer(t)
+	if code := admin.do("GET", "/api/auth/sessions", nil, nil); code != 200 {
+		t.Fatalf("sessions before = %d", code)
+	}
+	s.cfg.Auth = true
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { s.Run(ctx); close(done) }()
+	t.Cleanup(func() { cancel(); <-done })
+
+	deadline := time.Now().Add(5 * time.Second)
+	for admin.do("GET", "/api/auth/sessions", nil, nil) != 401 {
+		select {
+		case <-done:
+			t.Fatal("Run returned before ctx ended")
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the passwordless session still worked while the server ran")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// Parallel wrong passwords for one account get the checks a serial run
+// would, not one each.
+func TestLoginBurstIsThrottled(t *testing.T) {
+	_, ts, admin := passwordlessServer(t)
+	if code := admin.do("POST", "/api/accounts", map[string]any{"name": "Kid", "password": "kid password"}, nil); code != 201 {
+		t.Fatalf("create = %d", code)
+	}
+	var wg sync.WaitGroup
+	var checked atomic.Int32
+	for range 40 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c := newClient(t, ts.URL)
+			if c.do("POST", "/api/auth/login", map[string]string{"name": "Kid", "password": "a wrong guess"}, nil) == 401 {
+				checked.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	// Five free failures and the one that locks the name.
+	if n := checked.Load(); n > 6 {
+		t.Fatalf("%d of 40 parallel guesses were checked, want at most 6", n)
+	}
+}
+
+// A page on another site can't sign this browser in.
+func TestLoginRefusesCrossSite(t *testing.T) {
+	_, ts, admin := passwordlessServer(t)
+	if code := admin.do("POST", "/api/accounts", map[string]any{"name": "Kid", "password": "kid password"}, nil); code != 201 {
+		t.Fatalf("create = %d", code)
+	}
+	login := map[string]string{"name": "Kid", "password": "kid password"}
+	c := newClient(t, ts.URL)
+	c.header = map[string]string{"Sec-Fetch-Site": "cross-site"}
+	if code := c.do("POST", "/api/auth/login", login, nil); code != 403 {
+		t.Fatalf("cross-site login = %d, want 403", code)
+	}
+	c.header = nil
+	c.origin = "https://evil.example"
+	if code := c.do("POST", "/api/auth/login", login, nil); code != 403 {
+		t.Fatalf("login from another origin = %d, want 403", code)
+	}
+	// A TV app sends no Origin and gets tokens, not cookies.
+	tv := newClient(t, ts.URL)
+	if code := tv.do("POST", "/api/auth/login", map[string]string{"name": "Kid", "password": "kid password", "client": "tv"}, nil); code != 200 {
+		t.Fatalf("tv login = %d", code)
+	}
+	c.origin = ""
+	c.header = map[string]string{"Sec-Fetch-Site": "same-origin"}
+	if code := c.do("POST", "/api/auth/login", login, nil); code != 200 {
+		t.Fatalf("same-origin login = %d", code)
+	}
+}
+
+// A TV app whose refresh answer was lost repeats it and keeps its session.
+func TestTVRefreshCanBeRepeated(t *testing.T) {
+	_, ts, _ := passwordlessServer(t)
+	tv := newClient(t, ts.URL)
+	var first, lost, again tokens
+	if code := tv.do("POST", "/api/auth/pick", map[string]any{"profileId": 1, "client": "tv"}, &first); code != 200 {
+		t.Fatalf("pick = %d", code)
+	}
+	// Clients schedule renewal from the time left, not from their own clock.
+	if first.ExpiresIn != int64(auth.TVAccessTTL/time.Second) {
+		t.Fatalf("expiresIn = %d, want the TV token's lifetime", first.ExpiresIn)
+	}
+	if code := tv.do("POST", "/api/auth/refresh", map[string]string{"refreshToken": first.RefreshToken}, &lost); code != 200 {
+		t.Fatalf("refresh = %d", code)
+	}
+	if code := tv.do("POST", "/api/auth/refresh", map[string]string{"refreshToken": first.RefreshToken}, &again); code != 200 {
+		t.Fatalf("repeated refresh = %d, want 200", code)
+	}
+	tv.bearer = again.AccessToken
+	if code := tv.do("GET", "/api/auth/sessions", nil, nil); code != 200 {
+		t.Fatalf("session after a repeated refresh = %d", code)
+	}
+	// The tokens from the lost answer no longer refresh.
+	if code := tv.do("POST", "/api/auth/refresh", map[string]string{"refreshToken": lost.RefreshToken}, nil); code == 200 {
+		t.Fatal("the undelivered refresh token still worked")
+	}
+}
+
+// A locked account created with a password: locked from the first moment,
+// and the password it was given isn't a temporary one.
+func TestCreateLockedAccount(t *testing.T) {
+	s, ts, admin := passwordlessServer(t)
+	var p db.Profile
+	if code := admin.do("POST", "/api/accounts", map[string]any{"name": "Guest", "password": "guest password", "passwordLocked": true}, &p); code != 201 {
+		t.Fatalf("create = %d", code)
+	}
+	if !p.PasswordLocked || p.MustChangePassword {
+		t.Fatalf("created account: locked=%v mustChange=%v", p.PasswordLocked, p.MustChangePassword)
+	}
+	stored, err := s.db.Profile(context.Background(), p.ID)
+	if err != nil || !stored.PasswordLocked || stored.MustChangePassword || !stored.HasPassword {
+		t.Fatalf("stored account: %+v %v", stored, err)
+	}
+	guest := newClient(t, ts.URL)
+	if code := guest.do("POST", "/api/auth/login", map[string]string{"name": "Guest", "password": "guest password"}, nil); code != 200 {
+		t.Fatalf("login = %d", code)
+	}
+	if code := guest.do("GET", "/api/home", nil, nil); code != 200 {
+		t.Fatalf("a locked account was asked to change its password (home = %d)", code)
+	}
+	// An admin is never locked, whatever was sent.
+	var a db.Profile
+	if code := admin.do("POST", "/api/accounts", map[string]any{"name": "Boss", "role": "admin", "password": "boss password", "passwordLocked": true}, &a); code != 201 || a.PasswordLocked || !a.MustChangePassword {
+		t.Fatalf("admin account: %d %+v", code, a)
 	}
 }

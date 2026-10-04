@@ -8,7 +8,7 @@ import { useRouter } from "../stores/router";
 
 /** Everything in the library a cast or crew member is in, newest first. */
 export default function PersonPage({ id }: { id: number }) {
-  const { data, error, loading } = useApi<PersonDetail>(`/api/people/${id}`);
+  const { data, error, loading, reload } = useApi<PersonDetail>(`/api/people/${id}`);
   const back = useRouter((s) => s.back);
 
   if (loading && !data)
@@ -17,7 +17,22 @@ export default function PersonPage({ id }: { id: number }) {
         <Spinner size={22} />
       </div>
     );
-  if (!data) return <EmptyState title="Person not found">{error}</EmptyState>;
+  if (!data) {
+    // Only a 404 means it isn't there; anything else is a failed request.
+    const missing = !error || /not found/i.test(error);
+    return (
+      <EmptyState title={missing ? "Person not found" : "Couldn't load this person"}>
+        {!missing && error}
+        {!missing && (
+          <div className="mt-3">
+            <button className="btn-ghost" onClick={() => void reload()}>
+              Try again
+            </button>
+          </div>
+        )}
+      </EmptyState>
+    );
+  }
 
   const { person, items } = data;
   const movies = items.filter((i) => i.kind === "movie");

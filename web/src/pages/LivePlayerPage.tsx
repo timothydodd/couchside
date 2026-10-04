@@ -6,15 +6,14 @@ import { bufferedAhead, useLiveCushion } from "../components/player/useLiveCushi
 import { InfoRows, type SettingSection } from "../components/player/SettingsMenu";
 import { ApiError, api, useApi } from "../lib/api";
 import { fmtTime } from "../lib/format";
-import { nativeHls } from "../lib/playback";
+import { hlsEngine } from "../lib/hls";
 import type { ChannelNow, LiveSessionInfo, Program } from "../lib/types";
 import { useProfile } from "../stores/profile";
 import { useRouter } from "../stores/router";
 import { useCanRecord } from "../stores/auth";
+import { errText } from "../lib/errors";
 
 const LIVE_QUALITIES = [1080, 720, 480] as const;
-let hlsModule: Promise<typeof HlsType> | null = null;
-const loadHls = () => (hlsModule ??= import("hls.js/light").then((m) => m.default));
 
 /** Live TV: the server tunes and transcodes; you can pause and rewind within the session. */
 export default function LivePlayerPage({ channel }: { channel: string }) {
@@ -103,14 +102,15 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
       sid = s.sessionId;
       if (cancelled) return leave();
       setSession(s);
-      const Hls = await loadHls().catch(() => null);
+      const engine = await hlsEngine("live streams");
       if (cancelled) return;
-      if (!Hls || !Hls.isSupported()) {
-        if (!nativeHls()) return setError("This browser can't play live streams.");
+      if ("error" in engine) return setError(engine.error);
+      if ("native" in engine) {
         v.src = s.playlist;
         void v.play().catch(() => {});
         return;
       }
+      const { Hls } = engine;
       const player = new Hls({
         // Sit 8s behind the newest segment (4 segments), never speed up to catch
         // up, and only jump forward when more than 40s behind.
@@ -188,7 +188,11 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
       }
       await reloadChannels();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : String(e));
+      // A notice over the stream, which is still playing: `error` is for a
+      // stream that can't be played and replaces the picture.
+      const msg = `Couldn't ${now.recordingStatus === "recording" ? "stop the recording" : "record this"}: ${errText(e)}`;
+      setNotice(msg);
+      setTimeout(() => setNotice((n) => (n === msg ? null : n)), 8000);
     } finally {
       setRecBusy(false);
     }
@@ -216,7 +220,7 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
       logo={current?.logoUrl}
       badge={
         <>
-          <span className="font-semibold tabular-nums text-white">{channel}</span>
+          <span className="font-semibold tabular-nums text-player-fg">{channel}</span>
           <span>{current?.name ?? session?.name}</span>
         </>
       }
@@ -239,13 +243,13 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
         <>
           {recording && now?.recordingId && (
             <TopButton label="Watch this show from the beginning" onClick={() => go(`/recording/${now.recordingId}`, { replace: true })}>
-              <SkipBack size={15} /> Start over
+              <SkipBack size={15} /> <span className="hidden md:inline">Start over</span>
             </TopButton>
           )}
           {canRecord && !current?.virtual && now && now.recordingStatus !== "completed" && (
             <TopButton label={recording ? "Stop recording" : "Record this program"} onClick={() => void toggleRecord()} danger={recording} disabled={recBusy || now.recordingStatus === "scheduled"}>
               {recording ? <Square size={12} className="fill-current" /> : <CircleDot size={15} className="text-critical" />}
-              {recording ? "Stop" : "Record"}
+              <span className="hidden md:inline">{recording ? "Stop" : "Record"}</span>
             </TopButton>
           )}
           <TopButton label="Channel up (Page Up)" onClick={() => zap(1)}>

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -167,5 +168,154 @@ func TestRestartAfterIdleRespectsTheLimit(t *testing.T) {
 	// The old one comes back while the fresh one is busy: no room.
 	if _, err := m.Segment(context.Background(), old.ID, 0); !errors.Is(err, ErrBusy) && !errors.Is(err, ErrNoSession) {
 		t.Fatalf("reviving past the limit: %v, want ErrBusy", err)
+	}
+}
+
+// A request waiting on a segment sees the run that a seek just killed. That
+// isn't a GPU failure: the session keeps GPU decoding and the seek's run.
+func TestSeekIsNotAGPUFailure(t *testing.T) {
+	ffmpeg, ffprobe, _ := fakeTools(t)
+	m, err := NewManager(Encoder{FFmpeg: ffmpeg, HW: "vaapi", VAAPIDevice: "/dev/dri/renderD128", HWDecode: true}, ffprobe, filepath.Join(t.TempDir(), "hls"), 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := m.Create(context.Background(), Request{FileID: 1, Path: "/x.mkv", Duration: 600, Height: 720, BurnSubtitle: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { m.Close(s.ID) })
+	if !s.HWDecode {
+		t.Fatal("the session should start on the GPU pipeline")
+	}
+	restart := func(n int) *exec.Cmd {
+		t.Helper()
+		s.restartMu.Lock()
+		defer s.restartMu.Unlock()
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if err := s.start(n); err != nil {
+			t.Fatal(err)
+		}
+		return s.cmd
+	}
+	old := restart(0)
+	seek := restart(50) // kills the first run
+
+	if !s.gpuFallback(3, "killed", old) {
+		t.Fatal("a waiter on the old run should keep waiting")
+	}
+	s.mu.Lock()
+	hw, cur, at := s.HWDecode, s.cmd, s.startSeg
+	s.mu.Unlock()
+	if !hw || cur != seek || at != 50 {
+		t.Fatalf("after a seek: gpu=%v, run replaced=%v, start segment %d", hw, cur != seek, at)
+	}
+
+	// The current run dying on its own is a failure: fall back and restart.
+	_ = seek.Process.Kill()
+	s.mu.Lock()
+	exited := s.exited
+	s.mu.Unlock()
+	<-exited
+	if !s.gpuFallback(50, "Failed to create decode context", seek) {
+		t.Fatal("a failed GPU run should fall back to CPU decoding")
+	}
+	s.mu.Lock()
+	hw, cur = s.HWDecode, s.cmd
+	s.mu.Unlock()
+	if hw || cur == seek || cur == nil {
+		t.Fatalf("after a real failure: gpu=%v, restarted=%v", hw, cur != seek && cur != nil)
+	}
+}
+
+func TestVideoCodecsCopyTenBitHEVC(t *testing.T) {
+	m, _ := newTestManager(t, 4)
+	req := Request{FileID: 1, Path: "/x.mkv", Duration: 600, Height: 1080, AllowCopyVideo: true, BurnSubtitle: -1}
+	s, err := m.Create(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.CopyVideo {
+		t.Fatal("10-bit HEVC copied for a client that only asked for H.264")
+	}
+	req.VideoCodecs = []string{"hevc"}
+	if s, err = m.Create(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	if !s.CopyVideo || s.Mode != "remux" || s.HDR {
+		t.Fatalf("HEVC not copied for a client that plays it: %+v", s)
+	}
+	req.VideoCodecs = []string{" H265 "} // however the client spells it
+	if s, err = m.Create(context.Background(), req); err != nil || !s.CopyVideo {
+		t.Fatalf("HEVC asked for as H265: copy=%v err=%v", s != nil && s.CopyVideo, err)
+	}
+	req.Height = 720 // smaller than the source: has to be encoded
+	if s, err = m.Create(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	if s.CopyVideo {
+		t.Fatal("copied a 1080p source for a 720p request")
+	}
+}
+
+// Dolby Vision profile 5 probes as hevc, but only a Dolby Vision player can
+// show it: it's never copied on the strength of "plays hevc".
+func TestDolbyVisionProfile5IsNotCopied(t *testing.T) {
+	ffmpeg, _, _ := fakeTools(t)
+	ffprobe := filepath.Join(t.TempDir(), "ffprobe")
+	out := `{"format":{"duration":"600"},"streams":[{"codec_type":"video","codec_name":"hevc","width":3840,"height":2160,"pix_fmt":"yuv420p10le","side_data_list":[{"side_data_type":"DOVI configuration record","dv_profile":5}]},{"codec_type":"audio","codec_name":"eac3","channels":6}]}`
+	if err := os.WriteFile(ffprobe, []byte("#!/bin/sh\necho '"+out+"'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewManager(Encoder{FFmpeg: ffmpeg}, ffprobe, filepath.Join(t.TempDir(), "hls"), 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := m.Create(context.Background(), Request{FileID: 1, Path: "/x.mkv", Duration: 600, AllowCopyVideo: true, VideoCodecs: []string{"hevc"}, BurnSubtitle: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { m.Close(s.ID) })
+	if s.CopyVideo {
+		t.Fatal("Dolby Vision profile 5 was copied")
+	}
+}
+
+// The test file's audio is 5.1 AC-3. A browser gets stereo AAC; a TV that
+// plays AC-3 gets it untouched; one that only plays E-AC-3 gets 5.1 E-AC-3.
+func TestSurroundAudio(t *testing.T) {
+	m, _ := newTestManager(t, 8)
+	req := Request{FileID: 1, Path: "/x.mkv", Duration: 600, Height: 1080, AllowCopyAudio: true, BurnSubtitle: -1}
+	create := func(codecs ...string) *Session {
+		t.Helper()
+		req.AudioCodecs = codecs
+		s, err := m.Create(context.Background(), req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		m.Close(s.ID)
+		return s
+	}
+	if s := create(); s.CopyAudio || s.AudioOut != "aac" {
+		t.Fatalf("a browser: copy=%v out=%s", s.CopyAudio, s.AudioOut)
+	}
+	if s := create("ac3", "eac3"); !s.CopyAudio || s.AudioOut != "copy" {
+		t.Fatalf("a TV that plays AC-3: copy=%v out=%s", s.CopyAudio, s.AudioOut)
+	}
+	if s := create(" AC-3 "); !s.CopyAudio {
+		t.Fatalf("AC-3 spelled the client's way wasn't recognised")
+	}
+	if s := create("eac3"); s.CopyAudio || s.AudioOut != "eac3" {
+		t.Fatalf("a TV that only plays E-AC-3: copy=%v out=%s", s.CopyAudio, s.AudioOut)
+	}
+	req.AllowCopyAudio = false
+	if s := create("ac3"); s.CopyAudio || s.AudioOut != "ac3" {
+		t.Fatalf("copying not allowed: copy=%v out=%s", s.CopyAudio, s.AudioOut)
+	}
+	if got := strings.Join(audioArgs("eac3"), " "); got != "-c:a eac3 -ac 6 -b:a 640k" {
+		t.Fatalf("eac3 args = %s", got)
+	}
+	if got := strings.Join(audioArgs("aac"), " "); got != strings.Join(AudioArgs(), " ") {
+		t.Fatalf("aac args = %s", got)
 	}
 }

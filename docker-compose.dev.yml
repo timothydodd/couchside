@@ -1,0 +1,10 @@
+# Build Couchside from this checkout instead of pulling the published image:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+#
+# A local build has no built-in TMDB key (release images get theirs from a
+# build secret), so set TMDB_API_KEY in .env for metadata. It's tagged
+# couchside:dev, never as the published image.
+services:
+  couchside:
+    build: .
+    image: couchside:dev

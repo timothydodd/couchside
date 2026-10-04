@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/timothydodd/couchside/internal/transcode"
 )
@@ -99,5 +100,104 @@ func TestLiveStartsOncePerStreamAndCapsEncodes(t *testing.T) {
 	// …but passing a broadcast through encodes nothing.
 	if _, err := m.startInput(ctx, "ch:5.1", "5.1", "WAGA", input, Spec{CopyVideo: true, CopyAudio: true}); err != nil {
 		t.Fatalf("passthrough at the encode limit: %v", err)
+	}
+}
+
+// A recording watched from its start keeps its segments after ffmpeg ends
+// (the recording finished), until the viewer stops asking; a tuner stream
+// whose ffmpeg died goes at once.
+func TestReapKeepsAFinishedRecordingPlayback(t *testing.T) {
+	m, err := newLiveManager(transcode.Encoder{FFmpeg: "ffmpeg", HW: "none"}, filepath.Join(t.TempDir(), "live"), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ended := func(id, key string) *LiveSession {
+		dir := filepath.Join(m.root, id)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		s := &LiveSession{ID: id, key: key, Channel: "2.1", dir: dir, exited: make(chan struct{}), stderr: &syncBuffer{}, lastAccess: time.Now()}
+		close(s.exited)
+		m.sessions[id] = s
+		return s
+	}
+	rec := ended("r", "rec:7")
+	tuner := ended("t", "ch:2.1")
+	m.reap()
+	if m.get("t") != nil {
+		t.Fatal("a tuner stream whose ffmpeg exited was kept")
+	}
+	if _, err := os.Stat(tuner.dir); err == nil {
+		t.Fatal("the dead tuner stream's folder is still there")
+	}
+	if m.get("r") == nil {
+		t.Fatal("a recording's playback was removed while someone was watching it")
+	}
+	if _, err := os.Stat(rec.dir); err != nil {
+		t.Fatal("its segments are gone")
+	}
+	// The viewer leaves: it goes at the next reap after the idle time.
+	rec.mu.Lock()
+	rec.lastAccess = time.Now().Add(-liveIdleKill - time.Second)
+	rec.mu.Unlock()
+	m.reap()
+	if m.get("r") != nil {
+		t.Fatal("an abandoned recording playback was kept")
+	}
+}
+
+// The first caller of a shared start leaves before it finishes: someone who
+// joined it starts the stream themselves instead of getting an error.
+func TestClaimAfterTheFirstCallerLeaves(t *testing.T) {
+	m, err := newLiveManager(transcode.Encoder{FFmpeg: "ffmpeg", HW: "none"}, filepath.Join(t.TempDir(), "live"), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	match := func(*LiveSession) bool { return false }
+	m.mu.Lock()
+	_, first, err := m.claimLocked(context.Background(), "k", match, true)
+	m.mu.Unlock()
+	if err != nil || first == nil {
+		t.Fatalf("first claim: %v %v", first, err)
+	}
+	type result struct {
+		s   *LiveSession
+		f   *liveStart
+		err error
+	}
+	joined := make(chan result, 1)
+	go func() {
+		m.mu.Lock()
+		s, f, err := m.claimLocked(context.Background(), "k", match, true)
+		m.mu.Unlock()
+		joined <- result{s, f, err}
+	}()
+	time.Sleep(50 * time.Millisecond)
+	m.finish("k", first, nil, context.Canceled)
+	select {
+	case r := <-joined:
+		if r.err != nil || r.s != nil || r.f == nil {
+			t.Fatalf("the second caller should start the stream itself: %+v", r)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the second caller never got an answer")
+	}
+}
+
+// launch reports a caller that left as that, not as a weak signal.
+func TestLaunchReportsACancelledCaller(t *testing.T) {
+	ff := filepath.Join(t.TempDir(), "ffmpeg")
+	if err := os.WriteFile(ff, []byte("#!/bin/sh\nexec sleep 30\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	m, err := newLiveManager(transcode.Encoder{FFmpeg: ff, HW: "none"}, filepath.Join(t.TempDir(), "live"), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { time.Sleep(200 * time.Millisecond); cancel() }()
+	_, err = m.launch(ctx, "ch:2.1", "2.1", "WSB", []string{"-i", "x"}, Spec{Height: 720}, false)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("launch after the caller left = %v, want context.Canceled", err)
 	}
 }

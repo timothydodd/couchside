@@ -42,7 +42,7 @@ func (s *Server) tvStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) tvRefresh(w http.ResponseWriter, r *http.Request) {
-	if s.tv == nil {
+	if !s.tv.HasTuner() {
 		writeErr(w, errNoTuner)
 		return
 	}
@@ -217,7 +217,7 @@ func (s *Server) tvLeave(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) dvrList(w http.ResponseWriter, r *http.Request) {
-	if s.tv == nil {
+	if !s.tv.HasTuner() {
 		writeErr(w, errNoTuner)
 		return
 	}
@@ -226,11 +226,36 @@ func (s *Server) dvrList(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	for i := range recs {
+		recs[i].Recoverable = s.tv.Recoverable(recs[i])
+	}
 	writeJSON(w, http.StatusOK, recs)
 }
 
+// dvrRecover joins the pieces of a recording whose file couldn't be finished.
+func (s *Server) dvrRecover(w http.ResponseWriter, r *http.Request) {
+	if !s.tv.HasTuner() {
+		writeErr(w, errNoTuner)
+		return
+	}
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := s.ownRecording(r, id); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := s.tv.Recover(r.Context(), id); err != nil {
+		writeErr(w, userFault(err))
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) dvrRecord(w http.ResponseWriter, r *http.Request) {
-	if s.tv == nil {
+	if !s.tv.HasTuner() {
 		writeErr(w, errNoTuner)
 		return
 	}
@@ -243,11 +268,7 @@ func (s *Server) dvrRecord(w http.ResponseWriter, r *http.Request) {
 	}
 	id, overlap, existing, err := s.tv.Record(r.Context(), in.ProgramID, currentUser(r.Context()).ID)
 	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
-			writeErr(w, err)
-			return
-		}
-		writeErr(w, badRequest(err.Error()))
+		writeErr(w, userFault(err))
 		return
 	}
 	tuners := 0
@@ -264,7 +285,7 @@ func (s *Server) dvrRecord(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) dvrCancel(w http.ResponseWriter, r *http.Request) {
-	if s.tv == nil {
+	if !s.tv.HasTuner() {
 		writeErr(w, errNoTuner)
 		return
 	}
@@ -285,7 +306,7 @@ func (s *Server) dvrCancel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) dvrDelete(w http.ResponseWriter, r *http.Request) {
-	if s.tv == nil {
+	if !s.tv.HasTuner() {
 		writeErr(w, errNoTuner)
 		return
 	}
@@ -299,7 +320,7 @@ func (s *Server) dvrDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.tv.Delete(r.Context(), id); err != nil {
-		writeErr(w, badRequest(err.Error()))
+		writeErr(w, userFault(err))
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -320,7 +341,7 @@ func (s *Server) ownRecording(r *http.Request, id int64) error {
 
 // dvrWatch starts playback of an in-progress recording from its beginning.
 func (s *Server) dvrWatch(w http.ResponseWriter, r *http.Request) {
-	if s.tv == nil {
+	if !s.tv.HasTuner() {
 		writeErr(w, errNoTuner)
 		return
 	}
@@ -345,7 +366,7 @@ func (s *Server) dvrWatch(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, httpError{http.StatusTooManyRequests, err.Error()})
 			return
 		}
-		writeErr(w, badRequest(err.Error()))
+		writeErr(w, userFault(err))
 		return
 	}
 	rec, _ := s.db.Recording(r.Context(), id)

@@ -21,7 +21,7 @@ const floorHalfHour = (t: number) => Math.floor(t / HALF_HOUR) * HALF_HOUR;
 /** Channels × time grid. Scrolls both ways; the channel column and time header stay pinned. */
 export default function Guide({ filters, setFilters }: { filters: TvFilters; setFilters: (f: TvFilters) => void }) {
   const [start, setStart] = useState(() => floorHalfHour(Date.now() / 1000));
-  const { data, error, loading, reload } = useApi<GuideResponse>(`/api/livetv/guide?start=${start}&hours=${HOURS}`, { pollMs: 60000 });
+  const { data, error, loading, reload } = useApi<GuideResponse>(`/api/livetv/guide?start=${start}&hours=${HOURS}`, { pollMs: 60000, keep: true });
   const [open, setOpen] = useState<{ p: Program; c: TvChannel } | null>(null);
   const [now, setNow] = useState(() => Date.now() / 1000);
   const scroller = useRef<HTMLDivElement>(null);

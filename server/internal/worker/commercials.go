@@ -121,7 +121,12 @@ func (w *Worker) commercials(ctx context.Context, jobID, fileID int64) error {
 	if err != nil {
 		return err
 	}
-	out, err := os.MkdirTemp(filepath.Join(w.cfg.CacheDir, "comskip"), fmt.Sprintf("%d-", fileID))
+	// comskipINI only makes this folder when it writes the default ini.
+	work := filepath.Join(w.cfg.CacheDir, "comskip")
+	if err := os.MkdirAll(work, 0o755); err != nil {
+		return err
+	}
+	out, err := os.MkdirTemp(work, fmt.Sprintf("%d-", fileID))
 	if err != nil {
 		return err
 	}

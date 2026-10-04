@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode, type Ref } from "react";
 import { Loader2, Search } from "lucide-react";
+import { menuKeys } from "../lib/dialog";
 import Link from "./Link";
 
 // Shared primitives, ported from Portside Lite's components/ui.tsx so both
@@ -179,9 +180,9 @@ export interface MenuItem {
   onSelect: () => void;
 }
 
-/** A small button that opens a list of less-used actions. Closes on pick, outside click or Escape. */
 /**
- * An icon button that opens a menu. align="end" lines the menu up with the
+ * An icon button that opens a menu of less-used actions; it closes on pick,
+ * outside click or Escape. align="end" lines the menu up with the
  * button's right edge (for buttons near the right of the screen); className
  * styles the button (e.g. the right half of a split button).
  */
@@ -202,8 +203,15 @@ export function MenuButton({
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
+    // Into the menu, so the arrow keys work straight away.
+    ref.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
     const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation(); // close the menu, not the panel or dialog it's in
+      setOpen(false);
+      ref.current?.querySelector<HTMLElement>("button")?.focus();
+    };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
     return () => {
@@ -217,7 +225,7 @@ export function MenuButton({
         {icon}
       </button>
       {open && (
-        <div role="menu" className={`menu ${align === "end" ? "menu-end" : ""}`}>
+        <div role="menu" className={`menu ${align === "end" ? "menu-end" : ""}`} onKeyDown={menuKeys}>
           {items.map((it) => (
             <button
               key={it.id}

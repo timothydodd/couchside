@@ -35,13 +35,13 @@ Each zip holds a single `couchside` binary with the web UI built in. Install
 COUCHSIDE_MEDIA_ROOT=/path/to/media ./couchside
 ```
 
-On Windows, set the variable first and run `couchside.exe`. For commercial
+On Windows, set the variable first and run `couchside.exe`. (On Windows a conversion isn't paused when it gets ahead of the player, so a stream converts its whole file while it's open.) For commercial
 detection, put [Comskip](https://github.com/erikkaashoek/Comskip) on the PATH
 or set `COUCHSIDE_COMSKIP` (the container image has it built in).
 
 ## Docker Compose against a NAS share
 
-Copy `.env.example` to `.env`, fill it in, and run `docker compose up -d`.
+Copy `.env.example` to `.env`, fill it in, and run `docker compose up -d`. That runs the published image; to build from a checkout instead, add `-f docker-compose.yml -f docker-compose.dev.yml` and `--build` (a local build has no built-in TMDB key, so set `TMDB_API_KEY`).
 Docker Desktop can't see mapped network drives, so the compose file mounts the
 SMB share directly. It mounts the share writable so the DVR can record into
 your TV library.

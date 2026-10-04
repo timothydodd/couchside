@@ -43,11 +43,22 @@ timezone: ""            # e.g. America/New_York; "" leaves the image's UTC
 livetv:
   hdhomerun: ""         # tuner IP or host; "" turns Live TV's tuner off
 
-# Extra environment variables, e.g. COUCHSIDE_TRUSTED_PROXIES or
-# COUCHSIDE_DVR_PAD_AFTER (see docs/configuration.md).
+# Extra environment variables for settings the chart has no value for, e.g.
+# COUCHSIDE_DVR_PAD_AFTER or COUCHSIDE_COMSKIP_INI (see docs/configuration.md).
 extraEnv: []
 #  - name: COUCHSIDE_DVR_PAD_AFTER
 #    value: 2m
+
+# Extra volumes and where to mount them, e.g. a ConfigMap holding your own
+# comskip.ini (then point COUCHSIDE_COMSKIP_INI at it with extraEnv).
+extraVolumes: []
+#  - name: comskip
+#    configMap:
+#      name: couchside-comskip
+extraVolumeMounts: []
+#  - name: comskip
+#    mountPath: /config/comskip
+#    readOnly: true
 
 # LAN discovery: TV apps find the server with an SSDP search instead of
 # having its address typed in. Multicast from the LAN only reaches a pod on
@@ -72,6 +83,9 @@ config:
 # unusable falls back to software with a warning in the log.
 hwaccel:
   mode: none            # none | vaapi | qsv | nvenc
+  # The VAAPI render node, when the node has more than one GPU
+  # (COUCHSIDE_VAAPI_DEVICE); "" uses /dev/dri/renderD128.
+  device: ""
   dri:
     enabled: false      # mount /dev/dri from the node
     # Host gids owning /dev/dri/renderD128 and card* (ls -ln /dev/dri on the node)
@@ -145,9 +159,23 @@ podSecurityContext:
   runAsUser: 1000
   runAsGroup: 1000
   fsGroup: 1000
-# Without GPU access the container drops every capability and can't gain
-# privileges (the image runs as 1000:1000). With hwaccel.dri.privileged it
-# runs privileged instead.
+  # Only fix ownership when the volume's root is wrong, instead of walking
+  # the cache and recordings volumes on every start.
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+# The container drops every capability and can't gain privileges (the image
+# runs as 1000:1000). With hwaccel.dri.privileged it runs privileged instead.
+
+# Mount the container's root filesystem read-only. /tmp (and /recordings when
+# it isn't persisted) become emptyDir volumes.
+readOnlyRootFilesystem: false
+
+# Liveness only starts once the server has answered. Hardware detection and
+# database migrations run before it listens, so allow a few minutes.
+startupProbe:
+  periodSeconds: 5
+  failureThreshold: 60
 
 nodeSelector: {}
 tolerations: []

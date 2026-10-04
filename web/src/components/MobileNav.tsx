@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Activity, Clapperboard, FolderOpen, Home, LogOut, Menu, RadioTower, Search, Settings, Tv, Users, X, type LucideIcon } from "lucide-react";
 import Link from "./Link";
 import ProfileAvatar from "./ProfileAvatar";
@@ -7,6 +7,9 @@ import { useAuth, useIsAdmin } from "../stores/auth";
 import { useProfile } from "../stores/profile";
 import { useRouter, type Route } from "../stores/router";
 import { useStatus } from "../stores/status";
+import { useDialog } from "../lib/dialog";
+import { attempt } from "../lib/notices";
+import { fmtVersion } from "../lib/format";
 
 /*
  * Phone layout (below md): a top bar with the logo, search and the profile,
@@ -90,11 +93,8 @@ function MoreSheet({ onClose }: { onClose: () => void }) {
   const jobs = status?.jobs;
   const active = jobs ? jobs.queued + jobs.running : 0;
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  const sheet = useRef<HTMLDivElement>(null);
+  useDialog(sheet, onClose);
 
   const row = (to: string, label: string, Icon: LucideIcon, extra?: React.ReactNode) => (
     <Link to={to} className="sheet-row">
@@ -105,8 +105,8 @@ function MoreSheet({ onClose }: { onClose: () => void }) {
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/55 md:hidden" onClick={onClose}>
-      <div role="dialog" aria-label="More" className="sheet" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-backdrop/55 md:hidden" onClick={onClose}>
+      <div ref={sheet} role="dialog" aria-modal="true" aria-label="More" className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3 px-4 pb-2 pt-4">
           {profile && <ProfileAvatar profile={profile} size={36} />}
           <div className="min-w-0 flex-1">
@@ -132,14 +132,14 @@ function MoreSheet({ onClose }: { onClose: () => void }) {
           {admin && row("/libraries", "Libraries", FolderOpen)}
           {row("/settings", "Settings", Settings)}
           {row("/profiles", "Switch profile", Users)}
-          <button type="button" className="sheet-row" onClick={() => void logout()}>
+          <button type="button" className="sheet-row" onClick={attempt("Couldn't sign out", () => logout())}>
             <LogOut size={20} className="text-content-muted" />
             <span className="flex-1 text-left">Sign out</span>
           </button>
         </div>
         <div className="border-t border-border-light px-4 py-3 text-xs text-content-muted">
           {status ? (active ? jobs?.current || `${active} jobs running` : "Server idle") : "Connecting…"}
-          {status && <span className="float-right mono">{/^\d/.test(status.version) ? `v${status.version}` : status.version}</span>}
+          {status && <span className="float-right mono">{fmtVersion(status.version)}</span>}
         </div>
       </div>
     </div>

@@ -32,6 +32,10 @@ const (
 	virtualMaxLagMs = 10_000 // real-time runs end a little late; catch up once this far behind
 	virtualWindow   = 900    // segments kept in the playlist (30 minutes)
 	virtualResyncMs = 30_000
+
+	virtualRetryMs    = 30_000 // a piece that failed is tried again this often while it's scheduled
+	virtualShortMs    = 1500   // a run this much shorter than asked means the file ended early
+	virtualSkipWaitMs = 12_000 // at tune-in, wait this long for the next piece when the current one won't play
 )
 
 // playoutSource returns schedule pieces playing at, or after, ms.
@@ -104,61 +108,132 @@ func (m *liveManager) launchVirtual(ctx context.Context, key, channel, name stri
 // playVirtual runs until ctx ends. The first error before any output goes to
 // failed; later ones are logged and the piece skipped.
 func (m *liveManager) playVirtual(ctx context.Context, s *LiveSession, pl *mergedPlaylist, spec Spec, src playoutSource, failed chan<- error) {
-	pos := time.Now().UnixMilli() - virtualLeadMs
+	info := map[string]pieceVideo{} // probed once per file
+	gpuOff := false                 // a GPU run failed: decode on the CPU from here on
+	play := func(ctx context.Context, p db.PlayoutPiece, inMs, durMs, streamMs int64, realtime bool, run int) (int64, error) {
+		v, ok := info[p.Path]
+		if !ok && m.pieceInfo != nil {
+			v = m.pieceInfo(ctx, p.Path)
+			info[p.Path] = v
+		}
+		hw := !gpuOff && m.enc.HWDecode && transcode.HWDecodable[v.Codec]
+		err := m.runPiece(ctx, m.virtualArgs(p, v, hw, inMs, durMs, streamMs, realtime, spec, s.dir, run), s, pl, run)
+		if err != nil && hw && ctx.Err() == nil && pl.runMs(run) == 0 {
+			slog.Warn("virtual channel: GPU decoding failed, decoding on the CPU instead", "channel", s.Channel, "file", p.Path, "err", err)
+			gpuOff = true
+			err = m.runPiece(ctx, m.virtualArgs(p, v, false, inMs, durMs, streamMs, realtime, spec, s.dir, run), s, pl, run)
+		}
+		return pl.runMs(run), err
+	}
+	virtualLoop(ctx, s.Channel, src, play, func() int64 { return time.Now().UnixMilli() }, sleepCtx, failed)
+}
+
+// pieceRunner plays durMs of a piece from inMs and returns how much it
+// actually produced, which is less when the file is shorter than the
+// schedule believes or the run failed part way.
+type pieceRunner func(ctx context.Context, p db.PlayoutPiece, inMs, durMs, streamMs int64, realtime bool, run int) (producedMs int64, err error)
+
+// virtualLoop walks the schedule, keeping the stream at the schedule's
+// position: pos never runs ahead of the clock. A piece that can't be played
+// (its file moved or the share is gone) leaves a hole in the stream for as
+// long as it's scheduled, and is tried again now and then in case the file
+// is back, rather than starting the next program early: everyone on the
+// channel shares this stream, and the guide says what's on.
+func virtualLoop(ctx context.Context, channel string, src playoutSource, play pieceRunner, now func() int64, sleep func(context.Context, time.Duration), failed chan<- error) {
+	pos := now() - virtualLeadMs
 	var streamMs int64 // stream time so far: each run's timestamps carry on from the last
+	started := false   // something has reached the playlist
+	lastFailed := ""
 	for run := 0; ctx.Err() == nil; run++ {
-		now := time.Now().UnixMilli()
-		if pos < now-virtualResyncMs {
-			pos = now - virtualLeadMs // fell far behind (a slow encode): jump to the schedule
+		t := now()
+		if pos > t+1000 {
+			sleep(ctx, time.Duration(pos-t)*time.Millisecond) // nothing to play yet
+			continue
+		}
+		if pos < t-virtualResyncMs {
+			pos = t - virtualLeadMs // fell far behind (a slow encode): jump to the schedule
 		}
 		pieces, err := src(ctx, pos)
 		if err == nil && len(pieces) == 0 {
 			err = usererr.New("nothing is scheduled on this channel; check that its filters match something in your library")
 		}
 		if err != nil {
-			if pl.count() == 0 {
+			if !started {
 				failed <- err
 				return
 			}
-			slog.Warn("virtual channel", "channel", s.Channel, "err", err)
-			sleepCtx(ctx, 2*time.Second)
+			slog.Warn("virtual channel", "channel", channel, "err", err)
+			sleep(ctx, 2*time.Second)
 			continue
 		}
 		p := pieces[0]
 		if p.StartMs > pos {
 			pos = p.StartMs // a gap in the schedule
+			continue
 		}
 		end := p.EndMs
 		// Catch up fast at the start (the player's buffer), and later only if
 		// the small delays between runs have added up.
-		realtime := run > 0 && now-pos <= virtualMaxLagMs
+		lag := t - pos
+		realtime := lag <= virtualMaxLagMs && (started || lag < 1000)
 		if !realtime {
-			end = min(end, now) // catch up only as far as the schedule is
+			end = min(end, t) // catch up only as far as the schedule is
 		}
 		if end-pos < 300 {
 			pos = end
 			continue
 		}
-		args := m.virtualArgs(p, p.InMs+(pos-p.StartMs), end-pos, streamMs, realtime, spec, s.dir, run)
-		if err := m.runPiece(ctx, args, s, pl, run); err != nil && ctx.Err() == nil {
-			if pl.count() == 0 {
-				failed <- fmt.Errorf("couldn't play %s: %w", filepath.Base(p.Path), err)
+		produced, err := play(ctx, p, p.InMs+(pos-p.StartMs), end-pos, streamMs, realtime, run)
+		if ctx.Err() != nil {
+			return
+		}
+		streamMs += produced
+		if produced > 0 {
+			started = true
+		}
+		switch {
+		case err != nil && !started:
+			// Tuning in while a file that won't play is on. Wait for the next
+			// piece if that's soon; otherwise say when the channel is back.
+			if p.EndMs-now() > virtualSkipWaitMs {
+				failed <- usererr.Errorf("%s can't be played right now (the file is missing or unreadable); this channel carries on at %s",
+					filepath.Base(p.Path), time.UnixMilli(p.EndMs).Format("3:04 PM"))
 				return
 			}
-			slog.Warn("virtual channel: skipping a piece that won't play", "channel", s.Channel, "file", p.Path, "err", err)
-			sleepCtx(ctx, time.Second)
+			slog.Warn("virtual channel: a piece won't play; waiting for the next", "channel", channel, "file", p.Path, "err", err)
+			pos = p.EndMs
+		case err != nil:
+			if p.Path != lastFailed {
+				slog.Warn("virtual channel: a piece won't play; the stream pauses until it does or the next is due", "channel", channel, "file", p.Path, "err", err)
+				lastFailed = p.Path
+			}
+			pos = min(p.EndMs, max(pos+produced, now()+virtualRetryMs))
+		case produced+virtualShortMs < end-pos:
+			// The file ended before the schedule expected (replaced by a
+			// shorter one since the schedule was built).
+			slog.Warn("virtual channel: a file is shorter than scheduled", "channel", channel, "file", p.Path, "missing_ms", end-pos-produced)
+			pos = p.EndMs
+		default:
+			pos = end
 		}
-		streamMs += end - pos
-		pos = end
 	}
 }
 
+// pieceVideo is what converting a library file needs to know about it.
+type pieceVideo struct {
+	HDR   bool   // PQ or HLG: tone map to SDR
+	Codec string // ffprobe's name, for transcode.HWDecodable
+}
+
 // virtualArgs encodes durMs of a file from inMs to HLS segments for run,
-// with timestamps starting offsetMs into the stream.
-func (m *liveManager) virtualArgs(p db.PlayoutPiece, inMs, durMs, offsetMs int64, realtime bool, spec Spec, dir string, run int) []string {
+// with timestamps starting offsetMs into the stream. Every piece comes out
+// at the session's height, smaller sources included: the pieces are joined
+// into one stream, and players cope badly with the picture size changing at
+// each join.
+func (m *liveManager) virtualArgs(p db.PlayoutPiece, v pieceVideo, hwDecode bool, inMs, durMs, offsetMs int64, realtime bool, spec Spec, dir string, run int) []string {
 	secs := func(ms int64) string { return strconv.FormatFloat(float64(ms)/1000, 'f', 3, 64) }
 	vIn, vOut := m.enc.Video(transcode.VideoOpts{MaxHeight: spec.Height, BitrateK: transcode.BitrateFor(spec.Height),
-		Deinterlace: true, Live: true})
+		Deinterlace: true, Live: true, HDR: v.HDR, HWDecode: hwDecode})
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
 	args = append(args, vIn...)
 	if realtime {
@@ -172,12 +247,12 @@ func (m *liveManager) virtualArgs(p db.PlayoutPiece, inMs, durMs, offsetMs int64
 	}
 	args = append(args, "-map", "0:v:0", "-map", audio, "-sn", "-dn")
 	args = append(args, vOut...)
-	args = append(args, "-force_key_frames", fmt.Sprintf("expr:gte(t,n_forced*%d)", liveSegDur))
+	args = append(args, transcode.ForceKeyFrames(liveSegDur)...)
 	args = append(args, transcode.AudioArgs()...)
-	return append(args, "-ar", "48000", "-output_ts_offset", secs(offsetMs), "-f", "hls", "-hls_time", strconv.Itoa(liveSegDur), "-hls_list_size", "0",
-		"-hls_playlist_type", "event", "-hls_flags", "temp_file+independent_segments",
-		"-hls_segment_filename", filepath.Join(dir, fmt.Sprintf("seg%d_%%d.ts", run)),
-		filepath.Join(dir, fmt.Sprintf("run%d.m3u8", run)))
+	args = append(args, "-ar", "48000", "-output_ts_offset", secs(offsetMs))
+	return append(args, transcode.HLSOutput{SegDur: liveSegDur, Start: -1, Event: true, Independent: true,
+		Segments: filepath.Join(dir, fmt.Sprintf("seg%d_%%d.ts", run)),
+		Playlist: filepath.Join(dir, fmt.Sprintf("run%d.m3u8", run))}.Args()...)
 }
 
 // runPiece runs one ffmpeg, merging its segments into the playlist as they appear.
@@ -232,8 +307,16 @@ type mergedPlaylist struct {
 	mu      sync.Mutex
 	segs    []mergedSegment
 	nextSeq int64
-	discSeq int64       // discontinuities that have slid out of the window
-	seen    map[int]int // segments merged so far, per run
+	discSeq int64         // discontinuities that have slid out of the window
+	seen    map[int]int   // segments merged so far, per run
+	ms      map[int]int64 // their total length, per run
+}
+
+// runMs is how much a run has put in the playlist so far.
+func (p *mergedPlaylist) runMs(run int) int64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.ms[run]
 }
 
 func (p *mergedPlaylist) count() int {
@@ -271,10 +354,11 @@ func (p *mergedPlaylist) follow(runList string, run int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.seen == nil {
-		p.seen = map[int]int{}
+		p.seen, p.ms = map[int]int{}, map[int]int64{}
 	}
 	added := false
 	for i := p.seen[run]; i < len(uris); i++ {
+		p.ms[run] += int64(math.Round(durs[i] * 1000))
 		p.segs = append(p.segs, mergedSegment{seq: p.nextSeq, dur: durs[i], uri: uris[i], disc: i == 0 && p.nextSeq > 0, run: run})
 		p.nextSeq++
 		added = true

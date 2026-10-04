@@ -1,5 +1,6 @@
 import Link from "../components/Link";
 import AccountManager from "../components/settings/AccountManager";
+import SingleSignOn from "../components/settings/SingleSignOn";
 import AccountSettings from "../components/settings/AccountSettings";
 import Console from "../components/settings/Console";
 import LiveTvSettings from "../components/settings/LiveTvSettings";
@@ -9,6 +10,7 @@ import { SECTIONS } from "../components/settings/sections";
 import ServerInfo from "../components/settings/ServerInfo";
 import ServerNow from "../components/settings/ServerNow";
 import SystemHistory from "../components/settings/SystemHistory";
+import BackupSettings from "../components/settings/Backups";
 import TimingSettings from "../components/settings/TimingSettings";
 import VirtualChannels from "../components/settings/VirtualChannels";
 import { PageHeader } from "../components/ui";
@@ -16,6 +18,7 @@ import { usePhone } from "../lib/media";
 import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
+import { fmtVersion } from "../lib/format";
 
 /**
  * Settings. /settings is your own preferences and account, for every profile;
@@ -58,7 +61,12 @@ export default function SettingsPage() {
           </>
         )}
         {id === "console" && <Console />}
-        {id === "accounts" && <AccountManager />}
+        {id === "accounts" && (
+          <>
+            <AccountManager />
+            <SingleSignOn />
+          </>
+        )}
         {id === "metadata" && <MetadataSettings />}
         {id === "livetv" && (
           <>
@@ -66,7 +74,12 @@ export default function SettingsPage() {
             <VirtualChannels />
           </>
         )}
-        {id === "advanced" && <TimingSettings />}
+        {id === "advanced" && (
+          <>
+            <TimingSettings />
+            <BackupSettings />
+          </>
+        )}
         {id === "you" && <About />}
       </div>
     </div>
@@ -78,7 +91,7 @@ function About() {
   const version = useStatus((s) => s.status?.version);
   return (
     <p className="px-1 text-xs text-content-muted">
-      Couchside {version && (/^\d/.test(version) ? `v${version}` : version)} &middot; free, open-source software under the{" "}
+      Couchside {version && fmtVersion(version)} &middot; free, open-source software under the{" "}
       <a href="https://github.com/timothydodd/couchside/blob/main/LICENSE" target="_blank" rel="noreferrer" className="hover:text-accent hover:underline">
         MIT License
       </a>{" "}

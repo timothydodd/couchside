@@ -4,6 +4,7 @@ import { ErrorNote, Spinner } from "../ui";
 import { api, useApi } from "../../lib/api";
 import { fmtAgo } from "../../lib/format";
 import type { DeviceSession } from "../../lib/types";
+import { errText } from "../../lib/errors";
 
 /** "Chrome on Windows" from a user agent, near enough to recognise a device. */
 export function describeAgent(ua: string): string {
@@ -44,7 +45,7 @@ export default function SessionList({ url }: { url: string }) {
       await api(`/api/auth/sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
       await reload();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errText(e));
     } finally {
       setBusy(null);
     }

@@ -131,3 +131,80 @@ func TestEmbeddedSubtitleChunkLoads(t *testing.T) {
 		t.Fatalf("embedded chunk = %d %q", rec.Code, rec.Body)
 	}
 }
+
+// A whole embedded track asked for with ?async=1 answers 202 while it's
+// converted in the background, then the track; a conversion that fails is
+// reported, not retried on every poll.
+func TestWholeTrackInTheBackground(t *testing.T) {
+	dir := t.TempDir()
+	ff := filepath.Join(dir, "ffmpeg")
+	runs := filepath.Join(dir, "runs")
+	// Takes half a second, then writes the WebVTT file (its last argument).
+	script := "#!/bin/sh\necho run >> " + runs + "\nsleep 0.5\nfor a in \"$@\"; do out=\"$a\"; done\nprintf 'WEBVTT\\n\\n00:01.000 --> 00:02.000\\nwhole track\\n' > \"$out\"\n"
+	if err := os.WriteFile(ff, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, h, _ := subsServer(t, ff)
+	// ?prepare=1 starts it too, and only says whether it's ready.
+	if rec := get(h, "/api/files/1/subtitles/s0.vtt?prepare=1"); rec.Code != 200 || !strings.Contains(rec.Body.String(), `"ready":false`) {
+		t.Fatalf("prepare while converting = %d %s", rec.Code, rec.Body)
+	}
+	url := "/api/files/1/subtitles/s0.vtt?async=1"
+	for i := 0; i < 3; i++ { // asking again while it runs starts nothing new
+		if rec := get(h, url); rec.Code != http.StatusAccepted || rec.Header().Get("Retry-After") == "" {
+			t.Fatalf("poll %d while converting = %d", i, rec.Code)
+		}
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		rec := get(h, url)
+		if rec.Code == 200 {
+			if !strings.Contains(rec.Body.String(), "whole track") {
+				t.Fatalf("track = %q", rec.Body)
+			}
+			break
+		}
+		if rec.Code != http.StatusAccepted || time.Now().After(deadline) {
+			t.Fatalf("waiting for the track: %d", rec.Code)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if b, _ := os.ReadFile(runs); strings.Count(string(b), "run") != 1 {
+		t.Fatalf("ffmpeg ran %d times for one track", strings.Count(string(b), "run"))
+	}
+	if rec := get(h, "/api/files/1/subtitles/s0.vtt?prepare=1"); rec.Code != 200 || !strings.Contains(rec.Body.String(), `"ready":true`) {
+		t.Fatalf("prepare once converted = %d %s", rec.Code, rec.Body)
+	}
+	// Without async, the same URL waits and answers as before (now from the cache).
+	if rec := get(h, "/api/files/1/subtitles/s0.vtt"); rec.Code != 200 {
+		t.Fatalf("synchronous = %d", rec.Code)
+	}
+
+	// A track ffmpeg can't convert: 202 first, then 422 on later polls.
+	os.WriteFile(ff, []byte("#!/bin/sh\necho run >> "+runs+"\necho 'Subtitle codec 94213 is not supported' >&2\nexit 1\n"), 0o755)
+	bad := "/api/files/1/subtitles/s1.vtt?async=1"
+	if rec := get(h, bad); rec.Code != http.StatusAccepted {
+		t.Fatalf("first ask for a bad track = %d", rec.Code)
+	}
+	deadline = time.Now().Add(5 * time.Second)
+	for {
+		rec := get(h, bad)
+		if rec.Code == http.StatusUnprocessableEntity {
+			if strings.Contains(rec.Body.String(), "94213") {
+				t.Fatalf("ffmpeg's text reached the client: %s", rec.Body)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("a failed conversion keeps answering %d", rec.Code)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	before, _ := os.ReadFile(runs)
+	get(h, bad)
+	get(h, bad)
+	time.Sleep(100 * time.Millisecond)
+	if after, _ := os.ReadFile(runs); len(after) != len(before) {
+		t.Fatal("a failed track was converted again on the next poll")
+	}
+}

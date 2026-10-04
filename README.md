@@ -5,7 +5,7 @@
 A fast, lightweight media server for your movies, shows and live TV.
 [couchside.app](https://couchside.app)
 
-- **Fast and light.** One 7 MB binary with SQLite built in. Runs on a NAS, a Pi or k3s.
+- **Fast and light.** One small binary with SQLite built in. Runs on a NAS, a Pi or k3s.
 - **Local only.** No cloud account, no telemetry. Everything it fetches is cached on your server.
 - **Live TV and DVR.** HDHomeRun guide, series recordings, commercial skipping, and your own channels made from your library.
 - **A good UI.** A dark web app that works on phones, a Plex-style player, and a Roku app.

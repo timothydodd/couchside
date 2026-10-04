@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { ApiError, api, setAuthHooks } from "../lib/api";
 import type { AuthInfo, Profile, SignedIn } from "../lib/types";
 import { stopStatus } from "./status";
+import { errText } from "../lib/errors";
 
 /**
  * Accounts are always on. Signing in is by name and password, or with
@@ -24,8 +25,11 @@ interface AuthState {
   signedIn: AuthInfo["signedIn"];
   /** Signing in here sends passwords unencrypted across the internet. */
   insecure: boolean;
+  /** The label of the single sign-on button; "" when there's none. */
+  oidc: string;
   load: () => Promise<void>;
-  login: (name: string, password: string) => Promise<void>;
+  /** code is the second step, for a profile with two-step sign-in; without it the error's code is "totp_required". */
+  login: (name: string, password: string, code?: string) => Promise<void>;
   /** Passwordless sign-in to a profile without a password. */
   pick: (profileId: number) => Promise<void>;
   setup: (code: string, name: string, password: string) => Promise<void>;
@@ -45,6 +49,7 @@ export const useAuth = create<AuthState>((set, get) => ({
   user: null,
   signedIn: [],
   insecure: false,
+  oidc: "",
   load: async () => {
     try {
       const info = await api<AuthInfo>("/api/auth");
@@ -56,18 +61,19 @@ export const useAuth = create<AuthState>((set, get) => ({
         user: info.user,
         signedIn: info.signedIn,
         insecure: !!info.insecure,
+        oidc: info.oidc ?? "",
         error: null,
       });
-      if (info.user && info.accessExpiresAt) schedule(info.accessExpiresAt);
+      if (info.user && info.accessExpiresAt) schedule(info);
       // The access cookie ran out while we were away; the refresh cookie may still be good.
       else if (!info.user && info.signedIn.length) await refreshSession();
     } catch (e) {
-      set({ error: e instanceof Error ? e.message : String(e) });
+      set({ error: errText(e) });
     }
     set({ loaded: true });
   },
-  login: async (name, password) => {
-    await api<SignedIn>("/api/auth/login", { method: "POST", json: { name, password, client: "web" } });
+  login: async (name, password, code) => {
+    await api<SignedIn>("/api/auth/login", { method: "POST", json: { name, password, code, client: "web" } });
     announceProfileChange();
     location.assign("/");
   },
@@ -146,7 +152,7 @@ function refresh(profileId?: number): Promise<RefreshResult> {
       if (res?.ok) {
         const t = (await res.json()) as SignedIn;
         useAuth.setState({ user: t.user });
-        schedule(t.accessExpiresAt);
+        schedule(t);
         return "ok";
       }
       if (res?.status === 401) return "ended";
@@ -173,12 +179,17 @@ export async function refreshSession(profileId?: number): Promise<boolean> {
   return (await refresh(profileId)) === "ok";
 }
 
-/** Renew two minutes before the access token runs out. */
-function schedule(exp: number) {
-  expiresAt = exp;
+/**
+ * Renew two minutes before the access token runs out. The time left comes
+ * from the server (expiresIn), so a browser clock that's minutes fast or
+ * slow doesn't renew every few seconds, or after the cookie has gone.
+ * expiresAt is kept on this browser's clock.
+ */
+function schedule(t: { expiresIn?: number; accessExpiresAt?: number }) {
+  const left = t.expiresIn ?? (t.accessExpiresAt ?? 0) - Date.now() / 1000;
+  expiresAt = Date.now() / 1000 + left;
   clearTimeout(timer);
-  const ms = exp * 1000 - Date.now() - 120_000;
-  timer = setTimeout(() => void refresh(), Math.max(5_000, ms));
+  timer = setTimeout(() => void refresh(), Math.max(5_000, left * 1000 - 120_000));
 }
 
 // Timers stall in background tabs and sleeping laptops; catch up on return.
@@ -215,5 +226,5 @@ export function useOwnerCheck() {
 /** A readable message for a failed sign-in call. */
 export function authError(e: unknown): string {
   if (e instanceof ApiError) return e.message;
-  return e instanceof Error ? e.message : String(e);
+  return errText(e);
 }

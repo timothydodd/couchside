@@ -102,4 +102,8 @@ ENV COUCHSIDE_ADDR=:8080 \
 USER 1000:1000
 EXPOSE 8080 1900/udp
 VOLUME ["/data", "/cache", "/recordings"]
+# For Docker and compose (Kubernetes uses the chart's probes). The port is
+# whatever COUCHSIDE_ADDR ends in.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+    CMD wget -qO /dev/null "http://127.0.0.1:${COUCHSIDE_ADDR##*:}/healthz" || exit 1
 ENTRYPOINT ["couchside"]

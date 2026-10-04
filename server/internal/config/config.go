@@ -12,7 +12,7 @@ import (
 type Config struct {
 	Addr         string        // COUCHSIDE_ADDR, default :8080
 	DataDir      string        // COUCHSIDE_DATA_DIR: SQLite database lives here
-	CacheDir     string        // COUCHSIDE_CACHE_DIR: artwork, stills (and later HLS segments)
+	CacheDir     string        // COUCHSIDE_CACHE_DIR: artwork, stills, subtitles, optimized copies, HLS segments
 	WebDir       string        // COUCHSIDE_WEB_DIR: built frontend to serve; empty = API only
 	MediaRoot    string        // COUCHSIDE_MEDIA_ROOT: libraries must live under it; enables folder browsing
 	OMDbKey      string        // OMDB_API_KEY: optional second metadata source

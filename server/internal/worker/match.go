@@ -16,6 +16,7 @@ import (
 
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/imaging"
+	"github.com/timothydodd/couchside/internal/keylock"
 	"github.com/timothydodd/couchside/internal/metadata"
 	"github.com/timothydodd/couchside/internal/remoteimg"
 )
@@ -40,7 +41,7 @@ func (w *Worker) match(ctx context.Context, itemID int64) error {
 	if item.ImdbPinned {
 		pinned = item.ImdbID
 	}
-	d, p, err := w.providers.Lookup(ctx, kind, item.ParsedTitle, item.ParsedYear, pinned)
+	d, p, skipped, err := w.providers.Lookup(ctx, kind, item.ParsedTitle, item.ParsedYear, pinned)
 	if err != nil {
 		return err
 	}
@@ -54,7 +55,7 @@ func (w *Worker) match(ctx context.Context, itemID int64) error {
 			bestScore = metadata.TitleScore(item.ParsedTitle, d.Title)
 		}
 		for _, v := range metadata.TitleVariants(item.ParsedTitle) {
-			vd, vp, err := w.providers.Lookup(ctx, kind, v, item.ParsedYear, "")
+			vd, vp, vskipped, err := w.providers.Lookup(ctx, kind, v, item.ParsedYear, "")
 			if err != nil {
 				return err
 			}
@@ -62,7 +63,7 @@ func (w *Worker) match(ctx context.Context, itemID int64) error {
 				continue
 			}
 			if sc := metadata.TitleScore(v, vd.Title); sc > bestScore {
-				d, p, bestScore = vd, vp, sc
+				d, p, skipped, bestScore = vd, vp, vskipped, sc
 				slog.Info("matched using a title variant", "file_title", item.ParsedTitle, "variant", v, "match", vd.Title)
 				if sc == 3 {
 					break
@@ -79,16 +80,24 @@ func (w *Worker) match(ctx context.Context, itemID int64) error {
 	if err := w.db.ApplyMetadata(ctx, itemID, db.Metadata{
 		Title: d.Title, Year: d.Year, Plot: d.Plot, Genres: d.Genres, Rated: d.Rated, Rating: d.Rating,
 		RuntimeMin: d.RuntimeMin, ImdbID: d.ImdbID, TotalSeasons: d.TotalSeasons, PosterURL: d.PosterURL, BackdropURL: d.BackdropURL,
-		Provider: p.Name(),
+		Provider: p.Name(), Partial: skipped != nil,
 	}); err != nil {
 		return err
 	}
-	credits := make([]db.Credit, len(d.Credits))
-	for i, c := range d.Credits {
-		credits[i] = db.Credit{PersonID: c.PersonID, Name: c.Name, ProfilePath: c.ProfilePath, Kind: c.Kind, Role: c.Role, Order: c.Order}
+	if skipped != nil {
+		// A provider ahead of this one is down or rate-limiting. Its cast,
+		// crew and backdrop stay as they are, and the item stays pending so
+		// the next scan asks again.
+		slog.Warn("matched without a provider that couldn't be reached; will retry", "title", d.Title, "used", p.Name(), "err", skipped)
 	}
-	if err := w.db.SetCredits(ctx, itemID, credits); err != nil {
-		return err
+	if skipped == nil || len(d.Credits) > 0 {
+		credits := make([]db.Credit, len(d.Credits))
+		for i, c := range d.Credits {
+			credits[i] = db.Credit{PersonID: c.PersonID, Name: c.Name, ProfilePath: c.ProfilePath, Kind: c.Kind, Role: c.Role, Order: c.Order}
+		}
+		if err := w.db.SetCredits(ctx, itemID, credits); err != nil {
+			return err
+		}
 	}
 	if item.Kind == "series" && d.ImdbID != "" {
 		seasons, err := w.db.SeriesSeasons(ctx, itemID)
@@ -227,8 +236,8 @@ func PersonPhotoPath(cacheDir string, personID int64) string {
 }
 
 var (
-	photoLocks sync.Map // person id → *sync.Mutex: one fetch per person, others in parallel
-	photoMiss  sync.Map // person id → time.Time of a failed fetch
+	photoLocks keylock.Map[int64] // one fetch per person, others in parallel
+	photoMiss  sync.Map           // person id → time.Time of a failed fetch
 )
 
 // photoMissFor is how long a person whose photo couldn't be fetched isn't tried again.
@@ -250,13 +259,7 @@ func (w *Worker) PersonPhoto(ctx context.Context, personID int64, profilePath st
 		}
 		photoMiss.Delete(personID)
 	}
-	lk, _ := photoLocks.LoadOrStore(personID, &sync.Mutex{})
-	mu := lk.(*sync.Mutex)
-	mu.Lock()
-	defer func() {
-		mu.Unlock()
-		photoLocks.Delete(personID)
-	}()
+	defer photoLocks.Lock(personID)()
 	if _, err := os.Stat(dst); err == nil {
 		return dst, nil // fetched while we waited
 	}
@@ -322,13 +325,6 @@ var httpClient = remoteimg.NewClient(30 * time.Second)
 // errGone means the remote image doesn't exist (404/410).
 var errGone = errors.New("remote image not found")
 
-func abs(n int) int {
-	if n < 0 {
-		return -n
-	}
-	return n
-}
-
 func download(ctx context.Context, url, dst string) error {
 	if u, err := neturl.Parse(url); err != nil || !remoteimg.Allowed(u) {
 		return fmt.Errorf("not an image host Couchside fetches from: %s", url)
@@ -355,6 +351,9 @@ func download(ctx context.Context, url, dst string) error {
 	_, err = io.Copy(out, io.LimitReader(resp.Body, 15<<20))
 	if cerr := out.Close(); err == nil {
 		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(dst) // a connection dropped part way: don't leave half a file
 	}
 	return err
 }

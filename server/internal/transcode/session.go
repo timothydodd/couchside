@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -55,9 +56,18 @@ type Request struct {
 	Height         int  // 0 = best available (source height, capped at 1080p)
 	BitrateK       int  // video bitrate in kbit/s; 0 = the default for the height
 	AllowCopyVideo bool // client can play the source's H.264 as is
+	// VideoCodecs are further codecs (ffprobe names, e.g. "hevc") the client
+	// plays as is at any bit depth and HDR, so they're copied too: a Roku
+	// that can't play a film's TrueHD still plays its 4K HEVC.
+	VideoCodecs    []string
 	AllowCopyAudio bool // client can play the source's AAC/MP3 as is
-	AudioIndex     int  // which audio track (0:a:N)
-	BurnSubtitle   int  // image subtitle track to burn into the video, -1 for none
+	// AudioCodecs are surround codecs the client (a TV with a receiver)
+	// plays: "ac3", "eac3". A track already in one is copied; any other
+	// track with more than two channels is converted to one, 5.1, instead of
+	// being mixed down to stereo AAC.
+	AudioCodecs  []string
+	AudioIndex   int // which audio track (0:a:N)
+	BurnSubtitle int // image subtitle track to burn into the video, -1 for none
 }
 
 // Session is one live stream of one file at one quality.
@@ -70,6 +80,7 @@ type Session struct {
 	BitrateK  int       `json:"bitrateK"`
 	CopyVideo bool      `json:"copyVideo"`
 	CopyAudio bool      `json:"copyAudio"`
+	AudioOut  string    `json:"audioOut"` // what the stream's audio is: copy | aac | eac3 | ac3
 	Audio     int       `json:"audio"`
 	BurnSub   int       `json:"burnSubtitle"`
 	HDR       bool      `json:"hdr"`
@@ -133,6 +144,43 @@ func (m *Manager) Max() int         { return m.max }
 
 // Create decides copy-vs-encode for each stream and registers a session.
 // ffmpeg itself starts lazily, on the first segment request. Probing (up to
+// audioName turns an audio codec as a client names it into ffprobe's name.
+func audioName(c string) string {
+	switch c = strings.ToLower(strings.TrimSpace(c)); c {
+	case "ac-3", "dolby digital":
+		return "ac3"
+	case "e-ac3", "e-ac-3", "ec-3", "ec3", "dolby digital plus":
+		return "eac3"
+	}
+	return c
+}
+
+// audioArgs encodes a session's audio: stereo AAC for browsers, or 5.1 in a
+// codec the client's receiver takes. 640k is the most AC-3 carries, and
+// plenty for E-AC-3.
+func audioArgs(out string) []string {
+	switch out {
+	case "eac3":
+		return []string{"-c:a", "eac3", "-ac", "6", "-b:a", "640k"}
+	case "ac3":
+		return []string{"-c:a", "ac3", "-ac", "6", "-b:a", "640k"}
+	}
+	return AudioArgs()
+}
+
+// codecName turns a codec as a client names it into ffprobe's name for it.
+func codecName(c string) string {
+	switch c = strings.ToLower(strings.TrimSpace(c)); c {
+	case "h265", "h.265":
+		return "hevc"
+	case "avc", "h.264", "mpeg4 avc":
+		return "h264"
+	case "mpeg2", "mpeg-2":
+		return "mpeg2video"
+	}
+	return c
+}
+
 // a minute on a slow share) happens before the manager lock is taken.
 func (m *Manager) Create(ctx context.Context, r Request) (*Session, error) {
 	if r.Duration <= 0 {
@@ -157,12 +205,30 @@ func (m *Manager) Create(ctx context.Context, r Request) (*Session, error) {
 		}
 	}
 	burn := r.BurnSubtitle >= 0
-	copyVideo := r.AllowCopyVideo && !burn && info.VideoCodec == "h264" && info.EightBit420() && !info.HDR() &&
+	plainH264 := info.VideoCodec == "h264" && info.EightBit420() && !info.HDR()
+	// The client's own codec list: any spelling ("HEVC", "h265"), and never
+	// Dolby Vision profile 5, which probes as plain hevc but only a Dolby
+	// Vision player can show.
+	listed := info.DVProfile != 5 && slices.ContainsFunc(r.VideoCodecs, func(c string) bool { return codecName(c) == info.VideoCodec })
+	copyVideo := r.AllowCopyVideo && !burn && (plainH264 || listed) &&
 		(r.Height == 0 || (srcH > 0 && srcH <= r.Height))
-	copyAudio := r.AllowCopyAudio && (audioCodec == "aac" || audioCodec == "mp3") && audioCh <= 6
+	surround := func(c string) bool {
+		return slices.ContainsFunc(r.AudioCodecs, func(x string) bool { return audioName(x) == c })
+	}
+	copyAudio := r.AllowCopyAudio && audioCh <= 6 &&
+		(audioCodec == "aac" || audioCodec == "mp3" || ((audioCodec == "ac3" || audioCodec == "eac3") && surround(audioCodec)))
+	audioOut := "aac"
+	switch {
+	case copyAudio:
+		audioOut = "copy"
+	case audioCh > 2 && surround("eac3"):
+		audioOut = "eac3"
+	case audioCh > 2 && surround("ac3"):
+		audioOut = "ac3"
+	}
 
 	s := &Session{
-		ID: newID(), FileID: r.FileID, Title: r.Title, CopyVideo: copyVideo, CopyAudio: copyAudio,
+		ID: newID(), FileID: r.FileID, Title: r.Title, CopyVideo: copyVideo, CopyAudio: copyAudio, AudioOut: audioOut,
 		Audio: r.AudioIndex, BurnSub: r.BurnSubtitle,
 		HDR: info.HDR() && !copyVideo, HW: m.enc.HW, Created: time.Now(),
 		src: r.Path, duration: r.Duration, srcHeight: srcH, enc: m.enc,
@@ -330,11 +396,12 @@ func (m *Manager) Segment(ctx context.Context, id string, n int) (string, error)
 			return path, nil
 		}
 		s.mu.Lock()
+		dead := s.cmd // the run seen as gone, if it is
 		exited := s.cmd == nil || !s.running()
 		errMsg := ""
 		cleanEOF := false
 		if exited && s.stderr != nil {
-			errMsg = tail(s.stderr.String(), 400)
+			errMsg = Tail(s.stderr.String(), 400)
 			cleanEOF = s.exitErr == nil && s.cmd != nil
 		}
 		s.mu.Unlock()
@@ -345,7 +412,10 @@ func (m *Manager) Segment(ctx context.Context, id string, n int) (string, error)
 				// remux can have fewer segments than the playlist lists.
 				return "", ErrPastEnd
 			}
-			if s.gpuFallback(n, errMsg) {
+			if ctx.Err() != nil {
+				return "", ctx.Err() // the player moved on; nothing to fall back for
+			}
+			if s.gpuFallback(n, errMsg, dead) {
 				continue
 			}
 			if errMsg == "" {
@@ -415,15 +485,31 @@ func (m *Manager) ensureRun(s *Session, n int) error {
 // codec or profile, or the driver can't tone map it. The session switches to
 // CPU decoding (GPU encoding) for good and restarts at segment n. It returns
 // false when there's nothing to fall back to.
-func (s *Session) gpuFallback(n int, errMsg string) bool {
+//
+// dead is the run the caller saw gone. A restart kills the old run and lets
+// go of mu while it dies, so a request waiting on a segment can see a run
+// that was killed for a seek, not one that failed. By the time this has
+// restartMu, that restart has finished and the session's run is a different
+// one: then nothing failed, and the caller just keeps waiting. Falling back
+// there would turn GPU decoding off for good and restart at the stale
+// segment, killing the seek's run.
+func (s *Session) gpuFallback(n int, errMsg string, dead *exec.Cmd) bool {
 	s.restartMu.Lock()
 	defer s.restartMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.HWDecode || s.closed {
+	if s.closed {
 		return false
 	}
-	slog.Warn("GPU decoding failed for this file; decoding on the CPU instead", "session", s.ID, "file", s.FileID, "ffmpeg", errMsg)
+	if dead != nil && s.cmd != nil && s.cmd != dead {
+		return true
+	}
+	if !s.HWDecode {
+		return false
+	}
+	// Not necessarily the GPU's fault (an unreadable file fails either way):
+	// the CPU run that follows tells.
+	slog.Warn("a GPU-decoded run failed; trying this file with CPU decoding", "session", s.ID, "file", s.FileID, "ffmpeg", errMsg)
 	s.HWDecode = false
 	return s.start(n) == nil
 }
@@ -496,7 +582,7 @@ func (s *Session) start(n int) error {
 		args = append(args, vCodec...)
 		// t is relative to this run's first frame, and runs always start on the
 		// grid, so "every SegDur seconds" lands on the playlist's boundaries.
-		args = append(args, "-force_key_frames", fmt.Sprintf("expr:gte(t,n_forced*%d)", SegDur))
+		args = append(args, ForceKeyFrames(SegDur)...)
 	}
 	if s.CopyAudio {
 		args = append(args, "-c:a", "copy")
@@ -504,12 +590,11 @@ func (s *Session) start(n int) error {
 		if preroll > 0 {
 			args = append(args, "-af", "atrim=start="+strconv.FormatFloat(startSec, 'f', 3, 64))
 		}
-		args = append(args, AudioArgs()...)
+		args = append(args, audioArgs(s.AudioOut)...)
 	}
-	args = append(args, "-max_muxing_queue_size", "4096", "-avoid_negative_ts", "disabled",
-		"-f", "hls", "-hls_time", strconv.Itoa(SegDur), "-hls_segment_type", "mpegts",
-		"-hls_flags", "temp_file", "-hls_list_size", "0", "-start_number", strconv.Itoa(n),
-		"-hls_segment_filename", filepath.Join(s.dir, "seg%d.ts"), filepath.Join(s.dir, "ffmpeg.m3u8"))
+	args = append(args, "-max_muxing_queue_size", "4096", "-avoid_negative_ts", "disabled")
+	args = append(args, HLSOutput{SegDur: SegDur, Start: n,
+		Segments: filepath.Join(s.dir, "seg%d.ts"), Playlist: filepath.Join(s.dir, "ffmpeg.m3u8")}.Args()...)
 
 	cmd := exec.Command(s.enc.FFmpeg, args...)
 	stderr := &limitedWriter{max: stderrKeep}

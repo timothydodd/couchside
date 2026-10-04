@@ -1,9 +1,12 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/timothydodd/couchside/internal/auth"
 	"github.com/timothydodd/couchside/internal/db"
@@ -18,7 +21,29 @@ func (s *Server) listAccounts(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, ps)
+	out := make([]accountView, len(ps))
+	for i, p := range ps {
+		out[i] = s.account(r.Context(), p)
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// accountView is a profile as the account manager shows it: with its limits.
+type accountView struct {
+	db.Profile
+	Libraries []int64 `json:"libraries"` // empty = every library
+	MaxRating string  `json:"maxRating"` // "" = any rating
+}
+
+func (s *Server) account(ctx context.Context, p db.Profile) accountView {
+	v := accountView{Profile: p, Libraries: []int64{}}
+	if a, err := s.db.ProfileAccess(ctx, p.ID); err == nil {
+		v.MaxRating = a.MaxRating
+		if a.Libraries != nil {
+			v.Libraries = a.Libraries
+		}
+	}
+	return v
 }
 
 type accountInput struct {
@@ -30,6 +55,10 @@ type accountInput struct {
 	// PasswordLocked stops the account setting or changing its own password
 	// (a shared profile). Admins can always change theirs.
 	PasswordLocked bool `json:"passwordLocked"`
+	// Libraries limits the account to these libraries (empty = all), and
+	// MaxRating to titles rated no higher ("" = any). Neither applies to admins.
+	Libraries []int64 `json:"libraries"`
+	MaxRating string  `json:"maxRating"`
 }
 
 func (in *accountInput) validate() error {
@@ -44,6 +73,10 @@ func (in *accountInput) validate() error {
 	}
 	if in.Role == "admin" {
 		in.PasswordLocked = false
+		in.Libraries, in.MaxRating = nil, ""
+	}
+	if in.MaxRating != "" && !slices.Contains(db.RatingLimits, in.MaxRating) {
+		return badRequest("the rating limit must be one of " + strings.Join(db.RatingLimits, ", "))
 	}
 	return nil
 }
@@ -86,22 +119,17 @@ func (s *Server) createAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	// An admin's temporary password for a locked account is the password: it
 	// can't be replaced at first sign-in.
-	p, err := s.db.CreateAccount(r.Context(), in.Name, in.Color, in.Role, in.CanRecord, hash)
+	p, err := s.db.CreateAccount(r.Context(), in.Name, in.Color, in.Role, in.CanRecord, hash, in.PasswordLocked)
 	if err != nil {
 		writeErr(w, accountErr(err))
 		return
 	}
-	if in.PasswordLocked {
-		if err := s.db.SetPasswordLocked(r.Context(), p.ID, true); err == nil && hash != "" {
-			err = s.db.SetPassword(r.Context(), p.ID, hash, false)
-		}
-		if p, err = s.db.Profile(r.Context(), p.ID); err != nil {
-			writeErr(w, err)
-			return
-		}
+	if err := s.db.SetProfileAccess(r.Context(), p.ID, db.Access{Libraries: in.Libraries, MaxRating: in.MaxRating}); err != nil {
+		writeErr(w, accountErr(err))
+		return
 	}
 	slog.Info("account created", "profile", p.Name, "role", p.Role, "by", currentUser(r.Context()).ID)
-	writeJSON(w, http.StatusCreated, p)
+	writeJSON(w, http.StatusCreated, s.account(r.Context(), p))
 }
 
 // updateAccount renames and recolours a profile and sets its access.
@@ -140,12 +168,16 @@ func (s *Server) updateAccount(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, accountErr(err))
 		return
 	}
+	if err := s.db.SetProfileAccess(ctx, id, db.Access{Libraries: in.Libraries, MaxRating: in.MaxRating}); err != nil {
+		writeErr(w, accountErr(err))
+		return
+	}
 	p, err := s.db.UpdateProfile(ctx, id, in.Name, in.Color)
 	if err != nil {
 		writeErr(w, accountErr(err))
 		return
 	}
-	writeJSON(w, http.StatusOK, p)
+	writeJSON(w, http.StatusOK, s.account(ctx, p))
 }
 
 type resetInput struct {

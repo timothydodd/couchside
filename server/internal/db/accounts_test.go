@@ -31,7 +31,7 @@ func TestSetupAdminAndLastAdminGuard(t *testing.T) {
 	if ok, _ := d.HasAdmin(bg); !ok {
 		t.Fatal("no admin after setup")
 	}
-	kid, err := d.CreateAccount(bg, "Kid", "pink", "user", false, "h2")
+	kid, err := d.CreateAccount(bg, "Kid", "pink", "user", false, "h2", false)
 	if err != nil || !kid.MustChangePassword || kid.Role != "user" {
 		t.Fatalf("create = %+v, %v", kid, err)
 	}
@@ -59,7 +59,7 @@ func TestRefreshRotation(t *testing.T) {
 	d := openTest(t)
 	bg := context.Background()
 	p, _ := d.SetupAdmin(bg, "Me", "hash")
-	if err := d.CreateSession(bg, Session{ID: "s1", ProfileID: p.ID, Client: "tv", ExpiresAt: 1000}, "r1"); err != nil {
+	if err := d.CreateSession(bg, Session{ID: "s1", ProfileID: p.ID, Client: "web", ExpiresAt: 1000}, "r1"); err != nil {
 		t.Fatal(err)
 	}
 	if u, err := d.SessionUser(bg, "s1", 100); err != nil || u.Profile.ID != p.ID {
@@ -93,7 +93,7 @@ func TestRefreshRotation(t *testing.T) {
 	if err := d.CreateSession(bg, Session{ID: "s2", ProfileID: p.ID, Client: "web", ExpiresAt: 1000}, "q1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.CreateAccount(bg, "Other", "accent", "admin", true, "h"); err != nil { // so Me can be disabled
+	if _, err := d.CreateAccount(bg, "Other", "accent", "admin", true, "h", false); err != nil { // so Me can be disabled
 		t.Fatal(err)
 	}
 	if _, err := d.SetAccess(bg, p.ID, "admin", true, true); err != nil {
@@ -104,5 +104,73 @@ func TestRefreshRotation(t *testing.T) {
 	}
 	if _, err := d.SessionUser(bg, "s2", 100); !errors.Is(err, ErrNotFound) {
 		t.Fatal("disabled profile's session accepted")
+	}
+}
+
+// A TV app that never got the answer to a refresh asks again with the token
+// it still has, and keeps its session. The token it never received is
+// retired, and a token from further back is still treated as stolen.
+func TestRefreshRetryForTV(t *testing.T) {
+	d := openTest(t)
+	bg := context.Background()
+	p, _ := d.SetupAdmin(bg, "Me", "hash")
+	if err := d.CreateSession(bg, Session{ID: "s1", ProfileID: p.ID, Client: "tv", ExpiresAt: 1000}, "r1"); err != nil {
+		t.Fatal(err)
+	}
+	idle := func(string) int64 { return 100000 }
+	rotate := func(old, next string, now int64) RefreshResult {
+		t.Helper()
+		_, res, err := d.RotateRefresh(bg, old, next, now, idle, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+	if res := rotate("r1", "r2", 100); res != RefreshOK {
+		t.Fatalf("first rotate = %v", res)
+	}
+	// The answer with r2 was lost. Minutes later the app tries r1 again.
+	if res := rotate("r1", "r3", 400); res != RefreshOK {
+		t.Fatalf("retry with the previous token = %v, want ok", res)
+	}
+	// And again: still its newest token as far as it knows.
+	if res := rotate("r1", "r4", 410); res != RefreshOK {
+		t.Fatalf("second retry = %v, want ok", res)
+	}
+	// It got r4 and uses it: r1 is now two tokens back.
+	if res := rotate("r4", "r5", 500); res != RefreshOK {
+		t.Fatalf("rotate with the received token = %v", res)
+	}
+	if res := rotate("r4", "r6", 510); res != RefreshOK {
+		t.Fatalf("retry of the latest refresh = %v, want ok", res)
+	}
+	// r2 never reached the app; someone presenting it later isn't the app.
+	if res := rotate("r2", "x", 2000); res != RefreshReused {
+		t.Fatalf("a token that was never delivered = %v, want reused", res)
+	}
+	if res := rotate("r6", "x", 2001); res != RefreshUnknown {
+		t.Fatalf("session should be gone, got %v", res)
+	}
+}
+
+// People nobody credits any more are dropped; the rest stay.
+func TestPrunePeople(t *testing.T) {
+	d := openTest(t)
+	bg := context.Background()
+	lib, _ := d.CreateLibrary(bg, "Films", "/films", "movies")
+	item, _, _ := d.EnsureItem(bg, lib, "movie", "Heat", 1995)
+	cast := []Credit{{PersonID: 1, Name: "Al Pacino", Kind: "cast"}, {PersonID: 2, Name: "Robert De Niro", Kind: "cast"}}
+	if err := d.SetCredits(bg, item, cast); err != nil {
+		t.Fatal(err)
+	}
+	if gone, err := d.PrunePeople(bg); err != nil || len(gone) != 0 {
+		t.Fatalf("pruned credited people: %v %v", gone, err)
+	}
+	if err := d.SetCredits(bg, item, cast[:1]); err != nil { // a re-match dropped one
+		t.Fatal(err)
+	}
+	gone, err := d.PrunePeople(bg)
+	if err != nil || len(gone) != 1 || gone[0] != 2 {
+		t.Fatalf("pruned = %v %v, want person 2", gone, err)
 	}
 }
