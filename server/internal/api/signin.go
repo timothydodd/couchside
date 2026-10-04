@@ -42,6 +42,7 @@ type authInfo struct {
 	Passwordless       bool          `json:"passwordless"`
 	PasswordlessLocked bool          `json:"passwordlessLocked"` // COUCHSIDE_AUTH=true requires passwords
 	Profiles           []profileStub `json:"profiles"`           // passwordless: every profile to pick from
+	HideAdmins         bool          `json:"hideAdmins"`         // admins are left out of profiles; ?admin=1 lists them instead
 	SetupRequired      bool          `json:"setupRequired"`
 	User               *db.Profile   `json:"user"`
 	AccessExpiresAt    int64         `json:"accessExpiresAt,omitempty"`
@@ -69,10 +70,14 @@ func (s *Server) authStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if out.Passwordless {
-		if out.Profiles, err = s.pickable(ctx); err != nil {
+		if out.Profiles, err = s.pickable(ctx, r.URL.Query().Get("admin") == "1"); err != nil {
 			writeErr(w, err)
 			return
 		}
+	}
+	if out.HideAdmins, err = s.hideAdmins(ctx); err != nil {
+		writeErr(w, err)
+		return
 	}
 	if c := s.oidcConfig(ctx); c.enabled() {
 		out.OIDC = c.Label

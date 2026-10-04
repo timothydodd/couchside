@@ -18,6 +18,7 @@ export type Route =
   | { name: "manage"; id: number }
   | { name: "settings"; section: SettingsSection }
   | { name: "profiles" }
+  | { name: "admin" }
   | { name: "link" }
   | { name: "search"; q: string }
   | { name: "person"; id: number }
@@ -38,6 +39,7 @@ export function parseRoute(path: string): Route {
   if (p === "/libraries") return { name: "libraries" };
   if (p === "/settings") return { name: "settings", section: "you" };
   if (p === "/profiles") return { name: "profiles" };
+  if (p === "/admin") return { name: "admin" };
   if (p === "/link") return { name: "link" };
   let m = p.match(/^\/settings\/([a-z]+)$/);
   if (m && (SETTINGS_SECTIONS as readonly string[]).includes(m[1]) && m[1] !== "you") return { name: "settings", section: m[1] as SettingsSection };

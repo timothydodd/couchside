@@ -18,8 +18,10 @@ interface AuthState {
   error: string | null;
   passwordless: boolean;
   passwordlessLocked: boolean;
-  /** Passwordless: every profile; otherwise none. */
+  /** Passwordless: the profiles to pick from; otherwise none. At /admin while admins are hidden, the admins. */
   profiles: AuthInfo["profiles"];
+  /** Admin accounts are left off the picker and sign in at /admin. */
+  hideAdmins: boolean;
   setupRequired: boolean;
   user: Profile | null;
   signedIn: AuthInfo["signedIn"];
@@ -45,6 +47,7 @@ export const useAuth = create<AuthState>((set, get) => ({
   passwordless: false,
   passwordlessLocked: false,
   profiles: [],
+  hideAdmins: false,
   setupRequired: false,
   user: null,
   signedIn: [],
@@ -52,11 +55,14 @@ export const useAuth = create<AuthState>((set, get) => ({
   oidc: "",
   load: async () => {
     try {
-      const info = await api<AuthInfo>("/api/auth");
+      // /admin is where hidden admin accounts sign in: ask for them there.
+      const admin = location.pathname.replace(/\/+$/, "") === "/admin";
+      const info = await api<AuthInfo>(admin ? "/api/auth?admin=1" : "/api/auth");
       set({
         passwordless: info.passwordless,
         passwordlessLocked: info.passwordlessLocked,
         profiles: info.profiles ?? [],
+        hideAdmins: !!info.hideAdmins,
         setupRequired: info.setupRequired,
         user: info.user,
         signedIn: info.signedIn,

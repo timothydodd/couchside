@@ -306,6 +306,73 @@ func TestPasswordless(t *testing.T) {
 	}
 }
 
+// With admins hidden, the picker lists everyone else and ?admin=1 lists the
+// admins; a hidden admin still signs in.
+func TestHideAdmins(t *testing.T) {
+	dir := t.TempDir()
+	d, err := db.Open(filepath.Join(dir, "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	s, err := New(d, config.Config{DataDir: dir}, nil, nil, nil, nil, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+	admin := newClient(t, ts.URL)
+	if code := admin.do("POST", "/api/auth/pick", map[string]any{"profileId": 1}, nil); code != 200 {
+		t.Fatalf("admin pick = %d", code)
+	}
+	var guest db.Profile
+	if code := admin.do("POST", "/api/accounts", map[string]any{"name": "Guest"}, &guest); code != 201 {
+		t.Fatalf("new account = %d", code)
+	}
+	names := func(c *testClient, path string) (bool, []string) {
+		t.Helper()
+		var info authInfo
+		if code := c.do("GET", path, nil, &info); code != 200 {
+			t.Fatalf("GET %s = %d", path, code)
+		}
+		out := []string{}
+		for _, p := range info.Profiles {
+			out = append(out, p.Name)
+		}
+		return info.HideAdmins, out
+	}
+	stranger := newClient(t, ts.URL)
+	if hide, got := names(stranger, "/api/auth"); hide || len(got) != 2 {
+		t.Fatalf("before hiding: hideAdmins=%v profiles=%v, want both", hide, got)
+	}
+	// Only admins change it.
+	guestClient := newClient(t, ts.URL)
+	if code := guestClient.do("POST", "/api/auth/pick", map[string]any{"profileId": guest.ID}, nil); code != 200 {
+		t.Fatalf("guest pick = %d", code)
+	}
+	if code := guestClient.do("PUT", "/api/settings/hide-admins", map[string]bool{"enabled": true}, nil); code != 403 {
+		t.Fatalf("a user hiding admins = %d, want 403", code)
+	}
+	if code := admin.do("PUT", "/api/settings/hide-admins", map[string]bool{"enabled": true}, nil); code != 204 {
+		t.Fatalf("hide admins = %d", code)
+	}
+	if hide, got := names(stranger, "/api/auth"); !hide || len(got) != 1 || got[0] != "Guest" {
+		t.Fatalf("picker with admins hidden: hideAdmins=%v profiles=%v, want only Guest", hide, got)
+	}
+	if _, got := names(stranger, "/api/auth?admin=1"); len(got) != 1 || got[0] != "Me" {
+		t.Fatalf("admin page lists %v, want only Me", got)
+	}
+	if code := newClient(t, ts.URL).do("POST", "/api/auth/pick", map[string]any{"profileId": 1}, nil); code != 200 {
+		t.Fatalf("a hidden admin signing in = %d", code)
+	}
+	if code := admin.do("PUT", "/api/settings/hide-admins", map[string]bool{"enabled": false}, nil); code != 204 {
+		t.Fatalf("show admins = %d", code)
+	}
+	if hide, got := names(stranger, "/api/auth?admin=1"); hide || len(got) != 2 {
+		t.Fatalf("after showing again: hideAdmins=%v profiles=%v, want both", hide, got)
+	}
+}
+
 func TestPasswordLocked(t *testing.T) {
 	dir := t.TempDir()
 	d, err := db.Open(filepath.Join(dir, "t.db"))

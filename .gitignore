@@ -25,3 +25,6 @@ server/internal/webui/dist/*
 # Python
 __pycache__/
 *.pyc
+
+# The full demo media list stays local; reviewers get scripts/fetch-reviewer-media.py
+scripts/fetch-demo-media.py
