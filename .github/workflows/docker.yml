@@ -1,13 +1,14 @@
 name: docker
 
-# Builds the image (amd64 only, nothing pushed) when the Dockerfile or what it
-# copies in changes, so a base-image or Comskip bump is caught before a release.
+# Builds the image (amd64 only, nothing pushed) when the Dockerfile or the
+# dependencies it installs change, so a base-image, Comskip or lockfile bump
+# is caught before a release.
 on:
   push:
     branches: [main]
-    paths: [Dockerfile, .dockerignore, .github/workflows/docker.yml]
+    paths: [Dockerfile, .dockerignore, .github/workflows/docker.yml, web/package-lock.json, server/go.sum]
   pull_request:
-    paths: [Dockerfile, .dockerignore, .github/workflows/docker.yml]
+    paths: [Dockerfile, .dockerignore, .github/workflows/docker.yml, web/package-lock.json, server/go.sum]
 
 permissions:
   contents: read

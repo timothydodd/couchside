@@ -42,7 +42,7 @@ from the start.
 | B16 | Console polling and token renewal                      | Bug       | Confirmed | Done |
 | B17 | Load failures and failed actions are shown             | Bug       | Reported  | Done |
 | B18 | Keyboard and screen-reader gaps                        | A11y      | Reported  | Done |
-| B19 | Docker and compose                                     | Packaging | Reported  |      |
+| B19 | Docker and compose                                     | Packaging | Reported  | Done |
 | B20 | Helm chart hardening                                   | Packaging | Reported  |      |
 | B21 | CI and release                                         | Packaging | Reported  |      |
 | B22 | Docs and site catch up                                 | Docs      | Reported  |      |
@@ -454,21 +454,17 @@ that changed. Virtualising a `<table>` needs trying in a browser.
 
 ## B19 · Docker and compose
 
-**Scope**
-- `docker-compose.yml` has `build: .` and `image: ghcr.io/…:latest`. That
-  build has no TMDB key and tags a dev build as the release image, and the
-  copy in release zips has no Dockerfile. Drop `build:` (keep it in a
-  `docker-compose.dev.yml`) and make the header `docker compose up -d`.
-- No `HEALTHCHECK`; add one on `/healthz` (busybox `wget` is in the image).
-- `.dockerignore`: add `.env*`, `site/`, `branding/`, `docs/`, `scripts/`,
-  `.github/`.
-- CI uses Node 22 and Go 1.26; the Dockerfile uses `node:26` and
-  `golang:1.27`. Align them. Add `web/package-lock.json` and `server/go.sum`
-  to `docker.yml`'s paths.
-- `.env.example` lacks `COUCHSIDE_HWACCEL`, which compose reads.
+**Done**, not built: Docker runs on Windows here. Build the image and run
+`docker compose up -d` from a release zip before the release.
 
-**Done when** `docker compose up -d` from a release zip starts the published
-image, and the image reports healthy.
+- `docker-compose.yml` runs the published image; `docker-compose.dev.yml`
+  adds the local build, tagged `couchside:dev`.
+- The image has a `HEALTHCHECK` on `/healthz`.
+- `.dockerignore` leaves out `.env*`, `site`, `branding`, `docs`, `scripts`
+  and `.github`.
+- CI, release and notices workflows use Node 26 and Go 1.27, as the
+  Dockerfile does; `docker.yml` also runs when the lockfiles change.
+- `.env.example` has `COUCHSIDE_HWACCEL`.
 
 ## B20 · Helm chart hardening
 
