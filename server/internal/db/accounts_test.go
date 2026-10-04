@@ -31,7 +31,7 @@ func TestSetupAdminAndLastAdminGuard(t *testing.T) {
 	if ok, _ := d.HasAdmin(bg); !ok {
 		t.Fatal("no admin after setup")
 	}
-	kid, err := d.CreateAccount(bg, "Kid", "pink", "user", false, "h2")
+	kid, err := d.CreateAccount(bg, "Kid", "pink", "user", false, "h2", false)
 	if err != nil || !kid.MustChangePassword || kid.Role != "user" {
 		t.Fatalf("create = %+v, %v", kid, err)
 	}
@@ -93,7 +93,7 @@ func TestRefreshRotation(t *testing.T) {
 	if err := d.CreateSession(bg, Session{ID: "s2", ProfileID: p.ID, Client: "web", ExpiresAt: 1000}, "q1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.CreateAccount(bg, "Other", "accent", "admin", true, "h"); err != nil { // so Me can be disabled
+	if _, err := d.CreateAccount(bg, "Other", "accent", "admin", true, "h", false); err != nil { // so Me can be disabled
 		t.Fatal(err)
 	}
 	if _, err := d.SetAccess(bg, p.ID, "admin", true, true); err != nil {
@@ -150,5 +150,27 @@ func TestRefreshRetryForTV(t *testing.T) {
 	}
 	if res := rotate("r6", "x", 2001); res != RefreshUnknown {
 		t.Fatalf("session should be gone, got %v", res)
+	}
+}
+
+// People nobody credits any more are dropped; the rest stay.
+func TestPrunePeople(t *testing.T) {
+	d := openTest(t)
+	bg := context.Background()
+	lib, _ := d.CreateLibrary(bg, "Films", "/films", "movies")
+	item, _, _ := d.EnsureItem(bg, lib, "movie", "Heat", 1995)
+	cast := []Credit{{PersonID: 1, Name: "Al Pacino", Kind: "cast"}, {PersonID: 2, Name: "Robert De Niro", Kind: "cast"}}
+	if err := d.SetCredits(bg, item, cast); err != nil {
+		t.Fatal(err)
+	}
+	if gone, err := d.PrunePeople(bg); err != nil || len(gone) != 0 {
+		t.Fatalf("pruned credited people: %v %v", gone, err)
+	}
+	if err := d.SetCredits(bg, item, cast[:1]); err != nil { // a re-match dropped one
+		t.Fatal(err)
+	}
+	gone, err := d.PrunePeople(bg)
+	if err != nil || len(gone) != 1 || gone[0] != 2 {
+		t.Fatalf("pruned = %v %v, want person 2", gone, err)
 	}
 }

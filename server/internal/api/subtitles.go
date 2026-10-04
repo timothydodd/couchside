@@ -13,11 +13,11 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/timothydodd/couchside/internal/keylock"
 	"github.com/timothydodd/couchside/internal/parse"
 	"github.com/timothydodd/couchside/internal/probe"
 )
@@ -159,7 +159,7 @@ const SubtitleChunk = 90
 var (
 	// "s2.vtt" = whole embedded track, "s2.c5.vtt" = chunk 5 of it, "x0.vtt" = sidecar file
 	reSubKey = regexp.MustCompile(`^([sx])(\d+)(?:\.c(\d+))?\.vtt$`)
-	subLocks sync.Map // cache path → *sync.Mutex, so one conversion runs per track
+	subLocks keylock.Map[string] // by cache path, so one conversion runs per track
 	// subSlots caps conversions running at once; others wait while their
 	// request lasts.
 	subSlots = make(chan struct{}, 3)
@@ -226,13 +226,7 @@ func (s *Server) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 		chunkTag = "-" + hex.EncodeToString(sum[:6])
 	}
 	cache := filepath.Join(s.cfg.CacheDir, "subs", fmt.Sprintf("%d-%s%d-%d%s.vtt", id, m[1], n, f.Mtime, chunkTag))
-	lk, _ := subLocks.LoadOrStore(cache, &sync.Mutex{})
-	mu := lk.(*sync.Mutex)
-	mu.Lock()
-	defer func() {
-		mu.Unlock()
-		subLocks.Delete(cache)
-	}()
+	defer subLocks.Lock(cache)()
 	if info, err := os.Stat(cache); err == nil {
 		if time.Since(info.ModTime()) > 24*time.Hour {
 			now := time.Now()

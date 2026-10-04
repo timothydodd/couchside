@@ -44,6 +44,26 @@ func (d *DB) SetCredits(ctx context.Context, itemID int64, credits []Credit) err
 	return tx.Commit()
 }
 
+// PrunePeople drops people no title credits any more (their titles were
+// removed or re-matched) and returns their ids, so the caller can remove
+// their cached photos.
+func (d *DB) PrunePeople(ctx context.Context) ([]int64, error) {
+	rows, err := d.sql.QueryContext(ctx, `DELETE FROM people WHERE id NOT IN (SELECT person_id FROM item_credits) RETURNING id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // CreditRow is a person as a title's page lists them.
 type CreditRow struct {
 	PersonID int64  `json:"personId"`

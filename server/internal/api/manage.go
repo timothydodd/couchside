@@ -288,15 +288,14 @@ func (s *Server) uploadArtwork(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	orig := filepath.Join(dir, "upload.orig")
-	defer os.Remove(orig)
-	// The upload replaces whatever the provider link gave; forget that link.
-	_ = os.Remove(filepath.Join(dir, kind+".src"))
-	out, err := os.Create(orig)
+	// Its own temp file: a poster and a backdrop can be uploaded together.
+	out, err := os.CreateTemp(dir, "upload-*.orig")
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
+	orig := out.Name()
+	defer os.Remove(orig)
 	n, err := io.Copy(out, http.MaxBytesReader(w, r.Body, 25<<20))
 	if cerr := out.Close(); err == nil {
 		err = cerr
@@ -327,6 +326,9 @@ func (s *Server) uploadArtwork(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	// The upload replaced whatever the provider link gave; forget that link
+	// (only now: a failed upload leaves the automatic artwork as it was).
+	_ = os.Remove(filepath.Join(dir, kind+".src"))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -439,7 +441,7 @@ func (s *Server) setFileRole(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if in.Role == "extra" && !f.HasStill && f.Problem == "" {
-		if err := s.db.Enqueue(ctx, worker.KindStill, id, "Still "+filepath.Base(f.Path)); err != nil {
+		if err := s.worker.Enqueue(ctx, worker.KindStill, id, "Still "+filepath.Base(f.Path)); err != nil {
 			writeErr(w, err)
 			return
 		}

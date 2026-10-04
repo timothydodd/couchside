@@ -117,8 +117,15 @@ func (s *Server) pruneTables(ctx context.Context) {
 	if err != nil {
 		slog.Warn("prune provider cache", "err", err)
 	}
-	if jobs+cached > 0 {
-		slog.Info("pruned old rows", "jobs", jobs, "providerResponses", cached)
+	people, err := s.db.PrunePeople(ctx)
+	if err != nil {
+		slog.Warn("prune people", "err", err)
+	}
+	for _, id := range people {
+		_ = os.Remove(worker.PersonPhotoPath(s.cfg.CacheDir, id))
+	}
+	if jobs+cached+int64(len(people)) > 0 {
+		slog.Info("pruned old rows", "jobs", jobs, "providerResponses", cached, "people", len(people))
 	}
 }
 

@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/timothydodd/couchside/internal/keylock"
 	"github.com/timothydodd/couchside/internal/remoteimg"
 )
 
@@ -138,15 +139,10 @@ func (c *missCache) add(key string) {
 
 // remoteLocks makes concurrent requests for one image share a single fetch
 // (a guide page asks for dozens of logos at once).
-var remoteLocks sync.Map
+var remoteLocks keylock.Map[string]
 
 func (s *Server) fetchRemote(ctx context.Context, key, path string) error {
-	mu, _ := remoteLocks.LoadOrStore(path, &sync.Mutex{})
-	mu.(*sync.Mutex).Lock()
-	defer func() {
-		mu.(*sync.Mutex).Unlock()
-		remoteLocks.Delete(path)
-	}()
+	defer remoteLocks.Lock(path)()
 	if _, err := os.Stat(path); err == nil {
 		return nil // another request fetched it while we waited
 	}

@@ -16,6 +16,7 @@ import (
 
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/imaging"
+	"github.com/timothydodd/couchside/internal/keylock"
 	"github.com/timothydodd/couchside/internal/metadata"
 	"github.com/timothydodd/couchside/internal/remoteimg"
 )
@@ -235,8 +236,8 @@ func PersonPhotoPath(cacheDir string, personID int64) string {
 }
 
 var (
-	photoLocks sync.Map // person id → *sync.Mutex: one fetch per person, others in parallel
-	photoMiss  sync.Map // person id → time.Time of a failed fetch
+	photoLocks keylock.Map[int64] // one fetch per person, others in parallel
+	photoMiss  sync.Map           // person id → time.Time of a failed fetch
 )
 
 // photoMissFor is how long a person whose photo couldn't be fetched isn't tried again.
@@ -258,13 +259,7 @@ func (w *Worker) PersonPhoto(ctx context.Context, personID int64, profilePath st
 		}
 		photoMiss.Delete(personID)
 	}
-	lk, _ := photoLocks.LoadOrStore(personID, &sync.Mutex{})
-	mu := lk.(*sync.Mutex)
-	mu.Lock()
-	defer func() {
-		mu.Unlock()
-		photoLocks.Delete(personID)
-	}()
+	defer photoLocks.Lock(personID)()
 	if _, err := os.Stat(dst); err == nil {
 		return dst, nil // fetched while we waited
 	}
@@ -363,6 +358,9 @@ func download(ctx context.Context, url, dst string) error {
 	_, err = io.Copy(out, io.LimitReader(resp.Body, 15<<20))
 	if cerr := out.Close(); err == nil {
 		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(dst) // a connection dropped part way: don't leave half a file
 	}
 	return err
 }

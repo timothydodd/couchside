@@ -102,10 +102,13 @@ func (d *DB) SetupAdmin(ctx context.Context, name, hash string) (Profile, error)
 }
 
 // CreateAccount adds a profile, with a temporary password or (passwordless sign-in) none.
-func (d *DB) CreateAccount(ctx context.Context, name, color, role string, canRecord bool, hash string) (Profile, error) {
-	// A temporary password must be replaced at first sign-in; no password means passwordless.
+func (d *DB) CreateAccount(ctx context.Context, name, color, role string, canRecord bool, hash string, locked bool) (Profile, error) {
+	// A temporary password must be replaced at first sign-in; no password
+	// means passwordless. A locked account can't change its password, so the
+	// one it's given is the password and isn't temporary.
 	p, err := scanProfile(d.sql.QueryRowContext(ctx, `INSERT INTO profiles (name, color, role, can_record, password_hash,
-		must_change_password) VALUES (?, ?, ?, ?, ?, ?) RETURNING `+profileCols, name, color, role, canRecord, hash, hash != ""))
+		must_change_password, password_locked) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING `+profileCols,
+		name, color, role, canRecord, hash, hash != "" && !locked, locked))
 	return p, uniqueName(err)
 }
 

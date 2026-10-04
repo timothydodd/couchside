@@ -265,3 +265,32 @@ func TestTVRefreshCanBeRepeated(t *testing.T) {
 		t.Fatal("the undelivered refresh token still worked")
 	}
 }
+
+// A locked account created with a password: locked from the first moment,
+// and the password it was given isn't a temporary one.
+func TestCreateLockedAccount(t *testing.T) {
+	s, ts, admin := passwordlessServer(t)
+	var p db.Profile
+	if code := admin.do("POST", "/api/accounts", map[string]any{"name": "Guest", "password": "guest password", "passwordLocked": true}, &p); code != 201 {
+		t.Fatalf("create = %d", code)
+	}
+	if !p.PasswordLocked || p.MustChangePassword {
+		t.Fatalf("created account: locked=%v mustChange=%v", p.PasswordLocked, p.MustChangePassword)
+	}
+	stored, err := s.db.Profile(context.Background(), p.ID)
+	if err != nil || !stored.PasswordLocked || stored.MustChangePassword || !stored.HasPassword {
+		t.Fatalf("stored account: %+v %v", stored, err)
+	}
+	guest := newClient(t, ts.URL)
+	if code := guest.do("POST", "/api/auth/login", map[string]string{"name": "Guest", "password": "guest password"}, nil); code != 200 {
+		t.Fatalf("login = %d", code)
+	}
+	if code := guest.do("GET", "/api/home", nil, nil); code != 200 {
+		t.Fatalf("a locked account was asked to change its password (home = %d)", code)
+	}
+	// An admin is never locked, whatever was sent.
+	var a db.Profile
+	if code := admin.do("POST", "/api/accounts", map[string]any{"name": "Boss", "role": "admin", "password": "boss password", "passwordLocked": true}, &a); code != 201 || a.PasswordLocked || !a.MustChangePassword {
+		t.Fatalf("admin account: %d %+v", code, a)
+	}
+}

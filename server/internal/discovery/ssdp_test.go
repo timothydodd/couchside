@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -87,4 +88,42 @@ func TestRoundTrip(t *testing.T) {
 		}
 	}
 	t.Skip("no answer: multicast loopback isn't available here")
+}
+
+// One answer per address per second, and the sign-in mode isn't read for
+// every packet.
+func TestRepliesAreLimited(t *testing.T) {
+	reads := 0
+	d := &Responder{SignIn: func(context.Context) string { reads++; return "passwordless" }}
+	now := time.Now()
+	if !d.admit("192.168.1.20", now) {
+		t.Fatal("the first search wasn't answered")
+	}
+	if d.admit("192.168.1.20", now.Add(100*time.Millisecond)) {
+		t.Fatal("a second search from the same address within a second was answered")
+	}
+	if !d.admit("192.168.1.21", now) {
+		t.Fatal("another address was held back")
+	}
+	if !d.admit("192.168.1.20", now.Add(replyEvery)) {
+		t.Fatal("the address wasn't answered again after a second")
+	}
+	for range 3 {
+		d.done()
+	}
+	// No more than maxReplies at once.
+	for i := range maxReplies {
+		if !d.admit(fmt.Sprintf("10.0.%d.%d", i/250, i%250), now.Add(time.Minute)) {
+			t.Fatalf("reply %d refused below the limit", i)
+		}
+	}
+	if d.admit("10.9.9.9", now.Add(time.Minute)) {
+		t.Fatal("a reply was started past the limit")
+	}
+	for range 5 {
+		d.response(context.Background(), ST, net.IPv4(192, 168, 1, 5))
+	}
+	if reads != 1 {
+		t.Fatalf("the sign-in mode was read %d times for 5 replies", reads)
+	}
 }

@@ -86,19 +86,10 @@ func (s *Server) createAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	// An admin's temporary password for a locked account is the password: it
 	// can't be replaced at first sign-in.
-	p, err := s.db.CreateAccount(r.Context(), in.Name, in.Color, in.Role, in.CanRecord, hash)
+	p, err := s.db.CreateAccount(r.Context(), in.Name, in.Color, in.Role, in.CanRecord, hash, in.PasswordLocked)
 	if err != nil {
 		writeErr(w, accountErr(err))
 		return
-	}
-	if in.PasswordLocked {
-		if err := s.db.SetPasswordLocked(r.Context(), p.ID, true); err == nil && hash != "" {
-			err = s.db.SetPassword(r.Context(), p.ID, hash, false)
-		}
-		if p, err = s.db.Profile(r.Context(), p.ID); err != nil {
-			writeErr(w, err)
-			return
-		}
 	}
 	slog.Info("account created", "profile", p.Name, "role", p.Role, "by", currentUser(r.Context()).ID)
 	writeJSON(w, http.StatusCreated, p)

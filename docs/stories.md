@@ -35,7 +35,7 @@ from the start.
 | B9  | Commercial detection: custom ini and the job lookup    | Bug       | Confirmed | Done |
 | B10 | DVR: stale series matches and failed joins             | Bug       | Reported  | Done |
 | B11 | Transcode: false GPU fallback, copied HEVC             | Bug       | Reported  | Done |
-| B12 | Server odds and ends                                   | Bug       | Mixed     |      |
+| B12 | Server odds and ends                                   | Bug       | Mixed     | Done |
 | B13 | Player: subtitles, audio track, retry                  | Bug       | Confirmed |      |
 | B14 | Live player: failed Record, phone controls             | Bug       | Confirmed |      |
 | B15 | `useApi`: late answers, stale errors, cache size       | Bug       | Reported  |      |
@@ -324,6 +324,8 @@ copy Dolby Vision profile 5; check on a Roku that HEVC with 10s keyframe
 spacing plays against a playlist listing 4s segments (R15).
 
 ## B12 · Server odds and ends
+
+**Done.**
 
 **Scope**
 - `createAccount` (`api/accounts.go:94`) drops the errors from

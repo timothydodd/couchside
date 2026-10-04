@@ -66,6 +66,9 @@ var searchKinds = []string{"movie", "series", "episode", "channel", "program"}
 // search finds movies, shows, episodes and (with live TV) channels and guide
 // programs that haven't ended. ?q= is the text, ?limit= caps each group
 // (default 10, at most 50), and ?kinds= (comma separated) narrows the groups.
+// maxSearchQuery is how much of a query is used, in characters.
+const maxSearchQuery = 100
+
 func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	qs := r.URL.Query()
@@ -88,7 +91,12 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	}
 	want := func(k string) bool { return len(kinds) == 0 || kinds[k] }
 
-	out := searchResult{Query: qs.Get("q"), Movies: []db.ItemSummary{}, Series: []db.ItemSummary{},
+	// Nobody types a title this long; matching cost grows with every word.
+	query := qs.Get("q")
+	if r := []rune(query); len(r) > maxSearchQuery {
+		query = string(r[:maxSearchQuery])
+	}
+	out := searchResult{Query: query, Movies: []db.ItemSummary{}, Series: []db.ItemSummary{},
 		Episodes: []db.PlayInfo{}, Channels: []db.Channel{}, Programs: []programHit{}}
 	q := search.NewQuery(out.Query)
 	if q.Empty() {

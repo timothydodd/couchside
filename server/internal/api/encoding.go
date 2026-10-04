@@ -200,12 +200,11 @@ func (s *Server) optimizeFile(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) enqueueOptimize(w http.ResponseWriter, r *http.Request, files []db.File) {
 	for _, f := range files {
-		if err := s.db.Enqueue(r.Context(), worker.KindOptimize, f.ID, "Encode "+filepath.Base(f.Path)); err != nil {
+		if err := s.worker.Enqueue(r.Context(), worker.KindOptimize, f.ID, "Encode "+filepath.Base(f.Path)); err != nil {
 			writeErr(w, err)
 			return
 		}
 	}
-	s.worker.Wake()
 	writeJSON(w, http.StatusAccepted, map[string]int{"queued": len(files)})
 }
 
