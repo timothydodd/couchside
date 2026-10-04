@@ -186,8 +186,16 @@ export default function PlayerFrame(p: PlayerFrameProps) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- keyboard ---------------------------------------------------------------------
+  // The handler reads this render's state, so it's kept in a ref and the
+  // listener is added once, not on every render (about four a second).
+  const keyHandler = useRef<(e: KeyboardEvent) => void>(() => {});
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
+    const onKey = (e: KeyboardEvent) => keyHandler.current(e);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  {
+    keyHandler.current = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.closest("input, select, textarea")) return;
       // The page's own shortcuts first: they may use a modifier (Ctrl+Up
       // changes channel).
@@ -235,9 +243,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           break;
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
+  }
 
   // --- timeline math ------------------------------------------------------------------
   let min = 0;
@@ -524,12 +530,14 @@ export function TopButton({ label, onClick, children, danger, disabled }: { labe
 /** The menu a right-click on a commercial break opens, just above the seek bar. */
 function BreakMenu({ x, onPick, onClose }: { x: number; onPick: () => void; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose); // a new function each render: don't re-subscribe for it
+  close.current = onClose;
   useEffect(() => {
-    const away = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && onClose();
+    const away = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && close.current();
     const esc = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.stopPropagation(); // close the menu, not the player
-      onClose();
+      close.current();
     };
     window.addEventListener("pointerdown", away, true);
     window.addEventListener("keydown", esc, true);
@@ -537,7 +545,7 @@ function BreakMenu({ x, onPick, onClose }: { x: number; onPick: () => void; onCl
       window.removeEventListener("pointerdown", away, true);
       window.removeEventListener("keydown", esc, true);
     };
-  }, [onClose]);
+  }, []);
   return (
     <div ref={ref} className="absolute bottom-6 z-30 -translate-x-1/2" style={{ left: x }} role="menu">
       <button className="player-pill !py-1.5 !text-xs" role="menuitem" autoFocus onClick={onPick}>

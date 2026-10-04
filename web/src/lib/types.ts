@@ -622,6 +622,8 @@ export interface AuthInfo {
   setupRequired: boolean;
   user: Profile | null;
   accessExpiresAt?: number;
+  /** Seconds until the access token runs out. */
+  expiresIn?: number;
   /** Profiles this browser holds a session for (switch without a password). */
   signedIn: ProfileStub[];
   /** This connection is plain HTTP from an internet address. */
@@ -634,6 +636,8 @@ export type ProfileStub = Pick<Profile, "id" | "name" | "color" | "hasPassword">
 export interface SignedIn {
   user: Profile;
   accessExpiresAt: number;
+  /** Seconds until the access token runs out (missing from servers before 0.13). */
+  expiresIn?: number;
   sessionId: string;
 }
 

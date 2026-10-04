@@ -29,7 +29,11 @@ export default function Console() {
   useEffect(() => {
     if (paused) return;
     let stop = false;
+    let timer = 0;
+    // One request at a time: the next is sent 2s after the last answered. Two
+    // overlapping polls ask for the same lines and both add them.
     const poll = async () => {
+      if (document.visibilityState !== "visible") return;
       try {
         const r = await api<{ entries: LogEntry[]; last: number; gap: boolean }>(`/api/system/logs?after=${last.current}`);
         if (stop) return;
@@ -46,11 +50,14 @@ export default function Console() {
         if (!stop) setError(e instanceof Error ? e.message : String(e));
       }
     };
-    void poll();
-    const t = setInterval(() => void poll(), 2000);
+    const loop = async () => {
+      await poll();
+      if (!stop) timer = window.setTimeout(() => void loop(), 2000);
+    };
+    void loop();
     return () => {
       stop = true;
-      clearInterval(t);
+      clearTimeout(timer);
     };
   }, [paused]);
 

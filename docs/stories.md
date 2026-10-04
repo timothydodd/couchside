@@ -39,7 +39,7 @@ from the start.
 | B13 | Player: subtitles, audio track, retry                  | Bug       | Confirmed | Done |
 | B14 | Live player: failed Record, phone controls             | Bug       | Confirmed | Done |
 | B15 | `useApi`: late answers, stale errors, cache size       | Bug       | Reported  | Done |
-| B16 | Console polling and token renewal                      | Bug       | Confirmed |      |
+| B16 | Console polling and token renewal                      | Bug       | Confirmed | Done |
 | B17 | Load failures and failed actions are shown             | Bug       | Reported  |      |
 | B18 | Keyboard and screen-reader gaps                        | A11y      | Reported  |      |
 | B19 | Docker and compose                                     | Packaging | Reported  |      |
@@ -400,6 +400,8 @@ over" into the menu there.
 (Vitest) belongs with the lint step in B21.
 
 ## B16 · Console polling and token renewal
+
+**Done.**
 
 **Scope**
 - `web/src/components/settings/Console.tsx:32`: `setInterval` starts a poll

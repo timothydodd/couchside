@@ -294,6 +294,7 @@ type authInfo struct {
 	SetupRequired      bool          `json:"setupRequired"`
 	User               *db.Profile   `json:"user"`
 	AccessExpiresAt    int64         `json:"accessExpiresAt,omitempty"`
+	ExpiresIn          int64         `json:"expiresIn,omitempty"` // seconds until then, for clients whose clock is off
 	SignedIn           []profileStub `json:"signedIn"` // web: profiles this browser holds a session for
 	Insecure           bool          `json:"insecure"` // this request is plain HTTP from an internet address
 }
@@ -331,6 +332,7 @@ func (s *Server) authStatus(w http.ResponseWriter, r *http.Request) {
 		if tok, _ := accessToken(r); tok != "" {
 			if c, err := s.auth.signer.Verify(tok, time.Now()); err == nil {
 				out.AccessExpiresAt = c.Expires
+				out.ExpiresIn = max(1, c.Expires-time.Now().Unix())
 			}
 		}
 	}
@@ -360,6 +362,10 @@ type tokens struct {
 	AccessToken     string     `json:"accessToken,omitempty"`
 	RefreshToken    string     `json:"refreshToken,omitempty"`
 	AccessExpiresAt int64      `json:"accessExpiresAt"`
+	// ExpiresIn is seconds until the access token runs out. Clients schedule
+	// their renewal from this, not from AccessExpiresAt against their own
+	// clock, which may be minutes off.
+	ExpiresIn int64 `json:"expiresIn"`
 	SessionID       string     `json:"sessionId"`
 }
 
@@ -501,7 +507,7 @@ func (s *Server) issue(w http.ResponseWriter, r *http.Request, p db.Profile, ses
 	}
 	exp := time.Now().Add(ttl)
 	access := s.auth.signer.Sign(auth.Claims{Session: sess.ID, Profile: p.ID, Expires: exp.Unix()})
-	out := tokens{User: p, AccessExpiresAt: exp.Unix(), SessionID: sess.ID}
+	out := tokens{User: p, AccessExpiresAt: exp.Unix(), ExpiresIn: int64(ttl / time.Second), SessionID: sess.ID}
 	if sess.Client == "tv" {
 		out.AccessToken, out.RefreshToken = access, refresh
 	} else {

@@ -250,6 +250,10 @@ func TestTVRefreshCanBeRepeated(t *testing.T) {
 	if code := tv.do("POST", "/api/auth/pick", map[string]any{"profileId": 1, "client": "tv"}, &first); code != 200 {
 		t.Fatalf("pick = %d", code)
 	}
+	// Clients schedule renewal from the time left, not from their own clock.
+	if first.ExpiresIn != int64(auth.TVAccessTTL/time.Second) {
+		t.Fatalf("expiresIn = %d, want the TV token's lifetime", first.ExpiresIn)
+	}
 	if code := tv.do("POST", "/api/auth/refresh", map[string]string{"refreshToken": first.RefreshToken}, &lost); code != 200 {
 		t.Fatalf("refresh = %d", code)
 	}

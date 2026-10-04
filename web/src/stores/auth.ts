@@ -58,7 +58,7 @@ export const useAuth = create<AuthState>((set, get) => ({
         insecure: !!info.insecure,
         error: null,
       });
-      if (info.user && info.accessExpiresAt) schedule(info.accessExpiresAt);
+      if (info.user && info.accessExpiresAt) schedule(info);
       // The access cookie ran out while we were away; the refresh cookie may still be good.
       else if (!info.user && info.signedIn.length) await refreshSession();
     } catch (e) {
@@ -146,7 +146,7 @@ function refresh(profileId?: number): Promise<RefreshResult> {
       if (res?.ok) {
         const t = (await res.json()) as SignedIn;
         useAuth.setState({ user: t.user });
-        schedule(t.accessExpiresAt);
+        schedule(t);
         return "ok";
       }
       if (res?.status === 401) return "ended";
@@ -173,12 +173,17 @@ export async function refreshSession(profileId?: number): Promise<boolean> {
   return (await refresh(profileId)) === "ok";
 }
 
-/** Renew two minutes before the access token runs out. */
-function schedule(exp: number) {
-  expiresAt = exp;
+/**
+ * Renew two minutes before the access token runs out. The time left comes
+ * from the server (expiresIn), so a browser clock that's minutes fast or
+ * slow doesn't renew every few seconds, or after the cookie has gone.
+ * expiresAt is kept on this browser's clock.
+ */
+function schedule(t: { expiresIn?: number; accessExpiresAt?: number }) {
+  const left = t.expiresIn ?? (t.accessExpiresAt ?? 0) - Date.now() / 1000;
+  expiresAt = Date.now() / 1000 + left;
   clearTimeout(timer);
-  const ms = exp * 1000 - Date.now() - 120_000;
-  timer = setTimeout(() => void refresh(), Math.max(5_000, ms));
+  timer = setTimeout(() => void refresh(), Math.max(5_000, left * 1000 - 120_000));
 }
 
 // Timers stall in background tabs and sleeping laptops; catch up on return.
