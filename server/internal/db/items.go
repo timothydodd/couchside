@@ -65,6 +65,7 @@ func scanSummary(dest *ItemSummary, extra ...any) []any {
 func (d *DB) Watchlist(ctx context.Context, limit int) ([]ItemSummary, error) {
 	return d.querySummaries(ctx, `SELECT `+summaryCols(ctx)+` FROM media_items m
 		JOIN profile_items pl ON pl.item_id = m.id AND pl.profile_id = ?
+		WHERE 1 = 1`+visible(ctx, "m")+`
 		ORDER BY pl.added_at DESC, m.id DESC LIMIT ?`, ProfileID(ctx), limit)
 }
 
@@ -106,12 +107,12 @@ func SplitGenres(s string) []string {
 // Items lists every item of a kind. The client filters and sorts: a home
 // library is a few thousand rows, and doing it client-side keeps the grid instant.
 func (d *DB) Items(ctx context.Context, kind string) ([]ItemSummary, error) {
-	return d.querySummaries(ctx, `SELECT `+summaryCols(ctx)+` FROM media_items m WHERE m.kind = ? ORDER BY m.sort_title`, kind)
+	return d.querySummaries(ctx, `SELECT `+summaryCols(ctx)+` FROM media_items m WHERE m.kind = ?`+visible(ctx, "m")+` ORDER BY m.sort_title`, kind)
 }
 
 // RecentItems returns items of a kind ordered by newest file.
 func (d *DB) RecentItems(ctx context.Context, kind string, limit int) ([]ItemSummary, error) {
-	return d.querySummaries(ctx, `SELECT `+summaryCols(ctx)+` FROM media_items m WHERE m.kind = ?
+	return d.querySummaries(ctx, `SELECT `+summaryCols(ctx)+` FROM media_items m WHERE m.kind = ?`+visible(ctx, "m")+`
 		ORDER BY last_added DESC, m.id DESC LIMIT ?`, kind, limit)
 }
 
@@ -136,7 +137,7 @@ func (d *DB) Item(ctx context.Context, id int64) (Item, error) {
 	var it Item
 	err := d.sql.QueryRowContext(ctx, `SELECT `+summaryCols(ctx)+`, m.library_id, m.parsed_title, m.parsed_year,
 		m.plot, m.rated, m.imdb_id, m.imdb_pinned, m.total_seasons, m.poster_url, m.backdrop_url, m.match_provider
-		FROM media_items m WHERE m.id = ?`, id).
+		FROM media_items m WHERE m.id = ?`+visible(ctx, "m"), id).
 		Scan(scanSummary(&it.ItemSummary, &it.LibraryID, &it.ParsedTitle, &it.ParsedYear, &it.Plot, &it.Rated,
 			&it.ImdbID, &it.ImdbPinned, &it.TotalSeasons, &it.PosterURL, &it.BackdropURL, &it.Provider)...)
 	return it, notFound(err)

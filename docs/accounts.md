@@ -36,6 +36,12 @@ rules and server settings are shared. Switch profiles from the sidebar.
   password changed at first sign-in, or none when passwordless), set role and
   recording, reset or remove passwords, disable or delete accounts, and sign
   out their devices.
+- **What an account sees:** tick libraries to limit an account to those, and
+  pick a rating ("Up to PG") to hide anything rated higher; TV ratings count
+  (TV-PG as PG, TV-14 as PG-13, TV-MA as R), and with a limit, titles nobody
+  has rated are hidden too. A hidden title can't be listed, searched for,
+  opened or played. Admins see everything. Live TV isn't limited, and
+  posters are public (see below).
 - **Lost the admin password?** Run `couchside reset-password -admin <name>`
   inside the container (`kubectl exec -it deploy/couchside -- …`).
 

@@ -128,7 +128,7 @@ func (d *DB) PersonItems(ctx context.Context, personID int64) ([]PersonItem, err
 	rows, err := d.sql.QueryContext(ctx, `SELECT `+summaryCols(ctx)+`,
 		(SELECT group_concat(CASE WHEN c.kind = 'cast' AND c.role = '' THEN 'Cast' ELSE c.role END, '|')
 		 FROM item_credits c WHERE c.item_id = m.id AND c.person_id = ?)
-		FROM media_items m WHERE m.id IN (SELECT item_id FROM item_credits WHERE person_id = ?)
+		FROM media_items m WHERE m.id IN (SELECT item_id FROM item_credits WHERE person_id = ?)`+visible(ctx, "m")+`
 		ORDER BY COALESCE(m.year, 0) DESC, m.sort_title`, personID, personID)
 	if err != nil {
 		return nil, err

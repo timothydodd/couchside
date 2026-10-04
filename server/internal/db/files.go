@@ -39,7 +39,10 @@ const fileCols = `f.id, f.library_id, f.media_item_id, f.episode_id, f.path, f.s
 	EXISTS (SELECT 1 FROM optimized o WHERE o.file_id = f.id), f.problem,
 	f.role, f.part_no, f.extra_title, f.role_pinned`
 
-func fileFrom(ctx context.Context) string { return ` FROM files f ` + watchJoin(ctx) }
+// fileFrom selects files the profile in ctx may see, with its watch state.
+func fileFrom(ctx context.Context) string {
+	return ` FROM files f ` + visibleFileJoin(ctx) + watchJoin(ctx)
+}
 
 func scanFile(r interface{ Scan(...any) error }) (File, error) {
 	var f File

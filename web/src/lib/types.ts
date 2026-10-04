@@ -178,7 +178,13 @@ export interface Prefs {
   livePassthrough?: boolean; // TV apps play broadcasts they can decode untouched; default true
 }
 
+/** Ratings an account can be limited to, mildest first (the server's db.RatingLimits). */
+export const RATING_LIMITS = ["G", "PG", "PG-13", "R"] as const;
+
 export interface Profile {
+  /** Account manager only: the libraries it's limited to (empty = all) and its rating limit ("" = any). */
+  libraries?: number[];
+  maxRating?: string;
   id: number;
   name: string;
   color: ProfileColor;

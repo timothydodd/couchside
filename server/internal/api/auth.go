@@ -116,7 +116,8 @@ type user struct {
 	CanRecord  bool
 	MustChange bool
 	Session    string
-	Cookie     bool // authenticated by cookie (the web) rather than a bearer token
+	Cookie     bool      // authenticated by cookie (the web) rather than a bearer token
+	Access     db.Access // which libraries and ratings it's shown; empty for admins
 }
 
 type userKey struct{}
@@ -148,7 +149,8 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			writeErr(w, forbidden("cross-site request refused"))
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(db.WithProfile(ctx, u.ID), userKey{}, u)))
+		ctx = db.WithAccess(db.WithProfile(ctx, u.ID), u.Access)
+		next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, userKey{}, u)))
 	})
 }
 
@@ -168,8 +170,12 @@ func (s *Server) tokenUser(r *http.Request) (user, error) {
 		return user{}, auth.ErrBadToken
 	}
 	p := su.Profile
-	return user{ID: p.ID, Admin: p.Role == "admin", CanRecord: p.Role == "admin" || p.CanRecord,
-		MustChange: p.MustChangePassword, Session: c.Session, Cookie: cookie}, nil
+	u := user{ID: p.ID, Admin: p.Role == "admin", CanRecord: p.Role == "admin" || p.CanRecord,
+		MustChange: p.MustChangePassword, Session: c.Session, Cookie: cookie}
+	if !u.Admin {
+		u.Access = su.Access
+	}
+	return u, nil
 }
 
 func accessToken(r *http.Request) (string, bool) {

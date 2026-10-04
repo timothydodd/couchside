@@ -5,7 +5,7 @@ import { MIN_PASSWORD } from "../auth/NewPassword";
 import SessionList from "./SessionList";
 import { ErrorNote, Segmented, Spinner } from "../ui";
 import { api, useApi } from "../../lib/api";
-import type { Profile, ProfileColor } from "../../lib/types";
+import { RATING_LIMITS, type Library, type Profile, type ProfileColor } from "../../lib/types";
 import { authError, useAuth } from "../../stores/auth";
 
 /**
@@ -103,6 +103,11 @@ function AccountBadges({ p }: { p: Profile }) {
   return (
     <span className="flex shrink-0 items-center gap-1.5">
       {p.role === "admin" && <span className="tint-info rounded px-1.5 text-[11px] font-semibold">Admin</span>}
+      {p.role !== "admin" && (!!p.libraries?.length || !!p.maxRating) && (
+        <span className="tint-muted rounded px-1.5 text-[11px] font-semibold">
+          {[p.libraries?.length ? `${p.libraries.length} ${p.libraries.length === 1 ? "library" : "libraries"}` : "", p.maxRating ? `Up to ${p.maxRating}` : ""].filter(Boolean).join(" · ")}
+        </span>
+      )}
       {p.role !== "admin" && p.canRecord && (
         <span className="tint-muted inline-flex items-center gap-1 rounded px-1.5 text-[11px] font-semibold">
           <CircleDot size={10} /> Records
@@ -125,6 +130,9 @@ function AccountForm({ account, onDone, onChanged }: { account?: Profile; onDone
   const [canRecord, setCanRecord] = useState(account?.canRecord ?? false);
   const [disabled, setDisabled] = useState(account?.disabled ?? false);
   const [passwordLocked, setPasswordLocked] = useState(account?.passwordLocked ?? false);
+  const { data: allLibraries } = useApi<Library[]>("/api/libraries");
+  const [libraries, setLibraries] = useState<number[]>(account?.libraries ?? []);
+  const [maxRating, setMaxRating] = useState(account?.maxRating ?? "");
   const [password, setPassword] = useState("");
   const [reset, setReset] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -150,8 +158,8 @@ function AccountForm({ account, onDone, onChanged }: { account?: Profile; onDone
   const save = () =>
     run(() =>
       account
-        ? api(`/api/accounts/${account.id}`, { method: "PUT", json: { name, color, role, canRecord, disabled, passwordLocked } })
-        : api("/api/accounts", { method: "POST", json: { name, color, role, canRecord, password, passwordLocked } }),
+        ? api(`/api/accounts/${account.id}`, { method: "PUT", json: { name, color, role, canRecord, disabled, passwordLocked, libraries, maxRating } })
+        : api("/api/accounts", { method: "POST", json: { name, color, role, canRecord, password, passwordLocked, libraries, maxRating } }),
     );
 
   return (
@@ -210,6 +218,41 @@ function AccountForm({ account, onDone, onChanged }: { account?: Profile; onDone
               <input type="checkbox" className="accent-brand" checked={!passwordLocked} onChange={(e) => setPasswordLocked(!e.target.checked)} />
               Can set and change their own password (turn off for a shared profile, like a guest)
             </label>
+            <span className="text-content-muted">Libraries</span>
+            <div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-content-secondary">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" className="accent-brand" checked={libraries.length === 0} onChange={() => setLibraries([])} />
+                  All
+                </label>
+                {allLibraries?.map((l) => (
+                  <label key={l.id} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="accent-brand"
+                      checked={libraries.includes(l.id)}
+                      onChange={(e) => setLibraries(e.target.checked ? [...libraries, l.id] : libraries.filter((x) => x !== l.id))}
+                    />
+                    {l.name}
+                  </label>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-content-muted">Tick some to show this account only those. Live TV and channels aren't limited by this.</p>
+            </div>
+            <span className="text-content-muted">Ratings</span>
+            <div>
+              <select className="field" value={maxRating} onChange={(e) => setMaxRating(e.target.value)} aria-label="Highest rating shown">
+                <option value="">Any rating</option>
+                {RATING_LIMITS.map((r) => (
+                  <option key={r} value={r}>
+                    Up to {r}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-content-muted">
+                TV ratings count too (TV-PG as PG, TV-14 as PG-13, TV-MA as R). With a limit, titles nobody has rated, and unmatched ones, are hidden.
+              </p>
+            </div>
           </>
         )}
         {account && !self && (

@@ -58,7 +58,7 @@ from the start.
 | F3  | Database backup and restore                            | Feature   | S         | Done |
 | F4  | Seek-bar preview thumbnails                            | Feature   | M         | Done |
 | F5  | Skip intro and credits                                 | Feature   | M to L    | Done |
-| F6  | Per-profile libraries and rating limit                 | Feature   | M         |      |
+| F6  | Per-profile libraries and rating limit                 | Feature   | M         | Done |
 | F7  | Versions and editions                                  | Feature   | S to M    |      |
 | F8  | Surround sound passthrough                             | Feature   | S to M    |      |
 | F9  | Sign in with OIDC                                      | Feature   | M         |      |
@@ -704,21 +704,23 @@ starting the next-episode countdown at the credits.
 
 ## F6 · Per-profile libraries and rating limit
 
-**Why.** Every profile sees every library. Households want a child's profile
-limited (judgement; Jellyfin "user groups" about 200).
+**Done.** Server tested on every kind of route; the account form is
+typechecked and built, not yet seen in a browser.
 
-**Scope**
-- Table `profile_libraries` (none = all) and `profiles.max_rating`.
-  `media_items.rated` is stored but unused.
-- The profile is already in every query (`watchJoin(ctx)`,
-  `summaryCols(ctx)`). Filter in items, home, people, streams, play info and
-  search (the index is shared, so filter at hydration).
-- Artwork routes are open without a token, so posters of hidden titles can
-  still be fetched by id. Decide: accept it, or sign artwork URLs.
-- Admin UI in Settings → Accounts.
+- `profile_libraries` (none = all) and `profiles.max_rating` (G, PG, PG-13 or
+  R, with TV ratings mapped on; with a limit, unrated and unmatched titles
+  are hidden). Admins are never limited.
+- Applied in the queries themselves (`db/access.go`: `visible`,
+  `visibleFileJoin`, from `db.WithAccess` set by `authenticate`), so lists,
+  Home, My list, search, people, a title's page, a file's info, streams,
+  tracks, subtitles and new HLS sessions all answer 404 or leave it out.
+- Settings → Accounts: tick libraries and pick "Up to…" per account.
 
-**Done when** a limited profile can't list, search, open or play a title
-outside its libraries or above its rating (tests on each route).
+**Decided / known gaps**
+- Artwork routes stay open without a token (TV image nodes need that), so a
+  poster can still be fetched by someone who guesses a title's id.
+- Live TV isn't limited: a virtual channel can play a title the profile
+  couldn't open, and the sidebar's counts are for the whole server.
 
 ## F7 · Versions and editions
 

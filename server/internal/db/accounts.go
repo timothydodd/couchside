@@ -148,6 +148,7 @@ type SessionUser struct {
 	Session   string
 	ExpiresAt int64
 	Profile   Profile
+	Access    Access // the profile's limits (ignored for admins)
 }
 
 // SessionUser looks up a session that hasn't expired, for an enabled profile.
@@ -157,7 +158,11 @@ func (d *DB) SessionUser(ctx context.Context, id string, now int64) (SessionUser
 		FROM sessions s JOIN profiles p ON p.id = s.profile_id
 		WHERE s.id = ? AND s.expires_at > ? AND p.disabled = 0`, id, now), &u.ExpiresAt))
 	u.Profile = p
-	return u, notFound(err)
+	if err != nil {
+		return u, notFound(err)
+	}
+	u.Access, err = d.ProfileAccess(ctx, p.ID)
+	return u, err
 }
 
 // prefixed qualifies a column list with a table alias.

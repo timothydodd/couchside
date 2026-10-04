@@ -90,7 +90,7 @@ const playCols = `f.id, m.id, m.kind, m.title, e.season, e.episode, COALESCE(e.t
 	f.problem, COALESCE(e.air_date, ''), f.role, f.part_no, f.extra_title`
 
 func playFrom(ctx context.Context) string {
-	return ` FROM files f JOIN media_items m ON m.id = f.media_item_id
+	return ` FROM files f JOIN media_items m ON m.id = f.media_item_id` + visible(ctx, "m") + `
 	LEFT JOIN episodes e ON e.id = f.episode_id ` + watchJoin(ctx)
 }
 
