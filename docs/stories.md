@@ -26,7 +26,7 @@ from the start.
 | --- | ------------------------------------------------------ | --------- | --------- | ---- |
 | B1  | Turning passwords on ends passwordless sessions        | Security  | Confirmed | PR #45|
 | B2  | Sign-in hardening, second pass                         | Security  | Reported  | PR #46|
-| B3  | Remote image cache can't be filled between prunes      | Security  | Reported  |      |
+| B3  | Remote image cache can't be filled between prunes      | Security  | Reported  | PR #47|
 | B4  | Internal error text stays on the server                | Security  | Reported  |      |
 | B5  | A provider outage doesn't wipe cast and backdrops      | Data loss | Confirmed |      |
 | B6  | Virtual channels stay on their schedule                | Bug       | Confirmed |      |
@@ -136,6 +136,8 @@ for a year. This was A7's item 4.
 and a TV client that repeats a refresh with the previous token gets a session.
 
 ## B3 · Remote image cache can't be filled between prunes
+
+**Done** (PR #47).
 
 **Why.** `GET /api/artwork/remote` needs no sign-in, and the 2 GB
 `remoteMaxTotal` is only enforced by `pruneRemote` on the daily ticker
