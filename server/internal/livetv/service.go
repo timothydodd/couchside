@@ -246,6 +246,15 @@ func (s *Service) refreshGuide(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// Couchside's own channels write their own guide. A tuner channel that
+	// turns up with one's number isn't in the lineup (ReplaceChannels skips
+	// it), and its listings would replace the virtual channel's.
+	virtual := map[string]bool{}
+	if vcs, err := s.db.VirtualChannels(ctx); err == nil {
+		for _, vc := range vcs {
+			virtual[vc.Number] = true
+		}
+	}
 	horizon := time.Now().Add(26 * time.Hour).Unix()
 	var start, total int64
 	for page := 0; page < 10; page++ {
@@ -257,6 +266,9 @@ func (s *Service) refreshGuide(ctx context.Context) error {
 		var progs []db.Program
 		var maxEnd int64
 		for _, c := range chans {
+			if virtual[c.GuideNumber] {
+				continue
+			}
 			if page == 0 {
 				_ = s.db.SetChannelGuideInfo(ctx, c.GuideNumber, c.Affiliate, c.ImageURL)
 			}

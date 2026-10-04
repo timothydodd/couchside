@@ -29,7 +29,7 @@ from the start.
 | B3  | Remote image cache can't be filled between prunes      | Security  | Reported  | Done |
 | B4  | Internal error text stays on the server                | Security  | Reported  | Done |
 | B5  | A provider outage doesn't wipe cast and backdrops      | Data loss | Confirmed | Done |
-| B6  | Virtual channels stay on their schedule                | Bug       | Confirmed |      |
+| B6  | Virtual channels stay on their schedule                | Bug       | Confirmed | Done |
 | B7  | Virtual and tuner streams use the right picture path   | Bug       | Reported  |      |
 | B8  | A recording watched from the start outlives recording  | Bug       | Confirmed |      |
 | B9  | Commercial detection: custom ini and the job lookup    | Bug       | Confirmed |      |
@@ -201,6 +201,8 @@ TMDB 429 degrades the whole library.
 **Done when** both tests pass.
 
 ## B6 · Virtual channels stay on their schedule
+
+**Done.**
 
 **Scope**
 - **A failed piece puts the stream ahead of the guide.** `playVirtual`

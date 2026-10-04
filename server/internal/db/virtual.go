@@ -109,6 +109,9 @@ func (d *DB) UpdateVirtualChannel(ctx context.Context, id int64, number, name st
 	}{
 		{`UPDATE virtual_channels SET number = ?, name = ?, config = ?, state = '{}', updated_at = unixepoch() WHERE id = ?`, []any{number, name, string(config), id}},
 		{`UPDATE channels SET number = ?, name = ?, sort_key = ? WHERE virtual_id = ?`, []any{number, name, sortKey, id}},
+		// A favourite left on the new number by a channel that has gone would
+		// clash with this one's.
+		{`DELETE FROM profile_channels WHERE number = ?1 AND ?1 <> ?2`, []any{number, old}},
 		{`UPDATE profile_channels SET number = ? WHERE number = ?`, []any{number, old}},
 		{`DELETE FROM virtual_playout WHERE channel_id = ?`, []any{id}},
 		{`DELETE FROM programs WHERE channel IN (?, ?)`, []any{old, number}},
@@ -322,6 +325,16 @@ func (d *DB) FillerClips(ctx context.Context) (map[string]FillerClip, error) {
 		out[c.Path] = c
 	}
 	return out, rows.Err()
+}
+
+// DeleteFillerClips forgets clips that are no longer in their folder.
+func (d *DB) DeleteFillerClips(ctx context.Context, paths []string) error {
+	for _, p := range paths {
+		if _, err := d.sql.ExecContext(ctx, `DELETE FROM filler_clips WHERE path = ?`, p); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (d *DB) SaveFillerClip(ctx context.Context, c FillerClip) error {
