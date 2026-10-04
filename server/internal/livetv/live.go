@@ -360,6 +360,11 @@ func (m *liveManager) launch(ctx context.Context, key, channel, name string, inp
 			_ = cmd.Process.Kill()
 			<-s.exited
 			_ = os.RemoveAll(dir)
+			if err := ctx.Err(); err != nil {
+				// This viewer left. Say so, not "weak signal": anyone who
+				// joined this start then tunes for themselves (claimLocked).
+				return nil, err
+			}
 			return nil, usererr.New("the tuner didn't deliver video in time; weak signal?")
 		}
 		time.Sleep(150 * time.Millisecond)
@@ -438,10 +443,18 @@ func (m *liveManager) run(ctx context.Context) {
 			return
 		case <-t.C:
 		}
-		for _, s := range m.sessionsList() {
-			if s.idle() > liveIdleKill || !s.running() {
-				m.stop(s)
-			}
+		m.reap()
+	}
+}
+
+// reap stops streams nobody has asked for lately, and streams whose ffmpeg
+// has gone. A recording watched from its start is the exception: its ffmpeg
+// ends shortly after the recording does, with the playlist complete, and
+// someone still watching is behind that point, so it stays until they leave.
+func (m *liveManager) reap() {
+	for _, s := range m.sessionsList() {
+		if s.idle() > liveIdleKill || (!s.running() && !strings.HasPrefix(s.key, "rec:")) {
+			m.stop(s)
 		}
 	}
 }

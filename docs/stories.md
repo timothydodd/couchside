@@ -31,7 +31,7 @@ from the start.
 | B5  | A provider outage doesn't wipe cast and backdrops      | Data loss | Confirmed | Done |
 | B6  | Virtual channels stay on their schedule                | Bug       | Confirmed | Done |
 | B7  | Virtual and tuner streams use the right picture path   | Bug       | Reported  | Done |
-| B8  | A recording watched from the start outlives recording  | Bug       | Confirmed |      |
+| B8  | A recording watched from the start outlives recording  | Bug       | Confirmed | Done |
 | B9  | Commercial detection: custom ini and the job lookup    | Bug       | Confirmed |      |
 | B10 | DVR: stale series matches and failed joins             | Bug       | Reported  |      |
 | B11 | Transcode: false GPU fallback, copied HEVC             | Bug       | Reported  |      |
@@ -249,6 +249,8 @@ and tone maps HDR films, and decodes on the GPU when the start-up test passed
   a height, so there's nothing to pass.
 
 ## B8 · A recording watched from the start outlives recording
+
+**Done.**
 
 **Scope**
 - **Cut off 30s after the recording ends.** The follow-ffmpeg

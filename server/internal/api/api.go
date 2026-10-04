@@ -320,6 +320,9 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeErr(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, context.Canceled):
+		// The client went away mid-request; there's nobody to answer and nothing wrong.
+		w.WriteHeader(499)
 	case errors.Is(err, db.ErrNotFound):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 	default:
