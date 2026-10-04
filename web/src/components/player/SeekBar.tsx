@@ -108,17 +108,17 @@ export default function SeekBar({
       aria-valuemax={max}
       aria-valuenow={Math.round(value)}
     >
-      <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/15 transition-[height] group-hover/seek:h-1.5">
+      <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-player-fg/15 transition-[height] group-hover/seek:h-1.5">
         {recordedEnd !== undefined && (
           // not-yet-recorded part of the program
-          <div className="absolute inset-y-0 right-0 bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.06)_0_4px,transparent_4px_8px)]" style={{ left: pct(limit) }} />
+          <div className="absolute inset-y-0 right-0 seek-hatch-faint" style={{ left: pct(limit) }} />
         )}
-        {recordedEnd !== undefined && <div className="absolute inset-y-0 bg-white/20" style={{ left: pct(first), right: `calc(100% - ${pct(limit)})` }} />}
-        <div className="absolute inset-y-0 bg-white/35" style={{ left: pct(first), right: `calc(100% - ${pct(Math.max(first, Math.min(bufferedEnd, limit)))})` }} />
+        {recordedEnd !== undefined && <div className="absolute inset-y-0 bg-player-fg/20" style={{ left: pct(first), right: `calc(100% - ${pct(limit)})` }} />}
+        <div className="absolute inset-y-0 bg-player-fg/35" style={{ left: pct(first), right: `calc(100% - ${pct(Math.max(first, Math.min(bufferedEnd, limit)))})` }} />
         <div className="absolute inset-y-0 left-0 bg-accent" style={{ width: pct(shown) }} />
         {first > min && (
           // before the stream started: shown as progress through the program, but can't be seeked into
-          <div className="absolute inset-y-0 left-0 bg-black/35 bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.12)_0_4px,transparent_4px_8px)]" style={{ width: pct(first) }} />
+          <div className="absolute inset-y-0 left-0 bg-player-bg/35 seek-hatch" style={{ width: pct(first) }} />
         )}
         {breaks?.map((b) => (
           <div key={b.start} className="seek-break" style={{ left: pct(b.start), right: `calc(100% - ${pct(b.end)})` }} />
@@ -131,11 +131,11 @@ export default function SeekBar({
         <div className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 rounded bg-critical" style={{ left: pct(limit) }} title="Recorded so far" />
       )}
       <div
-        className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 scale-0 rounded-full bg-white shadow transition-transform group-hover/seek:scale-100 pointer-coarse:scale-100"
+        className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 scale-0 rounded-full bg-player-fg shadow transition-transform group-hover/seek:scale-100 pointer-coarse:scale-100"
         style={{ left: pct(shown), transform: drag !== null ? "translate(-50%,-50%) scale(1)" : undefined }}
       />
       {hover !== null && (
-        <div className="pointer-events-none absolute -top-8 -translate-x-1/2 rounded bg-black/85 px-2 py-0.5 text-xs tabular-nums text-white" style={{ left: pct(hover) }}>
+        <div className="pointer-events-none absolute -top-8 -translate-x-1/2 rounded bg-player-bg/85 px-2 py-0.5 text-xs tabular-nums text-player-fg" style={{ left: pct(hover) }}>
           {label(hover)}
           {breaks?.some((b) => hover >= b.start && hover < b.end) && " · Commercial"}
         </div>

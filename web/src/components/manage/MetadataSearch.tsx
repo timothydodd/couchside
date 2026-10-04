@@ -5,6 +5,7 @@ import { api } from "../../lib/api";
 import { titleLink } from "../../lib/format";
 import type { ManageRow, SearchResult } from "../../lib/types";
 import { useStatus } from "../../stores/status";
+import { errText } from "../../lib/errors";
 
 /**
  * Fix a match by searching TMDB (or OMDb) under any name, or pasting an IMDb
@@ -34,7 +35,7 @@ export default function MetadataSearch({ row, onMatched }: { row: ManageRow; onM
       if (year.trim()) p.set("year", year.trim());
       setResults(await api<SearchResult[]>(`/api/items/${row.id}/lookup?${p}`));
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errText(e));
     } finally {
       setBusy(null);
     }
@@ -47,7 +48,7 @@ export default function MetadataSearch({ row, onMatched }: { row: ManageRow; onM
       setResults(null);
       onMatched();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errText(e));
     } finally {
       setBusy(null);
     }

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { errText } from "./errors";
 
 /** A message that floats over the page for a few seconds (Notices). */
 export interface Notice {
@@ -36,7 +37,7 @@ export function attempt<A extends unknown[]>(what: string, fn: (...args: A) => P
     try {
       await fn(...args);
     } catch (e) {
-      notify(`${what}: ${e instanceof Error ? e.message : String(e)}`);
+      notify(`${what}: ${errText(e)}`);
     }
   };
 }

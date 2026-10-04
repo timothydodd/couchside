@@ -38,6 +38,9 @@ it is grey.
 | `--warning`        | `#FFB547` | unmatched, low quality, duplicates (amber)               |
 | `--critical`       | `#FF5C74` | errors, destructive actions, recording, favourites (red) |
 | `--brand-cyan`, `--secondary` (violet), `--brand-pink` | | avatar colours only |
+| `--player-fg`, `--player-bg` | white, black | text and controls over video (`text-player-fg/85`, `bg-player-fg/10`) |
+| `--backdrop` | black | behind dialogs, sheets and panels, at an opacity (`bg-backdrop/55`) |
+| `--scrim-bg`, `--scrim-fg`, `--logo-plate`, `--cue-bg`, `--cue-fg` | | labels over artwork, the plate under channel logos, subtitles |
 
 ## Contrast
 

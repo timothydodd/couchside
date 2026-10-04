@@ -51,7 +51,7 @@ from the start.
 | C2  | One builder for ffmpeg's HLS arguments                 | Cleanup   |           | Done |
 | C3  | Split `api/auth.go` and `api/handlers.go`              | Cleanup   |           | Done |
 | C4  | One HLS hook for the three players                     | Cleanup   |           | Done |
-| C5  | Web duplication, dead CSS, player colour tokens        | Cleanup   |           |      |
+| C5  | Web duplication, dead CSS, player colour tokens        | Cleanup   |           | Done |
 | C6  | Load pages on demand                                   | Cleanup   |           |      |
 | F1  | Next Up, and remove from Continue Watching             | Feature   | S         | Done |
 | F2  | Watchlist                                              | Feature   | S         | Done |
@@ -588,21 +588,20 @@ both play.
 
 ## C5 · Web duplication, dead CSS, player colour tokens
 
-- `bg-critical text-white` (`PlayerFrame.tsx:453,528`,
-  `RecordingPlayerPage.tsx:132`) breaks `docs/style.md`: red fills take
-  `text-on-accent`.
-- Hard-coded colours: `.scrim`, `.channel-logo`, `video::cue` in `index.css`,
-  the hatch gradients in `SeekBar.tsx:114,121`, and `text-white` / `bg-black/x`
-  across the player chrome. Give the player its own tokens beside
-  `--player-bg`.
-- Dead: `.toolbar-field`, the `streamUrl` export (`lib/api.ts:120`), the
-  doubled comment at `components/ui.tsx:182`.
-- Shared helpers for: `e instanceof Error ? e.message : String(e)` (24
-  places, with a hand-rolled busy/error block in about ten components); the
-  version label (three places); the 1080/720/480 options (three places); the
-  buffered-range loop (three places).
-- Other large files to split when next touched: `PlayerFrame.tsx` (560),
-  `ChannelEditor.tsx` (449), `ItemPage.tsx` (448), `lib/types.ts` (681).
+**Done.** Checked in a browser: the live player's controls look as before.
+
+- Red fills (RECORDING, LIVE, Stop) use `text-on-accent`.
+- No colour is written in a component any more: the player uses
+  `player-fg` / `player-bg`, backdrops behind dialogs use `backdrop`, and the
+  scrim, channel-logo plate, subtitle cue and seek-bar hatching read tokens
+  in `index.css`.
+- Removed `.toolbar-field` and the unused `streamUrl`.
+- `errText(e)` (`lib/errors.ts`) replaces the error-message expression in 18
+  files; `fmtVersion` the version label in three.
+
+**Left as they are:** the quality options (the three lists differ in what
+they offer) and the buffered-range loops (each wants a different number).
+The large files named in the story are split when next touched.
 
 ## C6 · Load pages on demand
 

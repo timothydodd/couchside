@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { api } from "../lib/api";
 import { notify } from "../lib/notices";
 import type { Prefs, Profile } from "../lib/types";
+import { errText } from "../lib/errors";
 
 interface ProfileState {
   loaded: boolean;
@@ -25,7 +26,7 @@ export const useProfile = create<ProfileState>((set, get) => ({
       const current = r.profiles.find((p) => p.id === r.current) ?? null;
       set({ loaded: true, error: null, profiles: r.profiles, current });
     } catch (e) {
-      set({ loaded: true, error: e instanceof Error ? e.message : String(e) });
+      set({ loaded: true, error: errText(e) });
     }
   },
   setPrefs: (patch) => {
@@ -44,7 +45,7 @@ export const useProfile = create<ProfileState>((set, get) => ({
         const back = { ...now, prefs: prefs as Prefs };
         set({ current: back, profiles: get().profiles.map((p) => (p.id === cur.id ? back : p)) });
       }
-      notify(`Couldn't save that setting: ${e instanceof Error ? e.message : String(e)}`);
+      notify(`Couldn't save that setting: ${errText(e)}`);
     });
   },
 }));

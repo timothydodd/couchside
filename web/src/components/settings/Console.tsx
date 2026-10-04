@@ -3,6 +3,7 @@ import { ArrowDownToLine, Pause, Play } from "lucide-react";
 import { SearchInput, Segmented } from "../ui";
 import { api } from "../../lib/api";
 import type { LogEntry } from "../../lib/types";
+import { errText } from "../../lib/errors";
 
 const KEEP = 2000; // lines held in the page, like the server
 const LEVELS = [
@@ -47,7 +48,7 @@ export default function Console() {
           return all.length > KEEP ? all.slice(all.length - KEEP) : all;
         });
       } catch (e) {
-        if (!stop) setError(e instanceof Error ? e.message : String(e));
+        if (!stop) setError(errText(e));
       }
     };
     const loop = async () => {

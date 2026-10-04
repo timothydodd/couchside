@@ -70,7 +70,7 @@ export default function ProgramDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-backdrop/55 p-4" onClick={onClose}>
       <div className="card relative max-h-[92vh] w-full max-w-lg overflow-y-auto shadow-[var(--shadow-md)]" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={program.title} ref={dialog}>
         {program.imageUrl && (
           <div className="relative aspect-video bg-raised">

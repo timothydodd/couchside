@@ -133,8 +133,8 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
       videoRef={videoRef}
       badge={
         <>
-          <span className="inline-flex items-center gap-1 rounded bg-critical px-1.5 py-px text-[10px] font-bold tracking-wide text-white">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> RECORDING
+          <span className="inline-flex items-center gap-1 rounded bg-critical px-1.5 py-px text-[10px] font-bold tracking-wide text-player-fg">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-on-accent" /> RECORDING
           </span>
           {rec && <span>{rec.channel} {rec.channelName}</span>}
         </>

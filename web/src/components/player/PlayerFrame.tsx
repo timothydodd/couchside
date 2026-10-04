@@ -304,7 +304,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
     <div
       ref={root}
       data-theme="dark"
-      className="fixed inset-0 z-50 select-none bg-[var(--player-bg)] text-white"
+      className="fixed inset-0 z-50 select-none bg-[var(--player-bg)] text-player-fg"
       style={{ cursor: show ? "auto" : "none" }}
       onPointerMove={poke}
       onPointerDown={poke}
@@ -333,13 +333,13 @@ export default function PlayerFrame(p: PlayerFrameProps) {
       {/* center: loading / paused */}
       {(p.loading || (st.waiting && !st.paused)) && !p.error && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3">
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/20 border-t-white/90" />
-          {p.loading && <div className="text-sm text-white/80">{p.loading}</div>}
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-player-fg/20 border-t-white/90" />
+          {p.loading && <div className="text-sm text-player-fg/80">{p.loading}</div>}
         </div>
       )}
       {st.paused && !p.loading && !p.error && st.width > 0 && (
         <button
-          className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur transition-transform hover:scale-105"
+          className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-player-bg/55 text-player-fg backdrop-blur transition-transform hover:scale-105"
           onClick={toggle}
           aria-label="Play"
         >
@@ -349,18 +349,18 @@ export default function PlayerFrame(p: PlayerFrameProps) {
 
       {/* top bar */}
       <div
-        className={`absolute inset-x-0 top-0 flex items-start gap-3 bg-gradient-to-b from-black/85 via-black/45 to-transparent player-top pb-14 transition-opacity duration-300 ${
+        className={`absolute inset-x-0 top-0 flex items-start gap-3 bg-gradient-to-b from-player-bg/85 via-player-bg/45 to-transparent player-top pb-14 transition-opacity duration-300 ${
           show ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
-        <button onClick={p.onBack} className="mt-0.5 rounded-md p-1.5 text-white/85 hover:bg-white/10 hover:text-white pointer-coarse:p-2.5" aria-label="Back">
+        <button onClick={p.onBack} className="mt-0.5 rounded-md p-1.5 text-player-fg/85 hover:bg-player-fg/10 hover:text-player-fg pointer-coarse:p-2.5" aria-label="Back">
           <ArrowLeft size={19} />
         </button>
         {p.logo && <img src={p.logo} alt="" className="channel-logo mt-0.5 max-h-9 max-w-16" />}
         <div className="min-w-0 flex-1">
-          {p.badge && <div className="mb-0.5 flex items-center gap-2 text-xs text-white/70">{p.badge}</div>}
+          {p.badge && <div className="mb-0.5 flex items-center gap-2 text-xs text-player-fg/70">{p.badge}</div>}
           <div className="truncate text-lg font-semibold leading-tight">{p.title}</div>
-          {p.subtitle && <div className="truncate text-xs text-white/65">{p.subtitle}</div>}
+          {p.subtitle && <div className="truncate text-xs text-player-fg/65">{p.subtitle}</div>}
         </div>
         <div className="flex items-center gap-1">{p.topActions}</div>
       </div>
@@ -398,7 +398,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
 
       {/* bottom controls */}
       <div
-        className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/55 to-transparent player-controls pt-16 transition-opacity duration-300 ${
+        className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-player-bg/90 via-player-bg/55 to-transparent player-controls pt-16 transition-opacity duration-300 ${
           show ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -457,7 +457,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
               aria-label="Volume"
             />
           </div>
-          <span className="ml-2 min-w-0 truncate text-xs tabular-nums text-white/80">{timeText}</span>
+          <span className="ml-2 min-w-0 truncate text-xs tabular-nums text-player-fg/80">{timeText}</span>
           <div className="flex-1" />
           {timeline.kind === "recording" && (
             <CtlButton label="Start over" onClick={() => seekTo(0)} wide>
@@ -468,7 +468,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
             <button
               onClick={goLive}
               className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-bold tracking-wide ${
-                atLive ? "bg-critical text-white" : "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+                atLive ? "bg-critical text-on-accent" : "bg-player-fg/10 text-player-fg/80 hover:bg-player-fg/20 hover:text-player-fg"
               }`}
               title={atLive ? "You're watching live" : "Jump to live"}
             >
@@ -527,7 +527,7 @@ function CtlButton({
       title={label}
       aria-label={label}
       className={`player-btn ${wide ? "px-2.5" : "px-2"} ${
-        active ? "bg-white/10 text-white" : ""
+        active ? "bg-player-fg/10 text-player-fg" : ""
       }`}
     >
       {children}
@@ -544,7 +544,7 @@ export function TopButton({ label, onClick, children, danger, disabled }: { labe
       title={label}
       aria-label={label}
       className={`flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm disabled:opacity-40 ${
-        danger ? "bg-critical/90 text-white hover:bg-critical" : "text-white/85 hover:bg-white/10 hover:text-white"
+        danger ? "bg-critical/90 text-on-accent hover:bg-critical" : "text-player-fg/85 hover:bg-player-fg/10 hover:text-player-fg"
       }`}
     >
       {children}

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
 import type { Status } from "../lib/types";
+import { errText } from "../lib/errors";
 
 interface StatusState {
   status: Status | null;
@@ -15,7 +16,7 @@ export const useStatus = create<StatusState>((set) => ({
     try {
       set({ status: await api<Status>("/api/status"), error: null });
     } catch (e) {
-      set({ error: e instanceof Error ? e.message : String(e) });
+      set({ error: errText(e) });
     }
   },
 }));

@@ -180,9 +180,9 @@ export interface MenuItem {
   onSelect: () => void;
 }
 
-/** A small button that opens a list of less-used actions. Closes on pick, outside click or Escape. */
 /**
- * An icon button that opens a menu. align="end" lines the menu up with the
+ * An icon button that opens a menu of less-used actions; it closes on pick,
+ * outside click or Escape. align="end" lines the menu up with the
  * button's right edge (for buttons near the right of the screen); className
  * styles the button (e.g. the right half of a split button).
  */

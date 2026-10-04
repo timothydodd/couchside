@@ -41,7 +41,7 @@ function Panel({ active, onReset, onClose, children }: { active: number; onReset
   const phone = usePhone();
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/55 md:bg-transparent" onClick={onClose} />
+      <div className="fixed inset-0 z-40 bg-backdrop/55 md:bg-transparent" onClick={onClose} />
       <div ref={ref} role="dialog" aria-modal={phone || undefined} aria-label="Filters" className="filter-panel">
         <div className="flex items-center justify-between gap-2 px-4 pt-4">
           <div className="card-title">Filters</div>

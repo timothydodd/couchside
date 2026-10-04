@@ -11,6 +11,7 @@ import { fmtBytes, relPath } from "../../lib/format";
 import type { DeleteResult, Library, ManageFile, ManageRow } from "../../lib/types";
 import { useStatus } from "../../stores/status";
 import { useDialog } from "../../lib/dialog";
+import { errText } from "../../lib/errors";
 
 /** A message at the top of the panel: what a delete or a queued job did. */
 type Note = { text: string; error?: boolean };
@@ -42,7 +43,7 @@ export default function ItemPanel({ row, library, onClose, onChanged }: { row: M
 
   return (
     <>
-      <div className="fixed inset-0 z-30 bg-black/30" onClick={onClose} />
+      <div className="fixed inset-0 z-30 bg-backdrop/30" onClick={onClose} />
       <aside className="side-panel" role="dialog" aria-modal="true" aria-label={`Manage ${row.title}`} ref={dialog}>
         <div className="flex items-start gap-3 px-4 py-4">
           <div className="poster relative w-16 shrink-0">
@@ -100,7 +101,7 @@ function ItemActions({ row, onNote }: { row: ManageRow; onNote: (n: Note) => voi
       onNote({ text: done(r?.queued ?? 0) });
       void useStatus.getState().refresh();
     } catch (e) {
-      onNote({ text: e instanceof Error ? e.message : String(e), error: true });
+      onNote({ text: errText(e), error: true });
     }
   };
   const optimize = () =>
@@ -160,7 +161,7 @@ function DeleteItem({ row, onDeleted }: { row: ManageRow; onDeleted: (r: DeleteR
     try {
       onDeleted(await api<DeleteResult>(`/api/items/${row.id}`, { method: "DELETE" }));
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errText(e));
     } finally {
       setBusy(false);
       setConfirm(false);

@@ -8,6 +8,7 @@ import { fmtAgo } from "../lib/format";
 import type { Library } from "../lib/types";
 import { useStatus } from "../stores/status";
 import { attempt } from "../lib/notices";
+import { errText } from "../lib/errors";
 
 export default function LibrariesPage() {
   const { data, error, reload } = useApi<Library[]>("/api/libraries", { pollMs: 5000 });
@@ -146,7 +147,7 @@ function LibraryForm({ library, onDone, onCancel }: { library?: Library; onDone:
       else await api("/api/libraries", { method: "POST", json: { name: n, path, kind } });
       onDone();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errText(e));
     } finally {
       setBusy(false);
     }

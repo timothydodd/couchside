@@ -11,6 +11,7 @@ import type { ChannelNow, LiveSessionInfo, Program } from "../lib/types";
 import { useProfile } from "../stores/profile";
 import { useRouter } from "../stores/router";
 import { useCanRecord } from "../stores/auth";
+import { errText } from "../lib/errors";
 
 const LIVE_QUALITIES = [1080, 720, 480] as const;
 
@@ -189,7 +190,7 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
     } catch (e) {
       // A notice over the stream, which is still playing: `error` is for a
       // stream that can't be played and replaces the picture.
-      const msg = `Couldn't ${now.recordingStatus === "recording" ? "stop the recording" : "record this"}: ${e instanceof Error ? e.message : String(e)}`;
+      const msg = `Couldn't ${now.recordingStatus === "recording" ? "stop the recording" : "record this"}: ${errText(e)}`;
       setNotice(msg);
       setTimeout(() => setNotice((n) => (n === msg ? null : n)), 8000);
     } finally {
@@ -219,7 +220,7 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
       logo={current?.logoUrl}
       badge={
         <>
-          <span className="font-semibold tabular-nums text-white">{channel}</span>
+          <span className="font-semibold tabular-nums text-player-fg">{channel}</span>
           <span>{current?.name ?? session?.name}</span>
         </>
       }

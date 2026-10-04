@@ -13,6 +13,7 @@ import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
 import { attempt } from "../lib/notices";
+import { errText } from "../lib/errors";
 
 export default function ItemPage({ id }: { id: number }) {
   const { data, error, loading, reload } = useApi<ItemDetail>(`/api/items/${id}`);
@@ -213,7 +214,7 @@ function MatchPanel({ id, status, imdbId, parsed, onDone }: { id: number; status
       setValue("");
       onDone();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errText(e));
     } finally {
       setBusy(false);
     }

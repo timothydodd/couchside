@@ -3,6 +3,7 @@ import { RotateCcw, Upload } from "lucide-react";
 import { ErrorNote, Spinner } from "../ui";
 import { api, backdropUrl, posterUrl } from "../../lib/api";
 import type { ManageRow } from "../../lib/types";
+import { errText } from "../../lib/errors";
 
 type Kind = "poster" | "backdrop";
 
@@ -19,7 +20,7 @@ export default function ArtworkEditor({ row, onChanged }: { row: ManageRow; onCh
       await api(`/api/items/${row.id}/artwork/${kind}`, { method: "PUT", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file });
       onChanged();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errText(e));
     } finally {
       setBusy(null);
     }
@@ -33,7 +34,7 @@ export default function ArtworkEditor({ row, onChanged }: { row: ManageRow; onCh
       onChanged();
       setTimeout(onChanged, 4000);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errText(e));
     } finally {
       setBusy(null);
     }
@@ -94,7 +95,7 @@ function Slot(p: {
       <div className={`${p.aspect} relative overflow-hidden rounded-md border border-border-light bg-raised`}>
         {p.preview && !broken && <img src={p.preview} alt="" className="h-full w-full object-cover" onError={() => setBroken(true)} onLoad={() => setBroken(false)} />}
         {p.busy && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+          <div className="absolute inset-0 flex items-center justify-center bg-backdrop/40">
             <Spinner size={18} />
           </div>
         )}

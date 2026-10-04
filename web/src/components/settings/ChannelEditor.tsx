@@ -7,6 +7,7 @@ import { api, useApi } from "../../lib/api";
 import { fmtTime } from "../../lib/format";
 import type { Library, Program, VirtualChannel, VirtualConfig, VirtualOptions } from "../../lib/types";
 import { useDialog } from "../../lib/dialog";
+import { errText } from "../../lib/errors";
 
 const BLANK: VirtualConfig = {
   libraries: [],
@@ -100,7 +101,7 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
         onClose();
       }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errText(e));
     } finally {
       setBusy(false);
     }
@@ -108,7 +109,7 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
 
   return (
     <>
-      <div className="fixed inset-0 z-30 bg-black/30" onClick={onClose} />
+      <div className="fixed inset-0 z-30 bg-backdrop/30" onClick={onClose} />
       <aside className="side-panel max-w-xl" role="dialog" aria-modal="true" ref={dialog} aria-label={channel ? `Edit ${channel.name}` : "New channel"}>
         <div className="flex items-center gap-3 px-4 py-4">
           <div className="min-w-0 flex-1">
@@ -417,7 +418,7 @@ function Preview({ config }: { config: VirtualConfig }) {
           setErr(null);
         }
       } catch (e) {
-        if (!stale) setErr(e instanceof Error ? e.message : String(e));
+        if (!stale) setErr(errText(e));
       } finally {
         if (!stale) setLoading(false);
       }

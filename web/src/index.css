@@ -48,6 +48,13 @@
   /* Media */
   --shadow-poster: 0 10px 28px rgba(0, 0, 0, 0.55);
   --player-bg: #000000;
+  --player-fg: #ffffff; /* text and controls over video */
+  --backdrop: #000000; /* behind dialogs, sheets and panels, at an opacity */
+  --scrim-bg: rgba(10, 10, 16, 0.62); /* a label over artwork */
+  --scrim-fg: #f8f8f2;
+  --logo-plate: #f4f4f8; /* channel logos are drawn for light backgrounds */
+  --cue-bg: rgba(0, 0, 0, 0.6); /* subtitles */
+  --cue-fg: #ffffff;
   color-scheme: dark;
 }
 
@@ -80,6 +87,10 @@
   --color-warning: var(--warning);
   --color-info: var(--info);
   --color-good: var(--good);
+
+  --color-player-bg: var(--player-bg);
+  --color-player-fg: var(--player-fg);
+  --color-backdrop: var(--backdrop);
 
   --font-sans: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
   --font-mono: "Cascadia Mono", "JetBrains Mono", Consolas, ui-monospace, monospace;
@@ -142,10 +153,6 @@ body {
   /* Read-only key/value lists (dl). */
   .kv-grid {
     @apply grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 sm:grid-cols-[160px_1fr] sm:gap-x-0;
-  }
-  /* Controls in a page header's toolbar: share a row on phones, natural width from sm up. */
-  .toolbar-field {
-    @apply min-w-0 flex-1 sm:flex-none;
   }
   /* FilterMenu's panel: a bottom sheet on phones, a dropdown under its button from md up. */
   .filter-panel {
@@ -429,9 +436,18 @@ body {
 }
 
 /* Dark scrim for text/badges sitting on artwork, theme-independent. */
+/* Hatching on the seek bar: time that can't be played (not recorded yet, or
+   before the stream started). */
+.seek-hatch {
+  background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--player-fg) 12%, transparent) 0 4px, transparent 4px 8px);
+}
+.seek-hatch-faint {
+  background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--player-fg) 6%, transparent) 0 4px, transparent 4px 8px);
+}
+
 .scrim {
-  background-color: rgba(10, 10, 16, 0.62);
-  color: #f8f8f2;
+  background-color: var(--scrim-bg);
+  color: var(--scrim-fg);
 }
 
 /* Horizontal poster rows scroll without a visible bar. */
@@ -472,7 +488,7 @@ body {
 /* Channel logos come in dark and white variants. A light chip plus a hairline
    outline keeps both readable in either theme. */
 .channel-logo {
-  background-color: #f4f4f8;
+  background-color: var(--logo-plate);
   border-radius: 4px;
   padding: 2px 3px;
   object-fit: contain;
@@ -481,8 +497,8 @@ body {
 
 /* Subtitles: readable on any picture, like Plex's default style. */
 video::cue {
-  background-color: rgba(0, 0, 0, 0.6);
-  color: #fff;
+  background-color: var(--cue-bg);
+  color: var(--cue-fg);
   font-family: var(--font-sans);
   font-size: 1.05em;
   line-height: 1.35;

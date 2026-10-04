@@ -5,6 +5,7 @@ import { api } from "../../lib/api";
 import { fmtBytes, fmtRuntime, relPath } from "../../lib/format";
 import { codecLabel, qualityLabel, qualityTone } from "../../lib/quality";
 import type { DeleteResult, FileRole, ItemKind, ManageFile } from "../../lib/types";
+import { errText } from "../../lib/errors";
 
 const MOVIE_GROUPS: { role: FileRole; label: string }[] = [
   { role: "copy", label: "Copies" },
@@ -58,7 +59,7 @@ export default function FileList({
     try {
       onDeleted(await api<DeleteResult>(`/api/files/${f.id}`, { method: "DELETE" }));
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errText(e));
     } finally {
       setBusy(null);
       setConfirm(null);
@@ -71,7 +72,7 @@ export default function FileList({
       await api(`/api/files/${f.id}/role`, { method: "PUT", json: { role, partNo, extraTitle } });
       onChanged();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errText(e));
     }
   };
 

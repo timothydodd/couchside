@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { ApiError, api, setAuthHooks } from "../lib/api";
 import type { AuthInfo, Profile, SignedIn } from "../lib/types";
 import { stopStatus } from "./status";
+import { errText } from "../lib/errors";
 
 /**
  * Accounts are always on. Signing in is by name and password, or with
@@ -62,7 +63,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       // The access cookie ran out while we were away; the refresh cookie may still be good.
       else if (!info.user && info.signedIn.length) await refreshSession();
     } catch (e) {
-      set({ error: e instanceof Error ? e.message : String(e) });
+      set({ error: errText(e) });
     }
     set({ loaded: true });
   },
@@ -220,5 +221,5 @@ export function useOwnerCheck() {
 /** A readable message for a failed sign-in call. */
 export function authError(e: unknown): string {
   if (e instanceof ApiError) return e.message;
-  return e instanceof Error ? e.message : String(e);
+  return errText(e);
 }

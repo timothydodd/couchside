@@ -2,6 +2,7 @@ import { Film, MonitorPlay } from "lucide-react";
 import Link from "./Link";
 import { useIsAdmin } from "../stores/auth";
 import { useStatus } from "../stores/status";
+import { fmtVersion } from "../lib/format";
 
 /** Bottom bar: server reachability, background work, metadata provider. */
 export default function StatusBar() {
@@ -54,7 +55,7 @@ export default function StatusBar() {
         <Film size={12} />
         {status?.providers.length ? status.providers.map((p) => p.toUpperCase()).join(" + ") : "No metadata provider"}
       </span>
-      {status && <span className="mono">{/^\d/.test(status.version) ? `v${status.version}` : status.version}</span>}
+      {status && <span className="mono">{fmtVersion(status.version)}</span>}
     </footer>
   );
 }

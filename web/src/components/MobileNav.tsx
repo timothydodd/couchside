@@ -9,6 +9,7 @@ import { useRouter, type Route } from "../stores/router";
 import { useStatus } from "../stores/status";
 import { useDialog } from "../lib/dialog";
 import { attempt } from "../lib/notices";
+import { fmtVersion } from "../lib/format";
 
 /*
  * Phone layout (below md): a top bar with the logo, search and the profile,
@@ -104,7 +105,7 @@ function MoreSheet({ onClose }: { onClose: () => void }) {
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/55 md:hidden" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-backdrop/55 md:hidden" onClick={onClose}>
       <div ref={sheet} role="dialog" aria-modal="true" aria-label="More" className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3 px-4 pb-2 pt-4">
           {profile && <ProfileAvatar profile={profile} size={36} />}
@@ -138,7 +139,7 @@ function MoreSheet({ onClose }: { onClose: () => void }) {
         </div>
         <div className="border-t border-border-light px-4 py-3 text-xs text-content-muted">
           {status ? (active ? jobs?.current || `${active} jobs running` : "Server idle") : "Connecting…"}
-          {status && <span className="float-right mono">{/^\d/.test(status.version) ? `v${status.version}` : status.version}</span>}
+          {status && <span className="float-right mono">{fmtVersion(status.version)}</span>}
         </div>
       </div>
     </div>

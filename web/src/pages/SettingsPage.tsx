@@ -17,6 +17,7 @@ import { usePhone } from "../lib/media";
 import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
+import { fmtVersion } from "../lib/format";
 
 /**
  * Settings. /settings is your own preferences and account, for every profile;
@@ -84,7 +85,7 @@ function About() {
   const version = useStatus((s) => s.status?.version);
   return (
     <p className="px-1 text-xs text-content-muted">
-      Couchside {version && (/^\d/.test(version) ? `v${version}` : version)} &middot; free, open-source software under the{" "}
+      Couchside {version && fmtVersion(version)} &middot; free, open-source software under the{" "}
       <a href="https://github.com/timothydodd/couchside/blob/main/LICENSE" target="_blank" rel="noreferrer" className="hover:text-accent hover:underline">
         MIT License
       </a>{" "}

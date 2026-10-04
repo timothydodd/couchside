@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { errText } from "./errors";
 
 export class ApiError extends Error {
   constructor(
@@ -126,7 +127,7 @@ export function useApi<T>(url: string | null, opts: { pollMs?: number; fresh?: b
       remember(u, d);
       if (latest()) setState({ url: u, data: d, error: null, loading: false });
     } catch (e) {
-      const error = e instanceof Error ? e.message : String(e);
+      const error = errText(e);
       if (latest()) setState((s) => ({ url: u, data: s.url === u ? s.data : undefined, error, loading: false }));
     }
   }, []);
@@ -153,4 +154,3 @@ export const posterUrl = (i: { id: number; updatedAt: number }, size: "thumb" | 
 export const backdropUrl = (i: { id: number; updatedAt: number }) => `/api/artwork/items/${i.id}/backdrop?v=${i.updatedAt}`;
 export const stillUrl = (fileId: number) => `/api/artwork/files/${fileId}/still`;
 export const personPhotoUrl = (personId: number) => `/api/artwork/people/${personId}`;
-export const streamUrl = (fileId: number) => `/api/files/${fileId}/stream`;
