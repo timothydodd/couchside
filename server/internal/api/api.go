@@ -261,6 +261,7 @@ func (s *Server) adminRoutes(r chi.Router) {
 	r.Get("/system", s.system)
 	r.Get("/system/history", s.systemHistory)
 	r.Get("/system/logs", s.systemLogs)
+	r.Post("/items/{id}/intros", s.findIntros)
 	r.Put("/files/{id}/segments/{kind}", s.setSegment)
 	r.Delete("/files/{id}/segments/{kind}", s.setSegment)
 	r.Get("/system/backups", s.listBackups)

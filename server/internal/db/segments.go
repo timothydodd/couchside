@@ -28,13 +28,81 @@ func (d *DB) FileSegments(ctx context.Context, fileID int64) ([]MarkedSegment, e
 	return out, rows.Err()
 }
 
-// SetSegment records where a file's intro or credits are. A segment an admin
-// marked by hand is only replaced by another manual one.
+// SetSegment records where a file's intro or credits are. A mark an admin
+// made by hand is only replaced by another manual one, and one from the
+// file's chapters isn't replaced by detection.
 func (d *DB) SetSegment(ctx context.Context, fileID int64, s MarkedSegment) error {
 	_, err := d.sql.ExecContext(ctx, `INSERT INTO file_segments (file_id, kind, start, "end", source) VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT (file_id, kind) DO UPDATE SET start = excluded.start, "end" = excluded."end", source = excluded.source
-		WHERE file_segments.source <> 'manual' OR excluded.source = 'manual'`, fileID, s.Kind, s.Start, s.End, s.Source)
+		WHERE excluded.source = 'manual' OR file_segments.source = 'detected'
+		   OR (file_segments.source = 'chapters' AND excluded.source = 'chapters')`, fileID, s.Kind, s.Start, s.End, s.Source)
 	return err
+}
+
+// EpisodeFile is one episode's file, as intro detection needs it.
+type EpisodeFile struct {
+	FileID          int64
+	Path            string
+	Season, Episode int
+	DurationSec     float64
+	Size, Mtime     int64
+	Checked         bool // been through intro detection as it is now
+	HasIntro        bool // already has an intro mark, from anywhere
+}
+
+// EpisodeFiles lists a series' episodes in order, one file each (the largest
+// copy), leaving out files that can't be read.
+func (d *DB) EpisodeFiles(ctx context.Context, itemID int64) ([]EpisodeFile, error) {
+	rows, err := d.sql.QueryContext(ctx, `SELECT f.id, f.path, e.season, e.episode, COALESCE(f.duration_sec, 0), f.size, f.mtime,
+		EXISTS (SELECT 1 FROM intro_checks c WHERE c.file_id = f.id AND c.size = f.size AND c.mtime = f.mtime),
+		EXISTS (SELECT 1 FROM file_segments s WHERE s.file_id = f.id AND s.kind = 'intro')
+		FROM files f JOIN episodes e ON e.id = f.episode_id
+		WHERE f.media_item_id = ? AND f.problem = '' AND f.role <> 'extra'
+		ORDER BY e.season, e.episode, f.size DESC`, itemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []EpisodeFile
+	for rows.Next() {
+		var f EpisodeFile
+		if err := rows.Scan(&f.FileID, &f.Path, &f.Season, &f.Episode, &f.DurationSec, &f.Size, &f.Mtime, &f.Checked, &f.HasIntro); err != nil {
+			return nil, err
+		}
+		if n := len(out); n > 0 && out[n-1].Season == f.Season && out[n-1].Episode == f.Episode {
+			continue // a smaller copy of the same episode
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// MarkIntroChecked remembers that a file has been through intro detection.
+func (d *DB) MarkIntroChecked(ctx context.Context, f EpisodeFile) error {
+	_, err := d.sql.ExecContext(ctx, `INSERT INTO intro_checks (file_id, size, mtime) VALUES (?, ?, ?)
+		ON CONFLICT (file_id) DO UPDATE SET size = excluded.size, mtime = excluded.mtime`, f.FileID, f.Size, f.Mtime)
+	return err
+}
+
+// SeriesNeedingIntros lists a library's series that have an episode intro
+// detection hasn't looked at yet.
+func (d *DB) SeriesNeedingIntros(ctx context.Context, libraryID int64) ([]ItemRef, error) {
+	rows, err := d.sql.QueryContext(ctx, `SELECT m.id, m.title FROM media_items m WHERE m.library_id = ? AND m.kind = 'series'
+		AND EXISTS (SELECT 1 FROM files f WHERE f.media_item_id = m.id AND f.episode_id IS NOT NULL AND f.problem = '' AND f.role <> 'extra'
+		  AND NOT EXISTS (SELECT 1 FROM intro_checks c WHERE c.file_id = f.id AND c.size = f.size AND c.mtime = f.mtime))`, libraryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ItemRef
+	for rows.Next() {
+		var r ItemRef
+		if err := rows.Scan(&r.ID, &r.Title); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
 
 // DeleteSegment removes a file's intro or credits mark, whatever its source.

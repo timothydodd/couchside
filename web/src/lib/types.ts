@@ -333,6 +333,8 @@ export interface Home {
 export interface Library {
   /** Seek-bar preview thumbnails are made for this library's files. */
   trickplay: boolean;
+  /** Intros are looked for in this (TV) library's seasons. */
+  intros: boolean;
   id: number;
   name: string;
   path: string;

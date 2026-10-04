@@ -77,6 +77,8 @@ func (s *Server) updateLibrary(w http.ResponseWriter, r *http.Request) {
 		Name, Path string
 		// Trickplay turns seek-bar preview thumbnails on or off; left out, it stays.
 		Trickplay *bool
+		// Intros turns intro detection on or off (TV libraries); left out, it stays.
+		Intros *bool
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, err)
@@ -122,6 +124,18 @@ func (s *Server) updateLibrary(w http.ResponseWriter, r *http.Request) {
 		// On: make them for the files already there. Off leaves what's made.
 		if *in.Trickplay {
 			if _, err := s.worker.QueueTrickplay(ctx, id); err != nil {
+				writeErr(w, err)
+				return
+			}
+		}
+	}
+	if in.Intros != nil && *in.Intros != old.Intros && old.Kind == "tv" {
+		if err := s.db.SetLibraryIntros(ctx, id, *in.Intros); err != nil {
+			writeErr(w, err)
+			return
+		}
+		if *in.Intros {
+			if _, err := s.worker.QueueIntros(ctx, id); err != nil {
 				writeErr(w, err)
 				return
 			}

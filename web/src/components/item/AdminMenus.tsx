@@ -1,4 +1,4 @@
-import { Cpu, Eye, EyeOff, FolderOpen, MoreHorizontal, RefreshCw, RotateCcw, Scissors, Trash2 } from "lucide-react";
+import { Cpu, Eye, EyeOff, FastForward, FolderOpen, MoreHorizontal, RefreshCw, RotateCcw, Scissors, Trash2 } from "lucide-react";
 import { MenuButton, type MenuItem } from "../ui";
 import { api } from "../../lib/api";
 import { attempt, notify } from "../../lib/notices";
@@ -115,6 +115,17 @@ export function TitleActions({ item, onChange }: { item: Item; onChange: () => v
       }),
     },
   ];
+  if (series)
+    items.push({
+      id: "intros",
+      label: "Find intros",
+      detail: "Compares each season's episodes to find the opening they share.",
+      icon: <FastForward size={15} />,
+      onSelect: attempt("Couldn't start looking for intros", async () => {
+        await api(`/api/items/${item.id}/intros`, { method: "POST" });
+        queued("Looking for intros");
+      }),
+    });
   if (comskip) {
     const find = (redo: boolean) =>
       attempt("Couldn't start detection", async () => {

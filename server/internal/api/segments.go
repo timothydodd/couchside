@@ -10,6 +10,7 @@ import (
 
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/probe"
+	"github.com/timothydodd/couchside/internal/worker"
 )
 
 // A file's intro and end credits, for the player's Skip intro and Skip
@@ -71,6 +72,29 @@ func (s *Server) readChapters(ctx context.Context, f db.File) {
 	if err := s.db.SetChapterSegments(ctx, f.ID, f.Size, f.Mtime, segs); err != nil {
 		slog.Warn("store chapter segments", "file", f.ID, "err", err)
 	}
+}
+
+// findIntros queues intro detection for a series (admin; the title's "⋯" menu).
+func (s *Server) findIntros(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	item, err := s.db.Item(r.Context(), id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if item.Kind != "series" {
+		writeErr(w, badRequest("intros are found by comparing a season's episodes; this isn't a series"))
+		return
+	}
+	if err := s.worker.Enqueue(r.Context(), worker.KindIntros, id, "Find intros "+item.Title); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]int{"queued": 1})
 }
 
 // setSegment is an admin marking (PUT) or clearing (DELETE) a file's intro

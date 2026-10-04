@@ -57,7 +57,7 @@ from the start.
 | F2  | Watchlist                                              | Feature   | S         | Done |
 | F3  | Database backup and restore                            | Feature   | S         | Done |
 | F4  | Seek-bar preview thumbnails                            | Feature   | M         | Done |
-| F5  | Skip intro and credits                                 | Feature   | M to L    |      |
+| F5  | Skip intro and credits                                 | Feature   | M to L    | Done |
 | F6  | Per-profile libraries and rating limit                 | Feature   | M         |      |
 | F7  | Versions and editions                                  | Feature   | S to M    |      |
 | F8  | Surround sound passthrough                             | Feature   | S to M    |      |
@@ -679,22 +679,28 @@ use of the BIF file is in R18.
 
 ## F5 · Skip intro and credits
 
-**Why.** Expected by anyone coming from Plex (judgement). `useBreakSkip`, the
-seek-bar markers and the `commercials` table already do this for adverts.
+**Done**, both steps. Step 1 was seen working in a browser (a file with
+"Intro" and "End Credits" chapters). Step 2 is tested on synthetic episodes
+through real ffmpeg; it hasn't met a real TV season yet, so expect to tune
+its thresholds (`audiofp`'s `maxDiff`, `minAgree`; `introMinSec` /
+`introMaxSec`).
 
-**Scope**
-- **Step 1, chapters.** Stop discarding chapter info at probe time; read
-  chapter names ("Intro", "Opening", "Credits", "OP", "ED") into a `segments`
-  table with a `type`. Show "Skip intro" / "Skip credits" buttons (not an
-  automatic skip by default; a profile pref chooses), and start the
-  next-episode countdown at the credits.
-- **Step 2, detection.** A job that fingerprints the audio of a season's
-  episodes (chromaprint) and finds the shared opening. Heavy on CPU and I/O:
-  same scheduling as F4.
-- Admins can correct a segment from the seek bar, as with "Not a commercial".
+- **Marks** (`file_segments`): an intro and end credits per file, from the
+  file's chapter names (read the first time it's played), from detection, or
+  from an admin. A manual mark is never replaced; chapters beat detection.
+- **Player:** "Skip intro" while in the intro (or S), and during the credits
+  "Next episode" or "Skip credits". Profile setting Intros: skip button
+  (default), auto-skip, or off. Admins mark the intro and credits at the
+  playhead from Settings → Intro and credits.
+- **Detection** (`internal/audiofp`, `worker/intros.go`): a job per series
+  fingerprints the first 10 minutes of each episode's sound and finds the
+  stretch neighbouring episodes share (15 to 180 seconds). On for a TV
+  library with "Find intros" ticked, or for one show from its "⋯" menu.
+- `GET /api/files/{id}/segments`; admins: `PUT` / `DELETE
+  /api/files/{id}/segments/{intro|credits}`, `POST /api/items/{id}/intros`.
 
-**Done when** step 1 works on a file with named chapters; step 2 is its own
-PR.
+**Not done:** detecting credits (only chapters and admins mark them), and
+starting the next-episode countdown at the credits.
 
 ## F6 · Per-profile libraries and rating limit
 

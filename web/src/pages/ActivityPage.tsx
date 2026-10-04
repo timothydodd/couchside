@@ -14,6 +14,7 @@ const KINDS: Record<string, { label: string; Icon: LucideIcon }> = {
   optimize: { label: "Encode", Icon: Cpu },
   commercials: { label: "Commercials", Icon: Scissors },
   trickplay: { label: "Thumbnails", Icon: Image },
+  intros: { label: "Intros", Icon: Search },
 };
 
 const STATUS: Record<Job["status"], { label: string; tone: Tone }> = {

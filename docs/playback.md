@@ -71,3 +71,17 @@ progress on the Activity page, and can be cancelled.
   Settings → System shows what passed its start-up test.
 - **QSV and NVENC** need an ffmpeg built with them; Alpine's lacks NVENC and
   the newer Intel QSV runtime.
+
+## Skipping intros and credits
+
+When Couchside knows where an episode's intro is, the player shows **Skip
+intro** while it plays (or press S); during the end credits it offers **Next
+episode**. Your settings choose a button (the default), skipping
+automatically, or neither.
+
+It knows from, in this order: an admin marking it in the player (Settings →
+Intro and credits, at the playhead); the file's own chapters, when they're
+named (Intro, Opening, End Credits and the like); or, for TV libraries with
+**Find intros** ticked, by comparing the sound of each season's episodes for
+the opening they share. That last one can also be run for one show from the
+"⋯" menu on its page.
