@@ -330,6 +330,7 @@ func (m *Manager) Segment(ctx context.Context, id string, n int) (string, error)
 			return path, nil
 		}
 		s.mu.Lock()
+		dead := s.cmd // the run seen as gone, if it is
 		exited := s.cmd == nil || !s.running()
 		errMsg := ""
 		cleanEOF := false
@@ -345,7 +346,10 @@ func (m *Manager) Segment(ctx context.Context, id string, n int) (string, error)
 				// remux can have fewer segments than the playlist lists.
 				return "", ErrPastEnd
 			}
-			if s.gpuFallback(n, errMsg) {
+			if ctx.Err() != nil {
+				return "", ctx.Err() // the player moved on; nothing to fall back for
+			}
+			if s.gpuFallback(n, errMsg, dead) {
 				continue
 			}
 			if errMsg == "" {
@@ -415,15 +419,31 @@ func (m *Manager) ensureRun(s *Session, n int) error {
 // codec or profile, or the driver can't tone map it. The session switches to
 // CPU decoding (GPU encoding) for good and restarts at segment n. It returns
 // false when there's nothing to fall back to.
-func (s *Session) gpuFallback(n int, errMsg string) bool {
+//
+// dead is the run the caller saw gone. A restart kills the old run and lets
+// go of mu while it dies, so a request waiting on a segment can see a run
+// that was killed for a seek, not one that failed. By the time this has
+// restartMu, that restart has finished and the session's run is a different
+// one: then nothing failed, and the caller just keeps waiting. Falling back
+// there would turn GPU decoding off for good and restart at the stale
+// segment, killing the seek's run.
+func (s *Session) gpuFallback(n int, errMsg string, dead *exec.Cmd) bool {
 	s.restartMu.Lock()
 	defer s.restartMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.HWDecode || s.closed {
+	if s.closed {
 		return false
 	}
-	slog.Warn("GPU decoding failed for this file; decoding on the CPU instead", "session", s.ID, "file", s.FileID, "ffmpeg", errMsg)
+	if dead != nil && s.cmd != nil && s.cmd != dead {
+		return true
+	}
+	if !s.HWDecode {
+		return false
+	}
+	// Not necessarily the GPU's fault (an unreadable file fails either way):
+	// the CPU run that follows tells.
+	slog.Warn("a GPU-decoded run failed; trying this file with CPU decoding", "session", s.ID, "file", s.FileID, "ffmpeg", errMsg)
 	s.HWDecode = false
 	return s.start(n) == nil
 }

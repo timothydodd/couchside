@@ -35,7 +35,7 @@ Each zip holds a single `couchside` binary with the web UI built in. Install
 COUCHSIDE_MEDIA_ROOT=/path/to/media ./couchside
 ```
 
-On Windows, set the variable first and run `couchside.exe`. For commercial
+On Windows, set the variable first and run `couchside.exe`. (On Windows a conversion isn't paused when it gets ahead of the player, so a stream converts its whole file while it's open.) For commercial
 detection, put [Comskip](https://github.com/erikkaashoek/Comskip) on the PATH
 or set `COUCHSIDE_COMSKIP` (the container image has it built in).
 

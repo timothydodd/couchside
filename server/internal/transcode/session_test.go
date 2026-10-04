@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -167,5 +168,62 @@ func TestRestartAfterIdleRespectsTheLimit(t *testing.T) {
 	// The old one comes back while the fresh one is busy: no room.
 	if _, err := m.Segment(context.Background(), old.ID, 0); !errors.Is(err, ErrBusy) && !errors.Is(err, ErrNoSession) {
 		t.Fatalf("reviving past the limit: %v, want ErrBusy", err)
+	}
+}
+
+// A request waiting on a segment sees the run that a seek just killed. That
+// isn't a GPU failure: the session keeps GPU decoding and the seek's run.
+func TestSeekIsNotAGPUFailure(t *testing.T) {
+	ffmpeg, ffprobe, _ := fakeTools(t)
+	m, err := NewManager(Encoder{FFmpeg: ffmpeg, HW: "vaapi", VAAPIDevice: "/dev/dri/renderD128", HWDecode: true}, ffprobe, filepath.Join(t.TempDir(), "hls"), 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := m.Create(context.Background(), Request{FileID: 1, Path: "/x.mkv", Duration: 600, Height: 720, BurnSubtitle: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { m.Close(s.ID) })
+	if !s.HWDecode {
+		t.Fatal("the session should start on the GPU pipeline")
+	}
+	restart := func(n int) *exec.Cmd {
+		t.Helper()
+		s.restartMu.Lock()
+		defer s.restartMu.Unlock()
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if err := s.start(n); err != nil {
+			t.Fatal(err)
+		}
+		return s.cmd
+	}
+	old := restart(0)
+	seek := restart(50) // kills the first run
+
+	if !s.gpuFallback(3, "killed", old) {
+		t.Fatal("a waiter on the old run should keep waiting")
+	}
+	s.mu.Lock()
+	hw, cur, at := s.HWDecode, s.cmd, s.startSeg
+	s.mu.Unlock()
+	if !hw || cur != seek || at != 50 {
+		t.Fatalf("after a seek: gpu=%v, run replaced=%v, start segment %d", hw, cur != seek, at)
+	}
+
+	// The current run dying on its own is a failure: fall back and restart.
+	_ = seek.Process.Kill()
+	s.mu.Lock()
+	exited := s.exited
+	s.mu.Unlock()
+	<-exited
+	if !s.gpuFallback(50, "Failed to create decode context", seek) {
+		t.Fatal("a failed GPU run should fall back to CPU decoding")
+	}
+	s.mu.Lock()
+	hw, cur = s.HWDecode, s.cmd
+	s.mu.Unlock()
+	if hw || cur == seek || cur == nil {
+		t.Fatalf("after a real failure: gpu=%v, restarted=%v", hw, cur != seek && cur != nil)
 	}
 }

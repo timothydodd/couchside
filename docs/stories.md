@@ -34,7 +34,7 @@ from the start.
 | B8  | A recording watched from the start outlives recording  | Bug       | Confirmed | Done |
 | B9  | Commercial detection: custom ini and the job lookup    | Bug       | Confirmed | Done |
 | B10 | DVR: stale series matches and failed joins             | Bug       | Reported  | Done |
-| B11 | Transcode: false GPU fallback, copied HEVC             | Bug       | Reported  |      |
+| B11 | Transcode: false GPU fallback, copied HEVC             | Bug       | Reported  | Done |
 | B12 | Server odds and ends                                   | Bug       | Mixed     |      |
 | B13 | Player: subtitles, audio track, retry                  | Bug       | Confirmed |      |
 | B14 | Live player: failed Record, phone controls             | Bug       | Confirmed |      |
@@ -307,26 +307,21 @@ don't appear in the library.
 
 ## B11 · Transcode: false GPU fallback, copied HEVC
 
-**Scope**
-- **Stale waiter.** In `Segment` (`transcode/session.go:338`), a waiter's tick
-  can see "exited with error" for a run another request's seek just killed and
-  call `gpuFallback` (`:424`), which turns GPU decoding off for good and
-  restarts at the stale segment. Check `ctx.Err()` first and only fall back
-  when the dead run is the one that covered `n`. Reported, not reproduced.
-- Any failure (an unreadable source) is logged as "GPU decoding failed". Say
-  that only when the retry on the CPU works.
-- **Copied video** (the uncommitted `VideoCodecs` change): normalise codec
-  names as `livetv.NormalizeCodec` does rather than matching ffprobe names by
-  exact case; don't copy Dolby Vision profile 5 (it probes as `hevc`); check
-  on a Roku that HEVC with 10s GOPs plays against a playlist that lists 4s
-  segments, and list real keyframe-based durations if it doesn't. Pairs
-  with R15.
-- `transcode/proc_windows.go`: releases ship a Windows zip, so the "dev builds
-  only" comment is wrong and ffmpeg is never paused there. Fix the comment
-  and note it in `docs/install.md`.
+**Done**, except the copied-video items.
 
-**Done when** a seek during a GPU session can't flip it to CPU decoding
-(test), and copied HEVC is confirmed on a device.
+- The stale waiter was real: a restart lets go of the session lock while the
+  old ffmpeg dies, and a request waiting on a segment could then turn GPU
+  decoding off for good. `gpuFallback` now ignores a run that has since been
+  replaced, and `Segment` checks the request is still wanted first.
+- The log no longer says "GPU decoding failed" for a failure that may not be
+  the GPU's.
+- The Windows comment and `docs/install.md` say that ffmpeg isn't paused
+  there.
+
+**Left for the copied-video change** (`Request.VideoCodecs`), which isn't on
+this branch yet: normalise codec names as `livetv.NormalizeCodec` does; don't
+copy Dolby Vision profile 5; check on a Roku that HEVC with 10s keyframe
+spacing plays against a playlist listing 4s segments (R15).
 
 ## B12 · Server odds and ends
 
