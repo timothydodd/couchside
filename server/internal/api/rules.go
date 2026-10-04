@@ -3,7 +3,6 @@ package api
 import (
 	"net/http"
 	"strconv"
-
 )
 
 func (s *Server) rulesList(w http.ResponseWriter, r *http.Request) {
