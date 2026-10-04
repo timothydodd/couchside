@@ -145,6 +145,10 @@ func TestWholeTrackInTheBackground(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, h, _ := subsServer(t, ff)
+	// ?prepare=1 starts it too, and only says whether it's ready.
+	if rec := get(h, "/api/files/1/subtitles/s0.vtt?prepare=1"); rec.Code != 200 || !strings.Contains(rec.Body.String(), `"ready":false`) {
+		t.Fatalf("prepare while converting = %d %s", rec.Code, rec.Body)
+	}
 	url := "/api/files/1/subtitles/s0.vtt?async=1"
 	for i := 0; i < 3; i++ { // asking again while it runs starts nothing new
 		if rec := get(h, url); rec.Code != http.StatusAccepted || rec.Header().Get("Retry-After") == "" {
@@ -167,6 +171,9 @@ func TestWholeTrackInTheBackground(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(runs); strings.Count(string(b), "run") != 1 {
 		t.Fatalf("ffmpeg ran %d times for one track", strings.Count(string(b), "run"))
+	}
+	if rec := get(h, "/api/files/1/subtitles/s0.vtt?prepare=1"); rec.Code != 200 || !strings.Contains(rec.Body.String(), `"ready":true`) {
+		t.Fatalf("prepare once converted = %d %s", rec.Code, rec.Body)
 	}
 	// Without async, the same URL waits and answers as before (now from the cache).
 	if rec := get(h, "/api/files/1/subtitles/s0.vtt"); rec.Code != 200 {

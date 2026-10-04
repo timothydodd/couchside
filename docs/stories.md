@@ -836,6 +836,9 @@ conversion that fails answers 422 for the next ten minutes instead of
 starting again on every poll. Without `async` the URL behaves as before, so
 a player can be given it once the poll says it's ready.
 
+`?prepare=1` does the same and answers only `{"ready": true|false}`, for an
+app that can't read a subtitle file itself (the Roku).
+
 ## S8 · Server discovery on the LAN
 
 Done (PR #28) for the same subnet. Left: try it on a real Roku with

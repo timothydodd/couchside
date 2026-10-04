@@ -243,15 +243,29 @@ func (s *Server) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 	// track takes, and its player fetches the track's URL by itself. With
 	// ?async=1 the conversion runs in the background: 202 until it's done
 	// (ask again in a few seconds), then the track.
-	if m[1] == "s" && m[3] == "" && r.URL.Query().Get("async") == "1" {
-		if _, err := os.Stat(cache); err != nil {
+	// ?prepare=1 asks the same without wanting the track itself: the answer
+	// is {"ready": bool} (a sidecar or a cached track is ready at once), for
+	// an app that then hands the plain URL to its player.
+	q := r.URL.Query()
+	if prepare := q.Get("prepare") == "1"; prepare || q.Get("async") == "1" {
+		_, err := os.Stat(cache)
+		if err != nil && m[1] == "s" && m[3] == "" {
 			if at, failed := subFailed.Load(cache); failed && time.Since(at.(time.Time)) < subFailedFor {
 				writeErr(w, httpError{http.StatusUnprocessableEntity, "couldn't convert subtitles; see the server log"})
 				return
 			}
 			s.convertInBackground(id, chunk(m), cache, input)
 			w.Header().Set("Retry-After", "5")
-			writeJSON(w, http.StatusAccepted, map[string]string{"status": "converting"})
+			if prepare {
+				writeJSON(w, http.StatusOK, map[string]bool{"ready": false})
+			} else {
+				writeJSON(w, http.StatusAccepted, map[string]string{"status": "converting"})
+			}
+			return
+		}
+		if prepare {
+			// Ready, or quick to make when the player asks (a sidecar, a chunk).
+			writeJSON(w, http.StatusOK, map[string]bool{"ready": true})
 			return
 		}
 	}
