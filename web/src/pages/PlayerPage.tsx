@@ -1,25 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type HlsType from "hls.js";
 import PlayerFrame from "../components/player/PlayerFrame";
+import { useProgressReports } from "../components/player/useProgressReports";
+import { useTextSubtitles } from "../components/player/useTextSubtitles";
 import { InfoRows, type SettingSection } from "../components/player/SettingsMenu";
 import { ApiError, api, useApi } from "../lib/api";
 import { fmtClock, fmtResolution } from "../lib/format";
-import { HLS_LOAD_FAILED, loadHls } from "../lib/hls";
-import { chooseSource, fmtMbps, hlsCopyCaps, nativeHls, presetById, presetSource, presetsFor, sourceKey, stepDown, type Quality, type Source } from "../lib/playback";
+import { hlsEngine } from "../lib/hls";
+import { chooseSource, fmtMbps, hlsCopyCaps, presetById, presetSource, presetsFor, sourceKey, stepDown, type Quality, type Source } from "../lib/playback";
 import { audioLabel, subtitleDetail, subtitleLabel, type AudioTrack, type SubtitleTrack } from "../lib/tracks";
-import { parseVtt } from "../lib/vtt";
 import { PROBLEM_TEXT, type BreakMode, type Commercials, type HlsSession, type PlayInfo, type Segment } from "../lib/types";
 import { BREAK_MODES, sameLanguage } from "../lib/prefs";
 import { useIsAdmin } from "../stores/auth";
 import { usePrefs, useProfile } from "../stores/profile";
 import { useRouter } from "../stores/router";
 
-const REPORT_EVERY_MS = 10_000;
 const STALL_MIN_MS = 1500;
 const STALL_WINDOW_MS = 60_000;
 const STALLS_TO_STEP = 3;
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
-const SUB_CHUNK = 90; // seconds per embedded-subtitle chunk (server's SubtitleChunk)
 const BROADCAST = new Set(["ts", "mpg", "mpeg", "wtv"]); // containers worth offering commercial detection for
 
 
@@ -173,14 +172,15 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
         if (cancelled) return void fetch(`/api/hls/${s.sessionId}`, { method: "DELETE", keepalive: true });
         sessionId = s.sessionId;
         setSession(s);
-        const Hls = await loadHls().catch(() => null);
+        const engine = await hlsEngine("streaming video");
         if (cancelled) return;
-        if (!Hls || !Hls.isSupported()) {
-          if (!nativeHls()) return setFatal(Hls ? "This browser can't play streaming video." : HLS_LOAD_FAILED);
+        if ("error" in engine) return setFatal(engine.error);
+        if ("native" in engine) {
           v.src = s.playlist;
           v.addEventListener("loadedmetadata", seekOnLoad, { once: true });
           return;
         }
+        const { Hls } = engine;
         const policy = {
           maxTimeToFirstByteMs: 90_000,
           maxLoadTimeMs: 120_000,
@@ -249,77 +249,8 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   }, [rate, sub, key]);
 
   // --- text subtitles --------------------------------------------------------------------
-  // Sidecar files load whole. Embedded tracks load in 90-second chunks around the
-  // playhead: extracting a whole track means reading the entire file, which
-  // takes minutes for a big remux on a NAS.
-  const subTrack = useRef<TextTrack | null>(null);
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    subTrack.current ??= v.addTextTrack("subtitles", "couchside");
-    const track = subTrack.current;
-    for (const c of Array.from(track.cues ?? [])) track.removeCue(c);
-    track.mode = sub.kind === "text" ? "showing" : "disabled";
-    if (sub.kind !== "text") return;
-
-    let cancelled = false;
-    const seen = new Set<string>();
-    const loaded = new Set<number>();
-    const add = (body: string) => {
-      if (cancelled) return;
-      for (const c of parseVtt(body)) {
-        const id = `${c.start.toFixed(2)}|${c.text}`;
-        if (seen.has(id)) continue;
-        seen.add(id);
-        const cue = new VTTCue(c.start, c.end, c.text);
-        cue.snapToLines = false; // sit a little above the control bar
-        cue.line = 86;
-        cue.lineAlign = "end";
-        track.addCue(cue);
-      }
-    };
-    const base = `/api/files/${fileId}/subtitles/${sub.track.key}`;
-    if (sub.track.external) {
-      void fetch(`${base}.vtt`).then((r) => (r.ok ? r.text() : "")).then(add).catch(() => {});
-      return () => {
-        cancelled = true;
-      };
-    }
-    // A chunk that failed is tried again later, a few times, not on every
-    // tick (this runs about four times a second). Never after a 404 (past
-    // the end of the file) or a 422 (a track that can't be converted).
-    const retryAt = new Map<number, number>();
-    const tries = new Map<number, number>();
-    const load = (k: number) => {
-      if (k < 0 || loaded.has(k)) return;
-      if (isFinite(v.duration) && k * SUB_CHUNK >= v.duration) return; // no such chunk
-      if (performance.now() < (retryAt.get(k) ?? 0)) return;
-      loaded.add(k);
-      void fetch(`${base}.c${k}.vtt`)
-        .then((r) => (r.ok ? r.text() : Promise.reject(r.status)))
-        .then(add)
-        .catch((status: unknown) => {
-          loaded.delete(k);
-          const n = (tries.get(k) ?? 0) + 1;
-          tries.set(k, n);
-          const final = status === 404 || status === 422 || n >= 4;
-          retryAt.set(k, final ? Infinity : performance.now() + 5000 * 2 ** (n - 1));
-        });
-    };
-    const around = () => {
-      const k = Math.floor(v.currentTime / SUB_CHUNK);
-      load(k);
-      load(k + 1);
-    };
-    around();
-    v.addEventListener("timeupdate", around);
-    v.addEventListener("seeked", around);
-    return () => {
-      cancelled = true;
-      v.removeEventListener("timeupdate", around);
-      v.removeEventListener("seeked", around);
-    };
-  }, [sub, fileId]);
+  const textTrack = sub.kind === "text" ? sub.track : null;
+  useTextSubtitles(videoRef, fileId, textTrack);
 
   // --- errors and stalls ---------------------------------------------------------------
   const onVideoError = () => {
@@ -365,46 +296,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   // Reports also tell the server who's watching what, and how (Settings shows it).
   const modeRef = useRef("");
   modeRef.current = describe(source, session);
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    // The last real position. By the time this effect's cleanup sends the
-    // final report, the source effect has already reset the element.
-    let last = { position: 0, duration: 0 };
-    const remember = () => {
-      if (v.duration && isFinite(v.duration)) last = { position: v.currentTime, duration: v.duration };
-    };
-    const report = (keepalive = false, stopped = false) => {
-      remember();
-      const { position, duration } = last;
-      if (!duration || position < 1) return;
-      const state = stopped ? "stopped" : v.paused ? "paused" : "playing";
-      const body = { position, duration, state, mode: modeRef.current };
-      const url = `/api/files/${fileId}/progress`;
-      // While the page lives, api() renews an expired token and retries;
-      // a keepalive report on the way out can't wait for that.
-      const sent = keepalive
-        ? fetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), keepalive })
-        : api(url, { method: "PUT", json: body });
-      void sent.catch(() => {});
-    };
-    const t = setInterval(() => !v.paused && report(), REPORT_EVERY_MS);
-    v.addEventListener("timeupdate", remember);
-    const onPause = () => report();
-    const onHide = () => document.visibilityState === "hidden" && report(true);
-    const onPageHide = () => report(true, true);
-    v.addEventListener("pause", onPause);
-    document.addEventListener("visibilitychange", onHide);
-    window.addEventListener("pagehide", onPageHide);
-    return () => {
-      clearInterval(t);
-      report(true, true);
-      v.removeEventListener("timeupdate", remember);
-      v.removeEventListener("pause", onPause);
-      document.removeEventListener("visibilitychange", onHide);
-      window.removeEventListener("pagehide", onPageHide);
-    };
-  }, [fileId]);
+  useProgressReports(videoRef, fileId, modeRef);
 
   // --- parts: a movie split across files plays as one timeline -----------------------
   const parts = useMemo(() => {

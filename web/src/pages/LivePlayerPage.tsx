@@ -6,8 +6,7 @@ import { bufferedAhead, useLiveCushion } from "../components/player/useLiveCushi
 import { InfoRows, type SettingSection } from "../components/player/SettingsMenu";
 import { ApiError, api, useApi } from "../lib/api";
 import { fmtTime } from "../lib/format";
-import { nativeHls } from "../lib/playback";
-import { HLS_LOAD_FAILED, loadHls } from "../lib/hls";
+import { hlsEngine } from "../lib/hls";
 import type { ChannelNow, LiveSessionInfo, Program } from "../lib/types";
 import { useProfile } from "../stores/profile";
 import { useRouter } from "../stores/router";
@@ -102,14 +101,15 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
       sid = s.sessionId;
       if (cancelled) return leave();
       setSession(s);
-      const Hls = await loadHls().catch(() => null);
+      const engine = await hlsEngine("live streams");
       if (cancelled) return;
-      if (!Hls || !Hls.isSupported()) {
-        if (!nativeHls()) return setError(Hls ? "This browser can't play live streams." : HLS_LOAD_FAILED);
+      if ("error" in engine) return setError(engine.error);
+      if ("native" in engine) {
         v.src = s.playlist;
         void v.play().catch(() => {});
         return;
       }
+      const { Hls } = engine;
       const player = new Hls({
         // Sit 8s behind the newest segment (4 segments), never speed up to catch
         // up, and only jump forward when more than 40s behind.

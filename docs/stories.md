@@ -50,7 +50,7 @@ from the start.
 | C1  | Server dead code and stale comments                    | Cleanup   |           | Done |
 | C2  | One builder for ffmpeg's HLS arguments                 | Cleanup   |           | Done |
 | C3  | Split `api/auth.go` and `api/handlers.go`              | Cleanup   |           | Done |
-| C4  | One HLS hook for the three players                     | Cleanup   |           |      |
+| C4  | One HLS hook for the three players                     | Cleanup   |           | Done |
 | C5  | Web duplication, dead CSS, player colour tokens        | Cleanup   |           |      |
 | C6  | Load pages on demand                                   | Cleanup   |           |      |
 | F1  | Next Up, and remove from Continue Watching             | Feature   | S         | Done |
@@ -575,11 +575,16 @@ that runs real ffmpeg still passes.
 
 ## C4 · One HLS hook for the three players
 
-The session POST, `pagehide` DELETE, native fallback, attach and destroy are
-copied across `PlayerPage`, `LivePlayerPage` and `RecordingPlayerPage`. Write
-`useHlsSession` (with B13's `loadHls`), then split `PlayerPage.tsx` (674
-lines) into source, subtitles, progress and settings parts. Do this after B13
-and B14.
+**Done**, as shared pieces rather than one hook: the three players differ in
+their hls.js settings and error recovery, so a single `useHlsSession` would
+have been mostly options. Checked in a browser: a film and a virtual channel
+both play.
+
+- `lib/hls.ts` `hlsEngine(what)` decides hls.js, the browser's own HLS, or
+  an error, for all three players.
+- `PlayerPage.tsx` is 581 lines (from 674): text subtitles are
+  `useTextSubtitles` and progress reports `useProgressReports`, both in
+  `components/player/`.
 
 ## C5 · Web duplication, dead CSS, player colour tokens
 

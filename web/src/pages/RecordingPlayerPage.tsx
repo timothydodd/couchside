@@ -4,8 +4,7 @@ import PlayerFrame from "../components/player/PlayerFrame";
 import { InfoRows, type SettingSection } from "../components/player/SettingsMenu";
 import { ApiError, api } from "../lib/api";
 import { fmtTime } from "../lib/format";
-import { HLS_LOAD_FAILED, loadHls } from "../lib/hls";
-import { nativeHls } from "../lib/playback";
+import { hlsEngine } from "../lib/hls";
 import type { Recording } from "../lib/types";
 import { useProfile } from "../stores/profile";
 import { useRouter } from "../stores/router";
@@ -64,15 +63,16 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
       sid = s.sessionId;
       if (cancelled) return leave();
       setSession(s);
-      const Hls = await loadHls().catch(() => null);
+      const engine = await hlsEngine("streams");
       if (cancelled) return;
-      if (!Hls || !Hls.isSupported()) {
-        if (!nativeHls()) return setError(Hls ? "This browser can't play streams." : HLS_LOAD_FAILED);
+      if ("error" in engine) return setError(engine.error);
+      if ("native" in engine) {
         v.src = s.playlist;
         v.addEventListener("loadedmetadata", () => (v.currentTime = resumeAt.current), { once: true });
         void v.play().catch(() => {});
         return;
       }
+      const { Hls } = engine;
       const player = new Hls({ startPosition: resumeAt.current, maxBufferLength: 30, backBufferLength: 3600 });
       hls = player;
       hlsRef.current = player;
