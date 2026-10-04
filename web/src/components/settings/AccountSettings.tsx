@@ -3,6 +3,7 @@ import { KeyRound, LogOut, Tv } from "lucide-react";
 import Link from "../Link";
 import NewPassword from "../auth/NewPassword";
 import SessionList from "./SessionList";
+import TwoStep from "./TwoStep";
 import { ErrorNote } from "../ui";
 import { api } from "../../lib/api";
 import { authError, useAuth } from "../../stores/auth";
@@ -96,6 +97,8 @@ export default function AccountSettings() {
           </div>
         </form>
       )}
+
+      {!locked && <TwoStep hasPassword={hasPassword} />}
 
       <div className="mb-2 mt-6 flex items-center justify-between">
         <div className="field-label !mb-0">Signed-in devices</div>

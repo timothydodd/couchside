@@ -4,6 +4,7 @@ import AuthShell from "../components/auth/AuthShell";
 import ProfileAvatar from "../components/ProfileAvatar";
 import { ErrorNote, WarningNote } from "../components/ui";
 import type { ProfileStub } from "../lib/types";
+import { ApiError } from "../lib/api";
 import { authError, useAuth } from "../stores/auth";
 import { useRouter } from "../stores/router";
 
@@ -28,6 +29,9 @@ export default function SignInPage({ switching = false }: { switching?: boolean 
   const [form, setForm] = useState(!passwordless && signedIn.length === 0);
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  // Two-step sign-in: asked for once the password has been accepted.
+  const [needCode, setNeedCode] = useState(false);
+  const [code, setCode] = useState("");
   const [busy, setBusy] = useState<number | "form" | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -37,6 +41,11 @@ export default function SignInPage({ switching = false }: { switching?: boolean 
     try {
       await fn();
     } catch (e) {
+      if (e instanceof ApiError && e.code === "totp_required") {
+        setNeedCode(true);
+        setBusy(null);
+        return;
+      }
       setErr(authError(e));
       setBusy(null);
     }
@@ -126,7 +135,7 @@ export default function SignInPage({ switching = false }: { switching?: boolean 
           className="card mt-8 flex w-full max-w-sm flex-col gap-4 p-6"
           onSubmit={(e) => {
             e.preventDefault();
-            void run("form", () => login(name, password));
+            void run("form", () => login(name, password, needCode ? code : undefined));
           }}
         >
           {asking ? (
@@ -151,8 +160,23 @@ export default function SignInPage({ switching = false }: { switching?: boolean 
               onChange={(e) => setPassword(e.target.value)}
             />
           </label>
+          {needCode && (
+            <label className="block">
+              <span className="field-label">Code from your authenticator app</span>
+              <input
+                className="field mono w-full text-center"
+                autoComplete="one-time-code"
+                inputMode="text"
+                autoFocus
+                placeholder="123456"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+              />
+              <span className="mt-1 block text-xs text-content-muted">Lost your phone? A recovery code works here too.</span>
+            </label>
+          )}
           {err && <ErrorNote>{err}</ErrorNote>}
-          <button type="submit" className="btn-primary justify-center" disabled={busy !== null || !name.trim() || !password}>
+          <button type="submit" className="btn-primary justify-center" disabled={busy !== null || !name.trim() || !password || (needCode && !code.trim())}>
             <LogIn size={15} /> Sign in
           </button>
           {asking ? (

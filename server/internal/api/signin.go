@@ -109,6 +109,9 @@ type loginInput struct {
 	Password string `json:"password"`
 	Client   string `json:"client"` // web (default) | tv
 	Device   string `json:"device"` // e.g. "Living room Roku"
+	// Code is the second step for a profile that has one: the authenticator
+	// app's code, or a recovery code. Left out, the answer says it's needed.
+	Code string `json:"code"`
 }
 
 // tokens is what a TV app gets from login and refresh; the web gets cookies
@@ -180,6 +183,20 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		ok, rehash = auth.VerifyPassword(hash, in.Password)
 		logName = nameKey
+	}
+	if ok && p.TwoStep {
+		if strings.TrimSpace(in.Code) == "" {
+			// The password was right; ask for the code. Not a failed attempt.
+			done(false)
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "enter the code from your authenticator app", "code": "totp_required"})
+			return
+		}
+		if !s.secondStep(ctx, p, in.Code) {
+			done(true)
+			slog.Warn("sign-in failed: wrong second-step code", "ip", ip, "name", logName, "ua", clip(r.UserAgent(), 200))
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "that code isn't right", "code": "bad_code"})
+			return
+		}
 	}
 	done(!ok)
 	if !ok {

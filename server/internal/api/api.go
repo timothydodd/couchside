@@ -167,6 +167,10 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/auth/logout", s.logout)
 			r.Post("/auth/password", s.changePassword)
 			r.Post("/auth/device/approve", s.deviceApprove)
+			r.Get("/auth/totp", s.totpStatus)
+			r.Post("/auth/totp/setup", s.totpSetup)
+			r.Post("/auth/totp/enable", s.totpEnable)
+			r.Post("/auth/totp/disable", s.totpDisable)
 			r.Get("/auth/sessions", s.mySessions)
 			r.Post("/auth/sessions/others/end", s.endOtherSessions)
 			r.Delete("/auth/sessions/{sid}", s.endSession)
@@ -286,6 +290,7 @@ func (s *Server) adminRoutes(r chi.Router) {
 	r.Post("/accounts", s.createAccount)
 	r.Put("/accounts/{id}", s.updateAccount)
 	r.Post("/accounts/{id}/password", s.resetPassword)
+	r.Post("/accounts/{id}/totp/reset", s.resetTOTP)
 	r.Delete("/accounts/{id}", s.deleteAccount)
 	r.Get("/accounts/{id}/sessions", s.accountSessions)
 

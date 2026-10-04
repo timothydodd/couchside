@@ -62,7 +62,7 @@ from the start.
 | F7  | Versions and editions                                  | Feature   | S to M    | Done |
 | F8  | Surround sound passthrough                             | Feature   | S to M    | Done |
 | F9  | Sign in with OIDC                                      | Feature   | M         | Done |
-| F10 | Two-factor sign-in                                     | Feature   | S to M    |      |
+| F10 | Two-factor sign-in                                     | Feature   | S to M    | Done |
 
 **How to read these.** "Confirmed" means the defect was read in the code and
 checked by a second pass. "Reported" means one reviewer traced it by reading
@@ -780,16 +780,24 @@ page. It hasn't met a real provider (Authelia, Authentik, Keycloak) yet.
 
 ## F10 · Two-factor sign-in
 
-**Why.** Jellyfin about 1,100 votes; Plex has it.
+**Done.** Tested (the RFC's code vectors, enrolment, sign-in, replay,
+recovery codes, admin reset), and enrolment was run for real in a browser
+with a computed code.
 
-**Scope**
-- TOTP per profile: enrol with a QR code in Your settings, recovery codes,
-  and a second step in `login`. Admins can reset it; `reset-password -admin`
-  clears it.
-- The Roku asks for the code after the password, or uses F9's device code.
-- Not applied to passwordless profiles.
+- TOTP (`auth/totp.go`: SHA-1, six digits, 30 seconds, the step either side
+  allowed, each code usable once). Your account → Two-step sign-in shows a
+  QR code and the key, checks a code, then shows eight recovery codes once.
+- Signing in with the password then answers 401 `totp_required` until a
+  `code` is sent with it: the app's code, or a recovery code (spent on use).
+- Turning it off needs a code. An admin can turn it off for someone from
+  Settings → Accounts, and `couchside reset-password` clears it.
+- New web dependency: `qrcode-generator` (MIT), for the QR code; the
+  third-party notices are regenerated.
 
-**Done when** a profile with TOTP can't sign in without the code.
+**By design:** it applies to signing in with a password. A profile picked
+without one isn't asked, sign-in through a provider relies on the
+provider's own second step, and a TV is best signed in with a code from
+`/link` (the Roku's own code prompt is R18).
 
 ## Not planned
 

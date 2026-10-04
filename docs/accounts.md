@@ -126,3 +126,18 @@ A TV app can show a short code instead of asking for a password. On a phone
 or computer where you're signed in, open `/link` (or Settings → Your account
 → Sign in a TV), enter the code, and the TV is signed in as you. It works for
 every kind of account, including ones that use single sign-on.
+
+## Two-step sign-in
+
+Anyone with a password can add a second step: Settings → Your account →
+Two-step sign-in → Turn on. Scan the QR code with an authenticator app
+(Google Authenticator, Aegis, 1Password…), type the code it shows, and save
+the eight recovery codes. From then on signing in with the password also
+asks for the app's code; a recovery code works once in its place.
+
+Lost the phone and the codes? An admin can turn it off for the account in
+Settings → Accounts, and `couchside reset-password <name>` clears it along
+with setting a new password.
+
+It covers signing in with a password. Sign a TV in with a code from `/link`
+rather than typing both with a remote.

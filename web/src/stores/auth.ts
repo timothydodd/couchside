@@ -28,7 +28,8 @@ interface AuthState {
   /** The label of the single sign-on button; "" when there's none. */
   oidc: string;
   load: () => Promise<void>;
-  login: (name: string, password: string) => Promise<void>;
+  /** code is the second step, for a profile with two-step sign-in; without it the error's code is "totp_required". */
+  login: (name: string, password: string, code?: string) => Promise<void>;
   /** Passwordless sign-in to a profile without a password. */
   pick: (profileId: number) => Promise<void>;
   setup: (code: string, name: string, password: string) => Promise<void>;
@@ -71,8 +72,8 @@ export const useAuth = create<AuthState>((set, get) => ({
     }
     set({ loaded: true });
   },
-  login: async (name, password) => {
-    await api<SignedIn>("/api/auth/login", { method: "POST", json: { name, password, client: "web" } });
+  login: async (name, password, code) => {
+    await api<SignedIn>("/api/auth/login", { method: "POST", json: { name, password, code, client: "web" } });
     announceProfileChange();
     location.assign("/");
   },

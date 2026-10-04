@@ -71,6 +71,10 @@ func resetPassword(args []string) error {
 	if err := d.SetPassword(ctx, p.ID, hash, false); err != nil {
 		return err
 	}
+	// The way back in mustn't need an authenticator that may be lost too.
+	if err := d.DisableTOTP(ctx, p.ID); err != nil {
+		return err
+	}
 	role := p.Role
 	if *admin {
 		role = "admin"

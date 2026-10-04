@@ -113,6 +113,7 @@ function AccountBadges({ p }: { p: Profile }) {
           <CircleDot size={10} /> Records
         </span>
       )}
+      {p.twoStep && <span className="tint-muted rounded px-1.5 text-[11px] font-semibold">Two-step</span>}
       {!p.hasPassword && <span className={`${passwordless ? "tint-muted" : "tint-warning"} rounded px-1.5 text-[11px] font-semibold`}>No password</span>}
       {p.hasPassword && p.mustChangePassword && <span className="tint-muted rounded px-1.5 text-[11px] font-semibold">Temporary password</span>}
       {p.disabled && <span className="tint-critical rounded px-1.5 text-[11px] font-semibold">Disabled</span>}
@@ -296,6 +297,20 @@ function AccountForm({ account, onDone, onChanged }: { account?: Profile; onDone
 
       {account && (
         <>
+          {account.twoStep && (
+            <div className="border-t border-border-light pt-3">
+              <div className="field-label">Two-step sign-in</div>
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={busy}
+                title="For someone who has lost their authenticator and recovery codes"
+                onClick={() => void run(() => api(`/api/accounts/${account.id}/totp/reset`, { method: "POST" }), "Two-step sign-in is off for this account.", false)}
+              >
+                Turn off two-step sign-in
+              </button>
+            </div>
+          )}
           {!self && (
             <div className="border-t border-border-light pt-3">
               <div className="field-label">Reset password</div>

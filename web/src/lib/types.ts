@@ -186,6 +186,8 @@ export interface Prefs {
 export const RATING_LIMITS = ["G", "PG", "PG-13", "R"] as const;
 
 export interface Profile {
+  /** Signing in with the password also needs a code from an authenticator app. */
+  twoStep?: boolean;
   /** Account manager only: the libraries it's limited to (empty = all) and its rating limit ("" = any). */
   libraries?: number[];
   maxRating?: string;

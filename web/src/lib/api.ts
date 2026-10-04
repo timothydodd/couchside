@@ -5,6 +5,8 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** The server's machine-readable reason, when it gives one ("totp_required"). */
+    public code?: string,
   ) {
     super(message);
   }
@@ -49,13 +51,15 @@ export async function api<T = void>(path: string, init?: RequestInit & { json?: 
   const res = await send(path, init ?? {});
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`;
+    let code: string | undefined;
     try {
       const body = await res.json();
       if (body?.error) msg = body.error;
+      if (typeof body?.code === "string") code = body.code;
     } catch {
       /* not JSON */
     }
-    throw new ApiError(res.status, msg);
+    throw new ApiError(res.status, msg, code);
   }
   if (res.status === 204 || res.headers.get("content-length") === "0") return undefined as T;
   // 202 Accepted may or may not carry a body (an optimize answers {queued}, a scan nothing).
