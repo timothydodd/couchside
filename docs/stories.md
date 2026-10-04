@@ -43,7 +43,7 @@ from the start.
 | B17 | Load failures and failed actions are shown             | Bug       | Reported  | Done |
 | B18 | Keyboard and screen-reader gaps                        | A11y      | Reported  | Done |
 | B19 | Docker and compose                                     | Packaging | Reported  | Done |
-| B20 | Helm chart hardening                                   | Packaging | Reported  |      |
+| B20 | Helm chart hardening                                   | Packaging | Reported  | Done |
 | B21 | CI and release                                         | Packaging | Reported  |      |
 | B22 | Docs and site catch up                                 | Docs      | Reported  |      |
 | B23 | Demo media script                                      | Hygiene   | Reported  |      |
@@ -468,24 +468,19 @@ that changed. Virtualising a `<table>` needs trying in a browser.
 
 ## B20 · Helm chart hardening
 
-**Scope** (`deploy/helm/couchside`)
-- `fsGroup: 1000` with no `fsGroupChangePolicy: OnRootMismatch`: a recursive
-  chown of the cache and recordings volumes on every start.
-- The "dri enabled, not privileged" branch keeps only
-  `allowPrivilegeEscalation: false`; keep `runAsNonRoot` and
-  `capabilities.drop: [ALL]` there too.
-- Add `seccompProfile: RuntimeDefault` and
-  `automountServiceAccountToken: false`.
-- Add a `startupProbe` on `/healthz`: hardware detection and migrations run
-  before the server listens, and liveness allows about 100s.
-- Offer `readOnlyRootFilesystem` with an emptyDir at `/tmp`.
-- `extraVolumes`/`extraVolumeMounts`, so `COUCHSIDE_COMSKIP_INI` can point at
-  a mounted file; a `hwaccel.device` value for `COUCHSIDE_VAAPI_DEVICE`.
-- The `extraEnv` comment shows `COUCHSIDE_TRUSTED_PROXIES`, which
-  `auth.trustedProxies` already sets.
+**Done**, not rendered: `helm` isn't installed in WSL. Run `helm lint` and
+`helm template` on Windows, and start a pod with the new security context,
+before the release.
 
-**Done when** `helm lint` and `helm template` pass (run on Windows) and the
-pod starts with the new security context.
+- `fsGroupChangePolicy: OnRootMismatch`, `seccompProfile: RuntimeDefault`,
+  `automountServiceAccountToken: false`.
+- A GPU through a device plugin (not privileged) keeps `runAsNonRoot` and
+  drops every capability, like the no-GPU case.
+- A `startupProbe` (5 minutes by default); liveness loses its initial delay.
+- `readOnlyRootFilesystem` (off by default) with emptyDir volumes for `/tmp`
+  and an unpersisted `/recordings`.
+- `extraVolumes` / `extraVolumeMounts`, and `hwaccel.device` for
+  `COUCHSIDE_VAAPI_DEVICE`.
 
 ## B21 · CI and release
 

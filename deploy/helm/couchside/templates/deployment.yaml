@@ -16,6 +16,8 @@ spec:
       annotations:
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
     spec:
+      # Couchside never talks to the Kubernetes API.
+      automountServiceAccountToken: false
       {{- if .Values.discovery.hostNetwork }}
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
@@ -37,13 +39,15 @@ spec:
           securityContext:
             {{- if and .Values.hwaccel.dri.enabled .Values.hwaccel.dri.privileged }}
             privileged: true
-            {{- else if not .Values.hwaccel.dri.enabled }}
+            {{- else }}
+            {{- /* No GPU, or a GPU through a device plugin: either way unprivileged. */}}
             allowPrivilegeEscalation: false
             runAsNonRoot: true
             capabilities:
               drop: [ALL]
-            {{- else }}
-            allowPrivilegeEscalation: false
+            {{- end }}
+            {{- if .Values.readOnlyRootFilesystem }}
+            readOnlyRootFilesystem: true
             {{- end }}
           ports:
             - name: http
@@ -57,6 +61,10 @@ spec:
               value: {{ .Values.config.scanInterval | quote }}
             - name: COUCHSIDE_HWACCEL
               value: {{ .Values.hwaccel.mode | quote }}
+            {{- with .Values.hwaccel.device }}
+            - name: COUCHSIDE_VAAPI_DEVICE
+              value: {{ . | quote }}
+            {{- end }}
             - name: COUCHSIDE_MAX_TRANSCODES
               value: {{ .Values.config.maxTranscodes | quote }}
             - name: COUCHSIDE_ENCODE_WORKERS
@@ -131,12 +139,26 @@ spec:
             - name: dri
               mountPath: /dev/dri
             {{- end }}
+            {{- if .Values.readOnlyRootFilesystem }}
+            - name: tmp
+              mountPath: /tmp
+            {{- if not .Values.persistence.recordings.enabled }}
+            - name: recordings-scratch
+              mountPath: /recordings
+            {{- end }}
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: {{ .Values.startupProbe.periodSeconds }}
+            failureThreshold: {{ .Values.startupProbe.failureThreshold }}
           readinessProbe:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 10
           livenessProbe:
             httpGet: { path: /healthz, port: http }
-            initialDelaySeconds: 10
             periodSeconds: 30
           resources: {{- toYaml .Values.resources | nindent 12 }}
       volumes:
@@ -173,6 +195,17 @@ spec:
           hostPath:
             path: /dev/dri
             type: Directory
+        {{- end }}
+        {{- if .Values.readOnlyRootFilesystem }}
+        - name: tmp
+          emptyDir: {}
+        {{- if not .Values.persistence.recordings.enabled }}
+        - name: recordings-scratch
+          emptyDir: {}
+        {{- end }}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
         {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector: {{- toYaml . | nindent 8 }}
