@@ -36,7 +36,7 @@ from the start.
 | B10 | DVR: stale series matches and failed joins             | Bug       | Reported  | Done |
 | B11 | Transcode: false GPU fallback, copied HEVC             | Bug       | Reported  | Done |
 | B12 | Server odds and ends                                   | Bug       | Mixed     | Done |
-| B13 | Player: subtitles, audio track, retry                  | Bug       | Confirmed |      |
+| B13 | Player: subtitles, audio track, retry                  | Bug       | Confirmed | Done |
 | B14 | Live player: failed Record, phone controls             | Bug       | Confirmed |      |
 | B15 | `useApi`: late answers, stale errors, cache size       | Bug       | Reported  |      |
 | B16 | Console polling and token renewal                      | Bug       | Confirmed |      |
@@ -355,31 +355,21 @@ spacing plays against a playlist listing 4s segments (R15).
 
 ## B13 · Player: subtitles, audio track, retry
 
-**Scope** (`web/src/pages/PlayerPage.tsx` unless named)
-- **Subtitle chunks are retried four times a second.** `load` (`:285`)
-  removes a failed chunk from `loaded` and `around` asks again on the next
-  `timeupdate`. In the last 90s of any file the next chunk is a 404 by
-  design; a track ffmpeg can't convert (422) re-runs ffmpeg for the whole
-  film. Never retry a 404, back off other failures, and don't ask for chunks
-  at or past `duration`.
-- **Wrong audio track.** `defaultAudio` is 0 until `/streams` loads and isn't
-  in `key`, so an HLS session created first plays track 0 while the menu
-  marks the default. Wait for `streams` before creating an HLS source.
-- **A failed hls.js import is cached for good** (`hlsModule ??= import(...)`
-  here, in `LivePlayerPage.tsx:16` and `RecordingPlayerPage.tsx:12`) and
-  shown as "this browser can't play streaming video". One shared `loadHls()`
-  in `lib/` that forgets a rejection and says "couldn't load the player".
-- **"Try again" does nothing when the file info failed** (`:540`): it bumps
-  `nonce` but `info` is still missing. Call `useApi`'s `reload`.
-- `RecordingPlayerPage.tsx:80`: `recoverMediaError()` has no limit and the
-  error card has no retry. Reuse the live player's bounded recovery.
-- `PlayerFrame.tsx:197` returns on any `ctrlKey` before `p.onKey`, so the live
-  player's Ctrl+Up/Down zapping never runs. Call `onKey` first.
-- After `webkitEnterFullscreen` on an iPhone, `full` never updates. Listen for
-  `webkitbeginfullscreen`/`webkitendfullscreen`.
+**Done.** Typechecked and built; not yet tried in a browser.
 
-**Done when** the last 90s of a file with subtitles makes no repeated
-requests, and a file whose default audio isn't track 0 starts on it.
+- Subtitle chunks: a failed chunk is retried after 5s, 10s and 20s, never
+  after a 404 or 422, and chunks past the end aren't asked for.
+- A server stream for "the default audio track" waits for the track list.
+- `lib/hls.ts` loads hls.js for all three players and forgets a failed load.
+- "Try again" reloads the file info when that's what failed.
+- The recording player recovers from a decode error twice, then offers
+  "Try again".
+- The page's own shortcuts run before the modifier check, so Ctrl+Up/Down
+  change channel.
+
+**Left for the touch-controls change** (not on this branch yet): after
+`webkitEnterFullscreen` on an iPhone, `full` never updates; listen for
+`webkitbeginfullscreen` / `webkitendfullscreen`.
 
 ## B14 · Live player: failed Record, phone controls
 

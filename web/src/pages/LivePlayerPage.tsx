@@ -7,14 +7,13 @@ import { InfoRows, type SettingSection } from "../components/player/SettingsMenu
 import { ApiError, api, useApi } from "../lib/api";
 import { fmtTime } from "../lib/format";
 import { nativeHls } from "../lib/playback";
+import { HLS_LOAD_FAILED, loadHls } from "../lib/hls";
 import type { ChannelNow, LiveSessionInfo, Program } from "../lib/types";
 import { useProfile } from "../stores/profile";
 import { useRouter } from "../stores/router";
 import { useCanRecord } from "../stores/auth";
 
 const LIVE_QUALITIES = [1080, 720, 480] as const;
-let hlsModule: Promise<typeof HlsType> | null = null;
-const loadHls = () => (hlsModule ??= import("hls.js/light").then((m) => m.default));
 
 /** Live TV: the server tunes and transcodes; you can pause and rewind within the session. */
 export default function LivePlayerPage({ channel }: { channel: string }) {
@@ -106,7 +105,7 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
       const Hls = await loadHls().catch(() => null);
       if (cancelled) return;
       if (!Hls || !Hls.isSupported()) {
-        if (!nativeHls()) return setError("This browser can't play live streams.");
+        if (!nativeHls()) return setError(Hls ? "This browser can't play live streams." : HLS_LOAD_FAILED);
         v.src = s.playlist;
         void v.play().catch(() => {});
         return;

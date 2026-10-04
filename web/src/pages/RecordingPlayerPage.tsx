@@ -4,13 +4,12 @@ import PlayerFrame from "../components/player/PlayerFrame";
 import { InfoRows, type SettingSection } from "../components/player/SettingsMenu";
 import { ApiError, api } from "../lib/api";
 import { fmtTime } from "../lib/format";
+import { HLS_LOAD_FAILED, loadHls } from "../lib/hls";
 import { nativeHls } from "../lib/playback";
 import type { Recording } from "../lib/types";
 import { useProfile } from "../stores/profile";
 import { useRouter } from "../stores/router";
 
-let hlsModule: Promise<typeof HlsType> | null = null;
-const loadHls = () => (hlsModule ??= import("hls.js/light").then((m) => m.default));
 
 interface Session {
   sessionId: string;
@@ -33,7 +32,9 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(true);
+  const [nonce, setNonce] = useState(0); // "Try again"
   const resumeAt = useRef(0);
+  const recovered = useRef(0); // decode-error recoveries used: a stream that keeps failing stops
 
   const exit = () => back("/livetv/recordings");
 
@@ -66,7 +67,7 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
       const Hls = await loadHls().catch(() => null);
       if (cancelled) return;
       if (!Hls || !Hls.isSupported()) {
-        if (!nativeHls()) return setError("This browser can't play streams.");
+        if (!nativeHls()) return setError(Hls ? "This browser can't play streams." : HLS_LOAD_FAILED);
         v.src = s.playlist;
         v.addEventListener("loadedmetadata", () => (v.currentTime = resumeAt.current), { once: true });
         void v.play().catch(() => {});
@@ -77,7 +78,10 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
       hlsRef.current = player;
       player.on(Hls.Events.ERROR, (_e, data) => {
         if (!data.fatal) return;
-        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) return player.recoverMediaError();
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && recovered.current < 2) {
+          recovered.current++;
+          return player.recoverMediaError();
+        }
         setError(`Playback stopped (${data.details}).`);
       });
       player.loadSource(s.playlist);
@@ -94,7 +98,7 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
       v.removeAttribute("src");
       v.load();
     };
-  }, [id, height]);
+  }, [id, height, nonce]);
 
   const rec = session?.recording;
   const startAt = rec ? rec.startedAt ?? rec.startAt - rec.padBefore : 0;
@@ -142,7 +146,25 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
       settings={settings}
       onBack={exit}
       loading={starting && !error ? "Starting from the beginning…" : null}
-      error={error ? { title: "Can't play this recording", message: error } : null}
+      error={
+        error
+          ? {
+              title: "Can't play this recording",
+              message: error,
+              actions: (
+                <button
+                  className="btn-primary"
+                  onClick={() => {
+                    recovered.current = 0;
+                    setNonce((n) => n + 1);
+                  }}
+                >
+                  Try again
+                </button>
+              ),
+            }
+          : null
+      }
       videoProps={{ onPlaying: () => setStarting(false), onEnded: exit }}
     />
   );

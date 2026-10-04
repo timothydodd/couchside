@@ -4,6 +4,7 @@ import PlayerFrame from "../components/player/PlayerFrame";
 import { InfoRows, type SettingSection } from "../components/player/SettingsMenu";
 import { ApiError, api, useApi } from "../lib/api";
 import { fmtClock, fmtResolution } from "../lib/format";
+import { HLS_LOAD_FAILED, loadHls } from "../lib/hls";
 import { chooseSource, fmtMbps, hlsCopyCaps, nativeHls, presetById, presetSource, presetsFor, sourceKey, stepDown, type Quality, type Source } from "../lib/playback";
 import { audioLabel, subtitleDetail, subtitleLabel, type AudioTrack, type SubtitleTrack } from "../lib/tracks";
 import { parseVtt } from "../lib/vtt";
@@ -21,8 +22,6 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const SUB_CHUNK = 90; // seconds per embedded-subtitle chunk (server's SubtitleChunk)
 const BROADCAST = new Set(["ts", "mpg", "mpeg", "wtv"]); // containers worth offering commercial detection for
 
-let hlsModule: Promise<typeof HlsType> | null = null;
-const loadHls = () => (hlsModule ??= import("hls.js/light").then((m) => m.default));
 
 type Sub = { kind: "off" } | { kind: "text"; track: SubtitleTrack } | { kind: "burn"; track: SubtitleTrack };
 
@@ -37,10 +36,10 @@ let partStart: { fileId: number; at: number } | null = null;
  */
 export default function PlayerPage({ fileId }: { fileId: number }) {
   // Fresh, never cached: the resume point is read once from this.
-  const { data: loaded, error: infoError } = useApi<PlayInfo>(`/api/files/${fileId}`, { fresh: true });
+  const { data: loaded, error: infoError, reload: reloadInfo } = useApi<PlayInfo>(`/api/files/${fileId}`, { fresh: true });
   // useApi hands back the previous file's info for a render after fileId changes.
   const info = loaded?.fileId === fileId ? loaded : undefined;
-  const { data: streams } = useApi<{ audio: AudioTrack[]; subtitles: SubtitleTrack[] }>(`/api/files/${fileId}/streams`);
+  const { data: streams, error: streamsError } = useApi<{ audio: AudioTrack[]; subtitles: SubtitleTrack[] }>(`/api/files/${fileId}/streams`);
   const [breakPoll, setBreakPoll] = useState(false);
   const { data: comm, reload: reloadComm } = useApi<Commercials>(`/api/files/${fileId}/commercials`, { pollMs: breakPoll ? 5000 : undefined });
   const prefs = usePrefs();
@@ -80,7 +79,11 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
     if (needServer) return quality === "auto" ? { kind: "hls", height: stepHeight } : presetSource(quality);
     return chooseSource(info, quality, forceHls, stepHeight);
   }, [info, quality, forceHls, stepHeight, needServer]);
-  const key = source ? `${sourceKey(source)}:${audio ?? "d"}:${burnIndex ?? "n"}:${nonce}` : null;
+  // A server stream is made for one audio track, so one for "the default
+  // track" waits until the track list says which that is (or has failed to
+  // load): made sooner, it would play track 0 while the menu shows the default.
+  const audioKey = audio ?? (source?.kind !== "hls" ? "d" : streams ? `d${defaultAudio}` : streamsError ? "d0" : "wait");
+  const key = source ? `${sourceKey(source)}:${audioKey}:${burnIndex ?? "n"}:${nonce}` : null;
 
   useEffect(() => {
     startAt.current = null;
@@ -132,7 +135,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   // --- attach the source ---------------------------------------------------------------
   useEffect(() => {
     const v = videoRef.current;
-    if (!v || !info || !source || !key) return;
+    if (!v || !info || !source || !key || audioKey === "wait") return;
     let cancelled = false;
     let hls: HlsType | null = null;
     let sessionId: string | null = null;
@@ -173,7 +176,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
         const Hls = await loadHls().catch(() => null);
         if (cancelled) return;
         if (!Hls || !Hls.isSupported()) {
-          if (!nativeHls()) return setFatal("This browser can't play streaming video.");
+          if (!nativeHls()) return setFatal(Hls ? "This browser can't play streaming video." : HLS_LOAD_FAILED);
           v.src = s.playlist;
           v.addEventListener("loadedmetadata", seekOnLoad, { once: true });
           return;
@@ -282,13 +285,26 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
         cancelled = true;
       };
     }
+    // A chunk that failed is tried again later, a few times, not on every
+    // tick (this runs about four times a second). Never after a 404 (past
+    // the end of the file) or a 422 (a track that can't be converted).
+    const retryAt = new Map<number, number>();
+    const tries = new Map<number, number>();
     const load = (k: number) => {
       if (k < 0 || loaded.has(k)) return;
+      if (isFinite(v.duration) && k * SUB_CHUNK >= v.duration) return; // no such chunk
+      if (performance.now() < (retryAt.get(k) ?? 0)) return;
       loaded.add(k);
       void fetch(`${base}.c${k}.vtt`)
         .then((r) => (r.ok ? r.text() : Promise.reject(r.status)))
         .then(add)
-        .catch(() => loaded.delete(k)); // retry on a later tick
+        .catch((status: unknown) => {
+          loaded.delete(k);
+          const n = (tries.get(k) ?? 0) + 1;
+          tries.set(k, n);
+          const final = status === 404 || status === 422 || n >= 4;
+          retryAt.set(k, final ? Infinity : performance.now() + 5000 * 2 ** (n - 1));
+        });
     };
     const around = () => {
       const k = Math.floor(v.currentTime / SUB_CHUNK);
@@ -557,7 +573,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
       notice={notice}
       noticeAction={notice ? noticeAction : null}
       onNotCommercial={isAdmin && comm?.status === "done" ? notCommercial : undefined}
-      error={errorText ? { title: "Can't play this right now", message: errorText, actions: <button className="btn-primary" onClick={() => switchTo(() => setNonce((n) => n + 1))}>Try again</button> } : null}
+      error={errorText ? { title: "Can't play this right now", message: errorText, actions: <button className="btn-primary" onClick={() => (info ? switchTo(() => setNonce((n) => n + 1)) : void reloadInfo())}>Try again</button> } : null}
       videoProps={{ onError: onVideoError, onWaiting, onPlaying, onSeeking: () => (waitingSince.current = null), onEnded: () => void onEnded() }}
     />
   );
