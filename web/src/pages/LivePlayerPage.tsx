@@ -187,7 +187,11 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
       }
       await reloadChannels();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : String(e));
+      // A notice over the stream, which is still playing: `error` is for a
+      // stream that can't be played and replaces the picture.
+      const msg = `Couldn't ${now.recordingStatus === "recording" ? "stop the recording" : "record this"}: ${e instanceof Error ? e.message : String(e)}`;
+      setNotice(msg);
+      setTimeout(() => setNotice((n) => (n === msg ? null : n)), 8000);
     } finally {
       setRecBusy(false);
     }
@@ -238,13 +242,13 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
         <>
           {recording && now?.recordingId && (
             <TopButton label="Watch this show from the beginning" onClick={() => go(`/recording/${now.recordingId}`, { replace: true })}>
-              <SkipBack size={15} /> Start over
+              <SkipBack size={15} /> <span className="hidden md:inline">Start over</span>
             </TopButton>
           )}
           {canRecord && !current?.virtual && now && now.recordingStatus !== "completed" && (
             <TopButton label={recording ? "Stop recording" : "Record this program"} onClick={() => void toggleRecord()} danger={recording} disabled={recBusy || now.recordingStatus === "scheduled"}>
               {recording ? <Square size={12} className="fill-current" /> : <CircleDot size={15} className="text-critical" />}
-              {recording ? "Stop" : "Record"}
+              <span className="hidden md:inline">{recording ? "Stop" : "Record"}</span>
             </TopButton>
           )}
           <TopButton label="Channel up (Page Up)" onClick={() => zap(1)}>

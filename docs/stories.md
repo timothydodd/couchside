@@ -37,7 +37,7 @@ from the start.
 | B11 | Transcode: false GPU fallback, copied HEVC             | Bug       | Reported  | Done |
 | B12 | Server odds and ends                                   | Bug       | Mixed     | Done |
 | B13 | Player: subtitles, audio track, retry                  | Bug       | Confirmed | Done |
-| B14 | Live player: failed Record, phone controls             | Bug       | Confirmed |      |
+| B14 | Live player: failed Record, phone controls             | Bug       | Confirmed | Done |
 | B15 | `useApi`: late answers, stale errors, cache size       | Bug       | Reported  |      |
 | B16 | Console polling and token renewal                      | Bug       | Confirmed |      |
 | B17 | Load failures and failed actions are shown             | Bug       | Reported  |      |
@@ -373,18 +373,16 @@ spacing plays against a playlist listing 4s segments (R15).
 
 ## B14 · Live player: failed Record, phone controls
 
-**Scope**
-- `toggleRecord` (`web/src/pages/LivePlayerPage.tsx:179`) puts a failed Record
-  or Stop into the player's fatal `error`, so a tuner conflict replaces the
-  stream with "Can't play". Use `attempt("Couldn't record", …)`.
-- `TopButton` (`components/player/PlayerFrame.tsx:521`) keeps its text labels
-  on phones; Start over, Record, channel up/down and Guide leave no room for
-  the title at 360px, and a recording's bottom row overflows. Hide the labels
-  below `md` (with `aria-label`) and move "Start over" into the menu there.
-  Check on a phone; this one is reasoned from class widths.
+**Done.** Typechecked and built; check the top bar on a phone.
 
-**Done when** a failed Record shows a notice over the playing stream, and the
-controls fit at 360px.
+- A failed Record or Stop shows as a notice over the stream, which keeps
+  playing.
+- "Start over" and "Record"/"Stop" lose their text below `md` (the buttons
+  keep an `aria-label`), so the title has room at 360px.
+
+**Left for the touch-controls change** (not on this branch yet): a
+recording's bottom row with 44px buttons overflows at 360px; move "Start
+over" into the menu there.
 
 ## B15 · `useApi`: late answers, stale errors, cache size
 

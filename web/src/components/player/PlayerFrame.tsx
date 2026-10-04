@@ -511,7 +511,8 @@ export function TopButton({ label, onClick, children, danger, disabled }: { labe
       onClick={onClick}
       disabled={disabled}
       title={label}
-      className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm disabled:opacity-40 ${
+      aria-label={label}
+      className={`flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm disabled:opacity-40 ${
         danger ? "bg-critical/90 text-white hover:bg-critical" : "text-white/85 hover:bg-white/10 hover:text-white"
       }`}
     >
