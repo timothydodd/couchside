@@ -46,7 +46,7 @@ from the start.
 | B20 | Helm chart hardening                                   | Packaging | Reported  | Done |
 | B21 | CI and release                                         | Packaging | Reported  | Done |
 | B22 | Docs and site catch up                                 | Docs      | Reported  | Done |
-| B23 | Demo media script                                      | Hygiene   | Reported  |      |
+| B23 | Demo media script                                      | Hygiene   | Reported  | Part |
 | C1  | Server dead code and stale comments                    | Cleanup   |           |      |
 | C2  | One builder for ffmpeg's HLS arguments                 | Cleanup   |           |      |
 | C3  | Split `api/auth.go` and `api/handlers.go`              | Cleanup   |           |      |
@@ -520,10 +520,13 @@ changed to the current tokens and haven't been seen rendered.
 
 ## B23 · Demo media script
 
-**Scope** (`scripts/fetch-demo-media.py`, uncommitted changes)
+**Partly done:** `.gitignore` has `__pycache__/` and `*.pyc`.
+
+**Waiting.** The rest is about changes to `scripts/fetch-demo-media.py` that
+aren't committed yet (the cartoons section). When they land:
 - "Any Bonds Today?" downloads as `.ogv`, which `parse.videoExts` doesn't
   scan. Pick another copy or drop it.
-- `--only` defaults to every section, so the documented run now pulls the
+- `--only` defaults to every section, so the documented run pulls the
   cartoons too (about 38 GB). Leave cartoons out of the default.
 - The closing message prints an empty list when only `commercials` was
   fetched, and mentions Cartoons when they weren't.
@@ -531,10 +534,6 @@ changed to the current tokens and haven't been seen rendered.
   Trail for Hallelujah Land", "Jungle Jitters", "All This and Rabbit Stew",
   "Tokio Jokio", "The Ducktators", "Inki and the Minah Bird") and the
   broadcast-capture and rip sources: this feeds the reviewers' demo (S5).
-- Add `__pycache__/` and `*.pyc` to `.gitignore`.
-
-**Done when** a default run fetches only what the demo needs and every file
-it fetches is scanned.
 
 ---
 

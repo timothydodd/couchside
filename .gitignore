@@ -21,3 +21,7 @@ values.local.yaml
 # Built UI copied in for release builds (the placeholder stays tracked)
 server/internal/webui/dist/*
 !server/internal/webui/dist/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
