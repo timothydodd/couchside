@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -48,7 +50,10 @@ type Server struct {
 	logs      *logbuf.Buffer   // recent log lines, for System → Console; nil without one
 	index     searchIndex
 	auth      *authState
-	proxies   []netip.Prefix // COUCHSIDE_TRUSTED_PROXIES
+
+	remoteSize    atomic.Int64 // bytes in the remote image cache, as of the last prune plus fetches since
+	remotePruning sync.Mutex
+	proxies       []netip.Prefix // COUCHSIDE_TRUSTED_PROXIES
 }
 
 func init() {

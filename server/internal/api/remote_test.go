@@ -2,10 +2,13 @@ package api
 
 import (
 	"context"
+	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -132,5 +135,45 @@ func TestImageURLGoesThroughTheCache(t *testing.T) {
 	}
 	if db.CachedImage("") != "" {
 		t.Error("empty should stay empty")
+	}
+}
+
+// Fetching past the cap evicts the least recently used images at once,
+// without waiting for the daily prune.
+func TestRemoteCacheStaysUnderItsCap(t *testing.T) {
+	img := append(append([]byte{}, testPNG...), make([]byte, 1000)...)
+	s, origin := remoteFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		w.Write(img)
+	})
+	old := remoteMaxTotal
+	remoteMaxTotal = int64(10 * len(img))
+	t.Cleanup(func() { remoteMaxTotal = old })
+
+	size := func() (total int64, files int) {
+		filepath.WalkDir(s.remoteDir(), func(p string, d fs.DirEntry, err error) error {
+			if err == nil && !d.IsDir() {
+				info, _ := d.Info()
+				total += info.Size()
+				files++
+			}
+			return nil
+		})
+		return
+	}
+	for i := range 40 {
+		if rec := getRemote(s, fmt.Sprintf("%s/%d.png", origin.URL, i)); rec.Code != 200 {
+			t.Fatalf("get %d = %d", i, rec.Code)
+		}
+		if total, _ := size(); total > remoteMaxTotal+int64(len(img)) {
+			t.Fatalf("after %d fetches the cache holds %d bytes, cap %d", i+1, total, remoteMaxTotal)
+		}
+	}
+	if total, files := size(); files == 0 || total != s.remoteSize.Load() {
+		t.Fatalf("tracked size %d, on disk %d in %d files", s.remoteSize.Load(), total, files)
+	}
+	// The image just fetched is the newest and survives.
+	if _, err := os.Stat(s.remotePath(origin.URL + "/39.png")); err != nil {
+		t.Fatalf("the newest image was evicted: %v", err)
 	}
 }
