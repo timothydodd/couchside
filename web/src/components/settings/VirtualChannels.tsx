@@ -48,7 +48,7 @@ export default function VirtualChannels() {
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <div className="card-title">Your channels</div>
-          <div className="text-xs text-content-muted">Channels made from your library that play around the clock, like broadcast TV. No tuner needed.</div>
+          <div className="text-xs text-content-muted">Channels made from your library, or from a stream address, that play around the clock like broadcast TV. No tuner needed.</div>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
           <input
@@ -118,6 +118,13 @@ export default function VirtualChannels() {
 
 /** A one-line summary: "Shows · Comedy · 1990–1999 · in order · commercials". */
 function describe(c: VirtualConfig): string {
+  if (c.stream) {
+    try {
+      return `Stream · ${new URL(c.stream.url).host}`;
+    } catch {
+      return "Stream";
+    }
+  }
   const parts: string[] = [];
   if (c.kinds?.length === 1) parts.push(c.kinds[0] === "movie" ? "Movies" : "Shows");
   if (c.items?.length) parts.push(`${c.items.length} picked ${c.items.length === 1 ? "title" : "titles"}`);

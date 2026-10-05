@@ -122,6 +122,16 @@ on the web and the Roku. No tuner is needed.
   and have breaks every 8, 12 or 20 minutes. A guide entry covers its program's
   commercials, as on real TV. `scripts/fetch-reviewer-media.py` downloads
   a few public-domain 1950s and 60s commercials to try it with.
+- **Stream channels:** in **New channel**, choose **A stream address** to make
+  a channel from a live stream somewhere else: an HLS playlist (`.m3u8`) or an
+  MPEG-TS stream over http or https that the server can reach, such as an IPTV
+  feed, a camera behind a restreamer, or another program's output (a
+  WeatherStar 4000 recreation captured by `ws4channels`, say). Couchside
+  connects only while someone is watching, converts the picture like a tuner
+  channel (one of `COUCHSIDE_MAX_TRANSCODES`), and shares the stream between
+  viewers. The guide shows the channel's name around the clock, since
+  Couchside can't know what a stream is showing. Stream channels can't be
+  recorded, and the address is only ever shown to admins.
 - **Export and import:** **Export** in Your channels saves the line-up as a
   JSON file, and **Import** adds one, here or on another Couchside. Libraries
   are matched by name and picked titles by title and year, so add the

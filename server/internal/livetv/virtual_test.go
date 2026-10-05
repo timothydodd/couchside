@@ -244,3 +244,35 @@ func TestExtendVirtualConcurrent(t *testing.T) {
 		}
 	}
 }
+
+// A stream channel's address must be http(s): ffmpeg would open anything,
+// the server's own files included.
+func TestStreamSourceAddress(t *testing.T) {
+	for addr, ok := range map[string]bool{
+		"http://ws4channels:9798/stream.m3u8": true,
+		" https://example.com/live.ts ":       true,
+		"file:///etc/passwd":                  false,
+		"concat:/data/a.ts|/data/b.ts":        false,
+		"/media/Movies/film.mkv":              false,
+		"rtsp://camera/stream":                false,
+		"http://":                             false,
+		"":                                    false,
+	} {
+		c := VirtualConfig{Stream: &StreamSource{URL: addr}}
+		if err := c.Validate(); (err == nil) != ok {
+			t.Errorf("%q: err = %v, want ok = %v", addr, err, ok)
+		}
+	}
+}
+
+// A stream channel's guide is its name, hour by hour from the current hour.
+func TestStreamGuide(t *testing.T) {
+	now := time.Date(2026, 10, 5, 14, 37, 0, 0, time.UTC)
+	g := streamGuide("950", "Weather", now, 3*time.Hour)
+	if len(g) != 4 || g[0].StartAt != now.Truncate(time.Hour).Unix() || g[0].EndAt != g[1].StartAt || g[3].EndAt < now.Add(3*time.Hour).Unix() {
+		t.Fatalf("guide = %+v", g)
+	}
+	if g[0].Channel != "950" || g[0].Title != "Weather" {
+		t.Fatalf("entry = %+v", g[0])
+	}
+}
