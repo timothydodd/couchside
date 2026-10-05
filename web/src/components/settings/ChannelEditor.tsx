@@ -54,7 +54,9 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
   const { data: libraries } = useApi<Library[]>("/api/libraries");
   const [number, setNumber] = useState(channel?.number ?? "");
   const [name, setName] = useState(channel?.name ?? "");
-  const [cfg, setCfg] = useState<VirtualConfig>(channel ? { ...BLANK, ...channel.config, filler: { ...BLANK.filler, ...channel.config.filler } } : BLANK);
+  // A stored config can have null where a list belongs (channels imported
+  // before 0.14.3): those take the blank's empty lists.
+  const [cfg, setCfg] = useState<VirtualConfig>(channel ? { ...BLANK, ...present(channel.config), filler: { ...BLANK.filler, ...present(channel.config.filler) } } : BLANK);
   const [preset, setPreset] = useState<string | null>(null);
   const [ads, setAds] = useState(!!channel?.config.filler?.folder);
   const [busy, setBusy] = useState(false);
@@ -244,6 +246,11 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
       </aside>
     </>
   );
+}
+
+/** o without its null and undefined values, so spreading it over defaults keeps them. */
+function present<T extends object>(o: T | null | undefined): Partial<T> {
+  return Object.fromEntries(Object.entries(o ?? {}).filter(([, v]) => v != null)) as Partial<T>;
 }
 
 function toggle<T>(list: T[], v: T): T[] {

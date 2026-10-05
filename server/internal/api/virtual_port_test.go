@@ -33,6 +33,14 @@ func TestChannelNamesRoundTrip(t *testing.T) {
 		t.Fatalf("resolved = %+v", got)
 	}
 
+	// What gets stored has empty lists, never null: the editor reads them.
+	if err := got.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if got.Genres == nil || got.ExcludeGenres == nil || got.Kinds == nil || got.Items == nil || got.Libraries == nil {
+		t.Fatalf("lists left nil after Validate: %+v", got)
+	}
+
 	// One name missing is a warning; all of them missing is an error, or the
 	// channel would play the whole library.
 	p.Libraries = []string{"TV", "Anime"}

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"regexp"
@@ -30,6 +31,13 @@ func (s *Server) listVirtual(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]virtualOut, len(chans))
 	for i, c := range chans {
+		// Through the parser, so a config stored with null lists (channels
+		// imported before 0.14.3) reaches the editor with empty ones.
+		if cfg, err := livetv.ParseVirtualConfig(c.Config); err == nil {
+			if raw, err := json.Marshal(cfg); err == nil {
+				c.Config = raw
+			}
+		}
 		out[i] = virtualOut{VirtualChannel: c, Error: s.tv.VirtualError(c.ID)}
 	}
 	writeJSON(w, http.StatusOK, out)
