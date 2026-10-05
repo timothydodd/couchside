@@ -63,6 +63,22 @@ type Filler struct {
 
 // Validate checks a config and fills in defaults.
 func (c *VirtualConfig) Validate() error {
+	// Lists are stored as [] and never null: the channel editor reads them.
+	if c.Libraries == nil {
+		c.Libraries = []int64{}
+	}
+	if c.Kinds == nil {
+		c.Kinds = []string{}
+	}
+	if c.Genres == nil {
+		c.Genres = []string{}
+	}
+	if c.ExcludeGenres == nil {
+		c.ExcludeGenres = []string{}
+	}
+	if c.Items == nil {
+		c.Items = []int64{}
+	}
 	if c.Order == "" {
 		c.Order = "shuffle"
 	}
