@@ -1,6 +1,7 @@
 import { useState, type MouseEvent } from "react";
 import { Check, Star } from "lucide-react";
 import Link from "./Link";
+import { useQueue } from "../stores/queue";
 import { posterUrl } from "../lib/api";
 import { placeholderAngle } from "../lib/format";
 import type { ItemSummary } from "../lib/types";
@@ -57,7 +58,7 @@ export default function PosterCard({ item, selected, onClick }: { item: ItemSumm
   ].filter(Boolean);
 
   return (
-    <Link to={`/item/${item.id}`} className="poster-link group block" title={item.title} onClick={onClick} data-selected={selected || undefined}>
+    <Link to={`/item/${item.id}`} className="poster-link group block" title={item.title} onClick={(e) => { useQueue.getState().clear(); onClick?.(e); }} data-selected={selected || undefined}>
       <div className="poster">
         <PosterArt item={item} />
         {selected && (

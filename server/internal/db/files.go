@@ -154,16 +154,18 @@ type FileStamp struct {
 	RolePinned  bool
 	Problem     string // unreadable | no-video | ""
 	Edition     string
+	ItemPinned  bool // put under its title by hand (Merge): the scan leaves it there
+	MediaItemID int64
 }
 
 func (d *DB) FileStamp(ctx context.Context, path string) (*FileStamp, error) {
 	var s FileStamp
 	err := d.sql.QueryRowContext(ctx, `SELECT f.id, f.size, f.mtime, m.parsed_title, m.parsed_year,
 		COALESCE(e.season, 0), COALESCE(e.episode, 0),
-		f.role, f.part_no, f.extra_title, f.role_pinned, f.problem, f.edition
+		f.role, f.part_no, f.extra_title, f.role_pinned, f.problem, f.edition, f.item_pinned, f.media_item_id
 		FROM files f JOIN media_items m ON m.id = f.media_item_id LEFT JOIN episodes e ON e.id = f.episode_id
 		WHERE f.path = ?`, path).Scan(&s.ID, &s.Size, &s.Mtime, &s.ParsedTitle, &s.ParsedYear, &s.Season, &s.Episode,
-		&s.Role, &s.PartNo, &s.ExtraTitle, &s.RolePinned, &s.Problem, &s.Edition)
+		&s.Role, &s.PartNo, &s.ExtraTitle, &s.RolePinned, &s.Problem, &s.Edition, &s.ItemPinned, &s.MediaItemID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -181,8 +183,11 @@ func (d *DB) UpsertFile(ctx context.Context, f File, seen int64) (int64, error) 
 	err := d.sql.QueryRowContext(ctx, `INSERT INTO files (library_id, media_item_id, episode_id, path, size, mtime,
 		duration_sec, container, video_codec, audio_codec, width, height, audio_tracks, subtitle_tracks, problem, last_seen)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT (path) DO UPDATE SET library_id = excluded.library_id, media_item_id = excluded.media_item_id,
-		  episode_id = excluded.episode_id, size = excluded.size, mtime = excluded.mtime,
+		ON CONFLICT (path) DO UPDATE SET library_id = excluded.library_id,
+		  -- a file merged under another title by hand stays there, whatever its name says
+		  media_item_id = CASE WHEN files.item_pinned THEN files.media_item_id ELSE excluded.media_item_id END,
+		  episode_id = CASE WHEN files.item_pinned THEN files.episode_id ELSE excluded.episode_id END,
+		  size = excluded.size, mtime = excluded.mtime,
 		  duration_sec = excluded.duration_sec, container = excluded.container, video_codec = excluded.video_codec,
 		  audio_codec = excluded.audio_codec, width = excluded.width, height = excluded.height,
 		  audio_tracks = excluded.audio_tracks, subtitle_tracks = excluded.subtitle_tracks,

@@ -215,3 +215,49 @@ func TestRescanFileKeepsOptimizedCopyUnlessChanged(t *testing.T) {
 		t.Fatalf("re-scan of a missing file: %v", err)
 	}
 }
+
+// A file merged under another title by hand stays there through scans,
+// whatever its name parses to.
+func TestScanKeepsMergedFilesWhereTheyWerePut(t *testing.T) {
+	w, d, lib, root := scanFixture(t)
+	ctx := context.Background()
+	film := filepath.Join(root, "Heat (1995)", "Heat (1995).mkv")
+	making := filepath.Join(root, "Heat Making Of", "Heat Making Of.mkv")
+	writeVideo(t, film)
+	writeVideo(t, making)
+	if err := w.scan(ctx, lib); err != nil {
+		t.Fatal(err)
+	}
+	items, _ := d.Items(ctx, "movie")
+	if len(items) != 2 {
+		t.Fatalf("items after the first scan = %d, want 2", len(items))
+	}
+	var keep, other int64
+	for _, it := range items {
+		if it.Title == "Heat" {
+			keep = it.ID
+		} else {
+			other = it.ID
+		}
+	}
+	if err := d.MergeItems(ctx, keep, []int64{other}, "extra"); err != nil {
+		t.Fatal(err)
+	}
+	// Scanned again (these files are unreadable to the fake ffprobe, so they're re-indexed every time).
+	if err := w.scan(ctx, lib); err != nil {
+		t.Fatal(err)
+	}
+	items, _ = d.Items(ctx, "movie")
+	if len(items) != 1 || items[0].ID != keep {
+		t.Fatalf("items after the merge and a rescan = %+v, want only %d", items, keep)
+	}
+	files, _ := d.ItemFiles(ctx, keep)
+	if len(files) != 2 {
+		t.Fatalf("files = %+v, want both under the kept film", files)
+	}
+	for _, f := range files {
+		if f.Path == making && (f.Role != "extra" || f.ExtraTitle == "") {
+			t.Fatalf("the merged file lost its role: %+v", f)
+		}
+	}
+}

@@ -1,7 +1,9 @@
 package api
 
 import (
+	"errors"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -118,7 +120,11 @@ func (s *Server) rematch(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	var in struct{ ImdbID string }
+	var in struct {
+		ImdbID string
+		// Refresh fetches the metadata again without touching a "Fix match" choice.
+		Refresh bool `json:"refresh"`
+	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, err)
 		return
@@ -139,9 +145,11 @@ func (s *Server) rematch(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	if err := s.db.SetImdbOverride(r.Context(), id, imdb); err != nil {
-		writeErr(w, err)
-		return
+	if !in.Refresh {
+		if err := s.db.SetImdbOverride(r.Context(), id, imdb); err != nil {
+			writeErr(w, err)
+			return
+		}
 	}
 	if err := s.worker.Enqueue(r.Context(), worker.KindMatch, id, "Match "+item.ParsedTitle); err != nil {
 		writeErr(w, err)
@@ -173,6 +181,39 @@ func (s *Server) itemWatched(w http.ResponseWriter, r *http.Request) {
 	if err := s.db.SetWatched(r.Context(), ids, in.Watched); err != nil {
 		writeErr(w, err)
 		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// mergeItems puts other titles' files under one title (admins): duplicate
+// copies or bonus material for a movie, episodes for a show.
+func (s *Server) mergeItems(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Into int64   `json:"into"`
+		From []int64 `json:"from"`
+		As   string  `json:"as"` // movies: copy | extra
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if in.As == "" {
+		in.As = "copy"
+	}
+	if len(in.From) == 0 || len(in.From) > 100 {
+		writeErr(w, badRequest("pick 1 to 100 titles to merge"))
+		return
+	}
+	if err := s.db.MergeItems(r.Context(), in.Into, in.From, in.As); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeErr(w, err)
+			return
+		}
+		writeErr(w, badRequest(err.Error()))
+		return
+	}
+	for _, id := range in.From {
+		_ = os.RemoveAll(worker.ItemArtDir(s.cfg.CacheDir, id))
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -174,7 +174,7 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 		}
 		// A file once unreadable is probed again: the failure may have been the share, not the file.
 		if stamp != nil && stamp.Size == info.Size() && stamp.Mtime == info.ModTime().Unix() && stamp.Problem != "unreadable" &&
-			!w.parseChanged(lib, path, stamp) {
+			(stamp.ItemPinned || !w.parseChanged(lib, path, stamp)) {
 			if err := w.refreshRole(ctx, lib, path, stamp); err != nil {
 				return err
 			}
@@ -310,7 +310,7 @@ func (w *Worker) refreshRole(ctx context.Context, lib db.Library, path string, s
 			return err
 		}
 	}
-	if st.RolePinned {
+	if st.RolePinned || st.ItemPinned {
 		return nil
 	}
 	r := parse.MovieRoleIn(relPath(lib, path), st.ParsedTitle, videosIn(lib))
@@ -347,19 +347,26 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 			slog.Info("scan: no episode number, skipping", "path", path)
 			return false, nil
 		}
-		if itemID, created, err = w.db.EnsureItem(ctx, lib.ID, "series", r.Title, r.Year); err != nil {
+		if prev != nil && prev.ItemPinned {
+			// Merged under another show by hand: UpsertFile keeps its title and episode.
+			itemID, label = prev.MediaItemID, r.Title
+		} else if itemID, created, err = w.db.EnsureItem(ctx, lib.ID, "series", r.Title, r.Year); err != nil {
 			return false, err
 		}
-		epID, err := w.db.EnsureEpisode(ctx, itemID, r.Season, r.Episode, r.EpisodeTitle, r.AirDate)
-		if err != nil {
-			return false, err
+		if prev == nil || !prev.ItemPinned {
+			epID, err := w.db.EnsureEpisode(ctx, itemID, r.Season, r.Episode, r.EpisodeTitle, r.AirDate)
+			if err != nil {
+				return false, err
+			}
+			f.EpisodeID = &epID
 		}
-		f.EpisodeID = &epID
 		label = r.Title
 	} else {
 		rel := relPath(lib, path)
 		r := parse.MovieIn(rel, videosIn(lib))
-		if itemID, created, err = w.db.EnsureItem(ctx, lib.ID, "movie", r.Title, r.Year); err != nil {
+		if prev != nil && prev.ItemPinned {
+			itemID = prev.MediaItemID
+		} else if itemID, created, err = w.db.EnsureItem(ctx, lib.ID, "movie", r.Title, r.Year); err != nil {
 			return false, err
 		}
 		label = r.Title
