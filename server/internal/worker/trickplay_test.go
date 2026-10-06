@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"image"
 	"image/jpeg"
 	"os"
 	"os/exec"
@@ -106,5 +107,53 @@ func TestTrickSheetName(t *testing.T) {
 		if got := TrickSheetName(name); got != want {
 			t.Errorf("TrickSheetName(%q) = %v", name, got)
 		}
+	}
+}
+
+// A file whose keyframe-only pass yields nothing (and no error) is decoded
+// in full. The fake ffmpeg writes no frames when asked for keyframes only,
+// and three otherwise.
+func TestTrickplayFallsBackToAFullDecode(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("no sh")
+	}
+	dir := t.TempDir()
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 320, 180)), nil); err != nil {
+		t.Fatal(err)
+	}
+	frame := filepath.Join(dir, "frame.jpg")
+	if err := os.WriteFile(frame, buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fake := filepath.Join(dir, "ffmpeg")
+	script := "#!/bin/sh\n" +
+		"for a in \"$@\"; do [ \"$a\" = \"-skip_frame\" ] && exit 0; done\n" + // keyframes only: nothing, happily
+		"out=\"${@: -1}\"\n" + // the output pattern is the last argument
+		"for n in 0 1 2; do cp \"" + frame + "\" \"$(printf \"$out\" $n)\"; done\n"
+	if err := os.WriteFile(fake, []byte("#!/bin/bash\n"+script[len("#!/bin/sh\n"):]), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	d, err := db.Open(filepath.Join(dir, "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ctx := context.Background()
+	lib, _ := d.CreateLibrary(ctx, "Films", dir, "movies")
+	item, _, _ := d.EnsureItem(ctx, lib, "movie", "Film", 2020)
+	dur := 25.0
+	fid, err := d.UpsertFile(ctx, db.File{LibraryID: lib, MediaItemID: item, Path: filepath.Join(dir, "film.mkv"), Size: 1, Mtime: 1, DurationSec: &dur}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := &Worker{db: d, cfg: config.Config{CacheDir: filepath.Join(dir, "cache"), FFmpeg: fake}, wake: make(chan struct{}, 1), wakeEnc: make(chan struct{}, 1)}
+	if err := w.trickplay(ctx, fid); err != nil {
+		t.Fatal(err)
+	}
+	f, _ := d.File(ctx, fid)
+	ix := Trickplay(w.cfg.CacheDir, f)
+	if ix == nil || ix.Count != 3 || ix.Sheets != 1 {
+		t.Fatalf("index = %+v, want 3 frames from the full decode", ix)
 	}
 }

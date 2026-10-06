@@ -223,12 +223,14 @@ func (w *Worker) grabFrames(ctx context.Context, f db.File, height int, dir stri
 			frames = append(frames, b)
 			got++
 		}
+		if got == 0 && next == 0 && keyframesOnly {
+			// Nothing came out, with or without a complaint: some remuxes have
+			// keyframes the decoder won't take on their own. Decode everything.
+			keyframesOnly = false
+			continue
+		}
 		if runErr == nil {
 			break // the end of the file
-		}
-		if got == 0 && next == 0 && keyframesOnly {
-			keyframesOnly = false // nothing came out: decode everything instead
-			continue
 		}
 		if got == 0 && len(frames) == 0 {
 			return nil, fmt.Errorf("ffmpeg: %v: %s", runErr, transcode.Tail(string(out), 300))
