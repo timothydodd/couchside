@@ -9,6 +9,7 @@ import (
 	"image"
 	"image/draw"
 	"image/jpeg"
+	"log/slog"
 	"math"
 	"os"
 	"os/exec"
@@ -132,36 +133,43 @@ func (w *Worker) trickplay(ctx context.Context, fileID int64) error {
 	}
 	defer os.RemoveAll(tmp)
 
-	// Keyframes only: a tenth of the decoding, and a frame near each tenth
-	// second is all a preview needs.
-	filter := fmt.Sprintf("fps=1/%d,scale=%d:%d,tile=%dx%d", trickInterval, trickWidth, height, trickCols, trickRows)
-	cmd := exec.CommandContext(ctx, w.cfg.FFmpeg, "-hide_banner", "-nostdin", "-loglevel", "error",
-		"-skip_frame", "nokey", "-i", f.Path, "-map", "0:v:0", "-an", "-sn", "-dn",
-		"-vf", filter, "-q:v", "6", "-start_number", "0", filepath.Join(tmp, "%d.jpg"))
-	if out, err := cmd.CombinedOutput(); err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		return fmt.Errorf("ffmpeg: %v: %s", err, transcode.Tail(string(out), 300))
+	frames, err := w.grabFrames(ctx, f, height, tmp)
+	if err != nil {
+		return err
 	}
-	sheets := 0
-	for {
-		if _, err := os.Stat(filepath.Join(tmp, fmt.Sprintf("%d.jpg", sheets))); err != nil {
-			break
-		}
-		sheets++
-	}
-	if sheets == 0 {
+	if len(frames) == 0 {
 		return fmt.Errorf("ffmpeg made no thumbnails")
 	}
-	// The last sheet is padded with empty tiles: count frames from the length.
-	count := sheets * trickCols * trickRows
+	// One slot per interval of the file's length (the last slot can come out
+	// empty, and damaged stretches leave gaps): a slot with no frame shows
+	// the one before it, which is nearer the truth than a black tile.
+	count := len(frames)
 	if f.DurationSec != nil && *f.DurationSec > 0 {
-		count = min(count, int(math.Ceil(*f.DurationSec/trickInterval)))
+		count = int(math.Ceil(*f.DurationSec / trickInterval))
+	}
+	for len(frames) < count {
+		frames = append(frames, nil)
+	}
+	frames = frames[:count]
+	var last []byte
+	for i := range frames {
+		if frames[i] == nil {
+			frames[i] = last
+		} else {
+			last = frames[i]
+		}
+	}
+	for i := range frames { // nothing before the first frame: use the first
+		if frames[i] == nil {
+			frames[i] = last
+		}
 	}
 	ix := TrickIndex{Interval: trickInterval, Width: trickWidth, Height: height, Cols: trickCols, Rows: trickRows,
-		Count: count, Sheets: sheets, Size: f.Size, Mtime: f.Mtime}
-	if err := writeBIF(tmp, ix); err != nil {
+		Count: count, Sheets: (count + trickCols*trickRows - 1) / (trickCols * trickRows), Size: f.Size, Mtime: f.Mtime}
+	if err := writeSheets(tmp, frames, ix); err != nil {
+		return fmt.Errorf("sheets: %w", err)
+	}
+	if err := writeBIF(tmp, frames, ix); err != nil {
 		return fmt.Errorf("bif: %w", err)
 	}
 	b, _ := json.Marshal(ix)
@@ -172,31 +180,121 @@ func (w *Worker) trickplay(ctx context.Context, fileID int64) error {
 	return os.Rename(tmp, dir)
 }
 
+// grabFrames has ffmpeg write one JPEG per trickInterval seconds of the file
+// into dir ("f<N>.jpg", N from 0) and returns them in order, nil where a
+// moment yielded nothing. It decodes keyframes only (a tenth of the work),
+// unless that finds none: some remuxes carry keyframes the decoder won't
+// take that way, and then the whole file is decoded. A broadcast recording
+// can hold damaged stretches whose malformed frames make ffmpeg give up
+// (its filters can't take a picture that changes shape mid-file); rather
+// than lose the whole file, the run resumes a slot past where it stopped.
+func (w *Worker) grabFrames(ctx context.Context, f db.File, height int, dir string) ([][]byte, error) {
+	var frames [][]byte
+	next := 0 // the slot the next run starts at
+	keyframesOnly := true
+	for attempt := 0; attempt < 24; attempt++ {
+		if f.DurationSec != nil && *f.DurationSec > 0 && float64(next*trickInterval) >= *f.DurationSec {
+			break
+		}
+		args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
+		if keyframesOnly {
+			args = append(args, "-skip_frame", "nokey")
+		}
+		if next > 0 {
+			args = append(args, "-ss", fmt.Sprint(next*trickInterval))
+		}
+		// yuvj420p: full-range 8-bit, which the JPEG encoder wants whatever the source is.
+		filter := fmt.Sprintf("fps=1/%d,scale=%d:%d,format=yuvj420p", trickInterval, trickWidth, height)
+		args = append(args, "-i", f.Path, "-map", "0:v:0", "-an", "-sn", "-dn",
+			"-vf", filter, "-q:v", "6", "-start_number", fmt.Sprint(next), filepath.Join(dir, "f%d.jpg"))
+		out, runErr := exec.CommandContext(ctx, w.cfg.FFmpeg, args...).CombinedOutput()
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		got := 0
+		for {
+			b, err := os.ReadFile(filepath.Join(dir, fmt.Sprintf("f%d.jpg", next+got)))
+			if err != nil {
+				break
+			}
+			for len(frames) < next+got {
+				frames = append(frames, nil)
+			}
+			frames = append(frames, b)
+			got++
+		}
+		if runErr == nil {
+			break // the end of the file
+		}
+		if got == 0 && next == 0 && keyframesOnly {
+			keyframesOnly = false // nothing came out: decode everything instead
+			continue
+		}
+		if got == 0 && len(frames) == 0 {
+			return nil, fmt.Errorf("ffmpeg: %v: %s", runErr, transcode.Tail(string(out), 300))
+		}
+		// Stopped part way (damaged data): carry on from the slot after the last one.
+		slog.Warn("preview thumbnails: ffmpeg stopped part way; resuming after it", "file", filepath.Base(f.Path),
+			"at", fmt.Sprintf("%ds", (next+got)*trickInterval), "said", transcode.Tail(string(out), 160))
+		next = len(frames) + 1
+	}
+	return frames, nil
+}
+
+// writeSheets tiles the frames into dir/<n>.jpg, trickCols by trickRows per
+// sheet, counted across then down; a missing frame is a black tile.
+func writeSheets(dir string, frames [][]byte, ix TrickIndex) error {
+	per := ix.Cols * ix.Rows
+	for s := 0; s < ix.Sheets; s++ {
+		sheet := image.NewRGBA(image.Rect(0, 0, ix.Width*ix.Cols, ix.Height*ix.Rows))
+		for t := 0; t < per && s*per+t < len(frames); t++ {
+			b := frames[s*per+t]
+			if b == nil {
+				continue
+			}
+			img, err := jpeg.Decode(bytes.NewReader(b))
+			if err != nil {
+				continue
+			}
+			at := image.Pt(t%ix.Cols*ix.Width, t/ix.Cols*ix.Height)
+			draw.Draw(sheet, image.Rectangle{Min: at, Max: at.Add(image.Pt(ix.Width, ix.Height))}, img, image.Point{}, draw.Src)
+		}
+		out, err := os.Create(filepath.Join(dir, fmt.Sprintf("%d.jpg", s)))
+		if err != nil {
+			return err
+		}
+		err = jpeg.Encode(out, sheet, &jpeg.Options{Quality: 80})
+		out.Close()
+		if err != nil {
+			return err
+		}
+	}
+	// The single frames were only input.
+	for i := range frames {
+		_ = os.Remove(filepath.Join(dir, fmt.Sprintf("f%d.jpg", i)))
+	}
+	return nil
+}
+
 // writeBIF packs the frames into dir/index.bif, the Roku's trick-play
 // format: a 64-byte header, a table of (timestamp, offset) pairs ending with
-// 0xffffffff, then the JPEG frames one after another.
-func writeBIF(dir string, ix TrickIndex) error {
-	frames := make([][]byte, 0, ix.Count)
-	for s := 0; s < ix.Sheets && len(frames) < ix.Count; s++ {
-		f, err := os.Open(filepath.Join(dir, fmt.Sprintf("%d.jpg", s)))
-		if err != nil {
-			return err
-		}
-		sheet, err := jpeg.Decode(f)
-		f.Close()
-		if err != nil {
-			return err
-		}
-		for t := 0; t < ix.Cols*ix.Rows && len(frames) < ix.Count; t++ {
-			at := image.Pt(t%ix.Cols*ix.Width, t/ix.Cols*ix.Height)
-			tile := image.NewRGBA(image.Rect(0, 0, ix.Width, ix.Height))
-			draw.Draw(tile, tile.Bounds(), sheet, at, draw.Src)
-			var buf bytes.Buffer
-			if err := jpeg.Encode(&buf, tile, &jpeg.Options{Quality: 70}); err != nil {
-				return err
+// 0xffffffff, then the JPEG frames one after another. A missing frame is a
+// black one, so the table stays regular.
+func writeBIF(dir string, in [][]byte, ix TrickIndex) error {
+	var blank []byte
+	frames := make([][]byte, 0, len(in))
+	for _, f := range in {
+		if f == nil {
+			if blank == nil {
+				var buf bytes.Buffer
+				if err := jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, ix.Width, ix.Height)), &jpeg.Options{Quality: 50}); err != nil {
+					return err
+				}
+				blank = buf.Bytes()
 			}
-			frames = append(frames, buf.Bytes())
+			f = blank
 		}
+		frames = append(frames, f)
 	}
 	var out bytes.Buffer
 	out.Write([]byte{0x89, 'B', 'I', 'F', 0x0d, 0x0a, 0x1a, 0x0a})
