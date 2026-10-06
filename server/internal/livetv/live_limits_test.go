@@ -15,8 +15,9 @@ import (
 	"github.com/timothydodd/couchside/internal/transcode"
 )
 
+// 0 (and below) is "as broadcast": no scaling at all.
 func TestSnapHeight(t *testing.T) {
-	for in, want := range map[int]int{0: 720, -5: 720, 1: 360, 359: 360, 360: 360, 500: 480, 719: 480, 720: 720, 1079: 720, 1080: 1080, 4320: 1080} {
+	for in, want := range map[int]int{0: 0, -5: 0, 1: 360, 359: 360, 360: 360, 500: 480, 719: 480, 720: 720, 1079: 720, 1080: 1080, 4320: 1080} {
 		if got := snapHeight(in); got != want {
 			t.Errorf("snapHeight(%d) = %d, want %d", in, got, want)
 		}

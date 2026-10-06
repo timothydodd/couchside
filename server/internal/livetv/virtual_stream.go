@@ -44,7 +44,12 @@ type playoutSource func(ctx context.Context, ms int64) ([]db.PlayoutPiece, error
 // startVirtual starts (or joins) a virtual channel's stream.
 func (m *liveManager) startVirtual(ctx context.Context, channel, name string, spec Spec, src playoutSource) (*LiveSession, error) {
 	spec.CopyVideo, spec.CopyAudio = false, false
+	// Pieces are joined into one stream, so they all need one size: "as
+	// broadcast" means 720p here.
 	spec.Height = snapHeight(spec.Height)
+	if spec.Height == 0 {
+		spec.Height = 720
+	}
 	key := "vc:" + channel
 	k := fmt.Sprintf("%s|%d", key, spec.Height)
 	m.mu.Lock()

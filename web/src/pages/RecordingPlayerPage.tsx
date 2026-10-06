@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { LIVE_QUALITIES, qualityDetail, qualityLabel } from "./LivePlayerPage";
 import type HlsType from "hls.js";
 import PlayerFrame from "../components/player/PlayerFrame";
 import { InfoRows, type SettingSection } from "../components/player/SettingsMenu";
@@ -52,7 +53,7 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
     (async () => {
       let s: Session;
       try {
-        s = await api<Session>(`/api/dvr/recordings/${id}/watch`, { method: "POST", json: { height } });
+        s = await api<Session>(`/api/dvr/recordings/${id}/watch`, { method: "POST", json: { height, source: height === 0 } });
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof ApiError ? e.message : String(e));
@@ -108,19 +109,19 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
     {
       id: "quality",
       label: "Quality",
-      value: `${height}p`,
-      options: [1080, 720, 480].map((h) => ({ id: String(h), label: `${h}p`, detail: h === 1080 ? "8 Mbps" : h === 720 ? "4 Mbps" : "1.5 Mbps", active: h === height })),
+      value: qualityLabel(height),
+      options: LIVE_QUALITIES.map((h) => ({ id: String(h), label: qualityLabel(h), detail: qualityDetail(h), active: h === height })),
       onSelect: (idv) => setHeight(Number(idv)),
     },
     {
       id: "info",
       label: "Playback info",
-      value: session ? `${session.height}p` : "",
+      value: session ? qualityLabel(session.height) : "",
       content: (
         <InfoRows
           rows={[
             ["Recording", rec ? `${rec.channel} ${rec.channelName}, ${fmtTime(startAt)} – ${fmtTime(endAt)}` : "–"],
-            ["Stream", session ? `H.264 ${session.height}p, following the file as it's written` : "–"],
+            ["Stream", session ? `H.264 ${session.height ? `${session.height}p` : "as broadcast"}, following the file as it's written` : "–"],
             ["Transcoder", session?.hw && session.hw !== "none" ? session.hw.toUpperCase() : "CPU (software)"],
           ]}
         />

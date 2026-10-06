@@ -114,7 +114,7 @@ func testHWDecode(ctx context.Context, e Encoder, filters string) bool {
 
 // VideoOpts describes one H.264 encode.
 type VideoOpts struct {
-	MaxHeight   int  // output height cap; 0 keeps the source height
+	MaxHeight   int  // output height cap; 0 keeps the source height. With SrcHeight unknown the cap is a filter expression, so a smaller picture is never scaled up
 	SrcHeight   int  // 0 when unknown
 	BitrateK    int  // target/peak bitrate in kbit/s
 	HDR         bool // source is PQ/HLG: tone map to SDR
@@ -142,7 +142,11 @@ func (e Encoder) VideoParts(o VideoOpts) (in []string, chain string, codec []str
 		// Only touches frames flagged interlaced, so progressive channels pass through.
 		f = append(f, "yadif=mode=send_frame:parity=auto:deint=interlaced")
 	}
-	if o.MaxHeight > 0 && (o.SrcHeight == 0 || o.SrcHeight > o.MaxHeight) {
+	switch {
+	case o.MaxHeight > 0 && o.SrcHeight == 0:
+		// Size unknown (a live stream): cap the height, never scale up.
+		f = append(f, fmt.Sprintf("scale=-2:'min(ih,%d)'", o.MaxHeight))
+	case o.MaxHeight > 0 && o.SrcHeight > o.MaxHeight:
 		f = append(f, fmt.Sprintf("scale=-2:%d", o.MaxHeight))
 	}
 	if o.HDR && e.Tonemap {
@@ -207,7 +211,10 @@ func (e Encoder) vaapiFull(o VideoOpts) (in []string, chain string, codec []stri
 		f = append(f, "deinterlace_vaapi=auto=1")
 	}
 	size := ""
-	if o.MaxHeight > 0 && (o.SrcHeight == 0 || o.SrcHeight > o.MaxHeight) {
+	switch {
+	case o.MaxHeight > 0 && o.SrcHeight == 0:
+		size = fmt.Sprintf(`w=-2:h=min(ih\,%d):`, o.MaxHeight) // size unknown: cap it, never scale up
+	case o.MaxHeight > 0 && o.SrcHeight > o.MaxHeight:
 		size = fmt.Sprintf("w=-2:h=%d:", o.MaxHeight)
 	}
 	switch {

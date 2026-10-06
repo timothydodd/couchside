@@ -298,3 +298,20 @@ func TestStreamSpec(t *testing.T) {
 		t.Fatalf("unknown: %+v", sp)
 	}
 }
+
+// "Auto" keeps the broadcast's size; a chosen height stays a cap; nothing
+// asked for means 720p as before.
+func TestWatchOptsAuto(t *testing.T) {
+	if sp := (WatchOpts{Source: true, Height: 1080}).spec("MPEG2", "AC3"); sp.Height != 0 || sp.VideoCodec != "mpeg2" {
+		t.Fatalf("auto: %+v", sp)
+	}
+	if sp := (WatchOpts{}).spec("", ""); sp.Height != 720 {
+		t.Fatalf("default: %+v", sp)
+	}
+	if sp := (WatchOpts{Height: 480}).spec("", ""); sp.Height != 480 {
+		t.Fatalf("chosen: %+v", sp)
+	}
+	if guessHeight(true) != 1080 || guessHeight(false) != 480 {
+		t.Fatal("guessHeight")
+	}
+}

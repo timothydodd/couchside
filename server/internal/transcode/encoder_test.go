@@ -36,7 +36,7 @@ func TestVAAPIFullPipeline(t *testing.T) {
 func TestVAAPILiveTV(t *testing.T) {
 	e := Encoder{HW: "vaapi", VAAPIDevice: "/dev/dri/renderD128", HWDecode: true}
 	_, chain, codec := e.VideoParts(VideoOpts{MaxHeight: 720, BitrateK: 4000, Deinterlace: true, Live: true, HWDecode: true})
-	if chain != "deinterlace_vaapi=auto=1,scale_vaapi=w=-2:h=720:format=nv12" {
+	if chain != `deinterlace_vaapi=auto=1,scale_vaapi=w=-2:h=min(ih\,720):format=nv12` {
 		t.Errorf("live chain = %q", chain)
 	}
 	if !strings.Contains(strings.Join(codec, " "), "-bf 0") {
@@ -54,5 +54,23 @@ func TestVAAPIWithoutGPUDecodeKeepsTheOldPipeline(t *testing.T) {
 		if strings.Contains(strings.Join(in, " "), "-hwaccel") || chain != "scale=-2:720,format=nv12,hwupload" {
 			t.Errorf("encoder %+v: in=%v chain=%q", e, in, chain)
 		}
+	}
+}
+
+// A live stream's size isn't known up front: the height is a cap the filter
+// applies per frame, so a 480-line broadcast asked for at 720p stays 480.
+func TestUnknownSourceNeverScalesUp(t *testing.T) {
+	e := Encoder{}
+	_, chain, _ := e.VideoParts(VideoOpts{MaxHeight: 720, BitrateK: 4000, Live: true})
+	if !strings.Contains(chain, "scale=-2:'min(ih,720)'") {
+		t.Errorf("chain = %q", chain)
+	}
+	_, chain, _ = e.VideoParts(VideoOpts{MaxHeight: 720, SrcHeight: 480, BitrateK: 4000})
+	if strings.Contains(chain, "scale") {
+		t.Errorf("a known smaller source was scaled: %q", chain)
+	}
+	_, chain, _ = e.VideoParts(VideoOpts{MaxHeight: 0, BitrateK: 4000, Live: true})
+	if strings.Contains(chain, "scale") {
+		t.Errorf("as-broadcast was scaled: %q", chain)
 	}
 }
