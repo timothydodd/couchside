@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject, type VideoHTMLAttributes } from "react";
 import {
-  AlertTriangle, ArrowLeft, ChevronsRight, Maximize, Minimize, Pause, Play, Radio, RotateCcw, RotateCw, Settings2, SkipBack, Volume1, Volume2, VolumeX,
+  AlertTriangle, ArrowLeft, ChevronsRight, ListVideo, Maximize, Minimize, Pause, Play, Radio, RotateCcw, RotateCw, Settings2, SkipBack, SkipForward, Volume1, Volume2, VolumeX,
 } from "lucide-react";
 import SeekBar from "./SeekBar";
 import SettingsMenu, { type SettingSection } from "./SettingsMenu";
+import QueueMenu from "./QueueMenu";
+import type { QueueEntry } from "../../stores/queue";
 import { useMediaState } from "./useMediaState";
 import { useBreakSkip } from "./useBreakSkip";
 import { useIntroSkip } from "./useIntroSkip";
@@ -62,6 +64,13 @@ export interface PlayerFrameProps {
   /** Offered on a right-click on a break in the seek bar; omitted, there's no menu. */
   onNotCommercial?: (b: Segment) => void;
   onBack: () => void;
+  /** The play queue (vod): previous/next buttons and the queue overlay. Omitted, there's none. */
+  queue?: {
+    entries: QueueEntry[];
+    current: number; // file id
+    onPlay: (fileId: number) => void;
+    onRemove: (fileId: number) => void;
+  };
   onKey?: (e: KeyboardEvent) => boolean; // return true when handled
   loading?: string | null;
   notice?: string | null;
@@ -89,6 +98,8 @@ export default function PlayerFrame(p: PlayerFrameProps) {
   const seg = useIntroSkip(videoRef, st.time, timeline.kind === "vod" ? p.segments : undefined, p.introMode ?? "button");
   const [chrome, setChrome] = useState(true);
   const [menu, setMenu] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
+  const resumeAfterQueue = useRef(false);
   const [breakMenu, setBreakMenu] = useState<{ b: Segment; x: number } | null>(null);
   const [full, setFull] = useState(false);
   const [volOpen, setVolOpen] = useState(false);
@@ -218,6 +229,35 @@ export default function PlayerFrame(p: PlayerFrameProps) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  // --- play queue --------------------------------------------------------------------
+  const q = p.queue;
+  const qAt = q ? q.entries.findIndex((e) => e.fileId === q.current) : -1;
+  const qPrev = q && qAt > 0 ? q.entries[qAt - 1].fileId : null;
+  const qNext = q && qAt >= 0 && qAt + 1 < q.entries.length ? q.entries[qAt + 1].fileId : null;
+  // Previous: inside the first five seconds it's the item before; after
+  // that it starts this one over, like a CD player.
+  const atStart = st.time <= 5;
+  const canPrevious = !!q && (!atStart || qPrev !== null);
+  const previous = useCallback(() => {
+    if (!q) return;
+    if (st.time > 5 || qPrev === null) seekTo(0);
+    else q.onPlay(qPrev);
+  }, [q, qPrev, st.time, seekTo]);
+  const next = useCallback(() => {
+    if (q && qNext !== null) q.onPlay(qNext);
+  }, [q, qNext]);
+  const openQueue = useCallback(() => {
+    const el = v();
+    resumeAfterQueue.current = !!el && !el.paused;
+    el?.pause();
+    setMenu(false);
+    setQueueOpen(true);
+  }, []);
+  const closeQueue = useCallback(() => {
+    setQueueOpen(false);
+    if (resumeAfterQueue.current) void v()?.play().catch(() => {});
+  }, []);
+
   {
     keyHandler.current = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.closest("input, select, textarea")) return;
@@ -257,6 +297,15 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           break;
         case "f":
           toggleFull();
+          break;
+        case "n":
+          if (q) next();
+          break;
+        case "p":
+          if (q && canPrevious) previous();
+          break;
+        case "q":
+          if (q && q.entries.length > 1) (queueOpen ? closeQueue : openQueue)();
           break;
         case "s":
           if (brk.current) brk.skip();
@@ -461,12 +510,22 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           <CtlButton label={st.paused ? "Play (Space)" : "Pause (Space)"} onClick={toggle}>
             {st.paused ? <Play size={20} className="fill-current" /> : <Pause size={20} className="fill-current" />}
           </CtlButton>
+          {q && (
+            <CtlButton label={!atStart ? "Start over (P)" : "Previous (P)"} onClick={previous} disabled={!canPrevious}>
+              <SkipBack size={18} />
+            </CtlButton>
+          )}
           <CtlButton label="Back 10 seconds (←)" onClick={() => skip(-10)}>
             <RotateCcw size={18} />
           </CtlButton>
           <CtlButton label="Forward 30 seconds (L)" onClick={() => skip(30)} disabled={atLive}>
             <RotateCw size={18} />
           </CtlButton>
+          {q && (
+            <CtlButton label="Next (N)" onClick={next} disabled={qNext === null}>
+              <SkipForward size={18} />
+            </CtlButton>
+          )}
           {/* phones have volume buttons, and iOS ignores the page's volume */}
           <div className="relative flex items-center max-md:hidden" onMouseEnter={() => setVolOpen(true)} onMouseLeave={() => setVolOpen(false)}>
             <CtlButton label="Mute (M)" onClick={() => { const el = v(); if (el) el.muted = !el.muted; }}>
@@ -501,7 +560,12 @@ export default function PlayerFrame(p: PlayerFrameProps) {
               <Radio size={13} /> {atLive ? "LIVE" : "GO LIVE"}
             </button>
           )}
-          <CtlButton label="Settings" onClick={() => setMenu((m) => !m)} active={menu}>
+          {q && q.entries.length > 1 && (
+            <CtlButton label="Queue (Q)" onClick={() => (queueOpen ? closeQueue() : openQueue())} active={queueOpen}>
+              <ListVideo size={19} />
+            </CtlButton>
+          )}
+          <CtlButton label="Settings" onClick={() => { setQueueOpen(false); setMenu((m) => !m); }} active={menu}>
             <Settings2 size={19} />
           </CtlButton>
           <CtlButton label={full ? "Exit full screen (F)" : "Full screen (F)"} onClick={toggleFull}>
@@ -511,6 +575,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
       </div>
 
       {menu && <SettingsMenu sections={p.settings} onClose={() => setMenu(false)} />}
+      {queueOpen && q && <QueueMenu entries={q.entries} current={q.current} onPlay={(id) => { setQueueOpen(false); q.onPlay(id); }} onRemove={q.onRemove} onClose={closeQueue} />}
 
       {p.error && (
         <div className="absolute inset-0 flex items-center justify-center p-6">
