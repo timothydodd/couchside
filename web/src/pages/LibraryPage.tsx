@@ -10,7 +10,7 @@ import { api, useApi } from "../lib/api";
 import { attempt, notify } from "../lib/notices";
 import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
-import { useQueue } from "../stores/queue";
+import { useQueue, type QueueEntry } from "../stores/queue";
 import { useStatus } from "../stores/status";
 import type { Item, ItemDetail, ItemKind, ItemSummary } from "../lib/types";
 
@@ -105,21 +105,23 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
   // Everything playable in the selected titles, in grid order: a movie's
   // chosen copy (or its parts), a show's episodes in order.
   const playAll = attempt("Couldn't start playing", async () => {
-    const ids: number[] = [];
+    const entries: QueueEntry[] = [];
     for (const it of chosen) {
       const d = await api<ItemDetail & { versionFileId?: number | null }>(`/api/items/${it.id}`);
       if (it.kind === "series") {
-        for (const s of d.seasons ?? []) for (const e of s.episodes) if (e.fileId) ids.push(e.fileId);
+        for (const s of d.seasons ?? [])
+          for (const e of s.episodes) if (e.fileId) entries.push({ fileId: e.fileId, title: it.title, subtitle: `S${e.season} E${e.episode}${e.title ? ` · ${e.title}` : ""}` });
       } else {
+        const year = it.year ? String(it.year) : undefined;
         const parts = d.files.filter((f) => f.role === "part").sort((a, b) => a.partNo - b.partNo);
-        if (parts.length) ids.push(...parts.map((f) => f.id));
-        else if (d.versionFileId) ids.push(d.versionFileId);
-        else if (d.files.find((f) => f.role === "copy")) ids.push(d.files.find((f) => f.role === "copy")!.id);
+        if (parts.length) entries.push(...parts.map((f) => ({ fileId: f.id, title: it.title, subtitle: `Part ${f.partNo}` })));
+        else if (d.versionFileId) entries.push({ fileId: d.versionFileId, title: it.title, subtitle: year });
+        else if (d.files.find((f) => f.role === "copy")) entries.push({ fileId: d.files.find((f) => f.role === "copy")!.id, title: it.title, subtitle: year });
       }
     }
-    if (!ids.length) throw new Error("nothing to play in the selection");
-    useQueue.getState().start(ids);
-    go(`/play/${ids[0]}`);
+    if (!entries.length) throw new Error("nothing to play in the selection");
+    useQueue.getState().start(entries);
+    go(`/play/${entries[0].fileId}`);
   });
   const allListed = chosen.length > 0 && chosen.every((i) => i.inWatchlist);
   const setListed = (on: boolean) =>

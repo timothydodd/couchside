@@ -12,7 +12,7 @@ import { hlsEngine } from "../lib/hls";
 import { previewFrame, type TrickIndex } from "../lib/trickplay";
 import { chooseSource, fmtMbps, hlsCopyCaps, presetById, presetSource, presetsFor, sourceKey, stepDown, type Quality, type Source } from "../lib/playback";
 import { audioLabel, subtitleDetail, subtitleLabel, type AudioTrack, type SubtitleTrack } from "../lib/tracks";
-import { PROBLEM_TEXT, type MarkedSegment, type BreakMode, type Commercials, type HlsSession, type PlayInfo, type Segment } from "../lib/types";
+import { type ItemDetail, PROBLEM_TEXT, type MarkedSegment, type BreakMode, type Commercials, type HlsSession, type PlayInfo, type Segment } from "../lib/types";
 import { BREAK_MODES, sameLanguage } from "../lib/prefs";
 import { useIsAdmin } from "../stores/auth";
 import { usePrefs, useProfile } from "../stores/profile";
@@ -74,6 +74,35 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   const recovered = useRef({ session: false, media: false });
 
   const exit = useCallback(() => back(info ? `/item/${info.itemId}` : "/"), [back, info]);
+
+  // The play queue: what Play all lined up, or else this episode's season.
+  // A file outside the current queue means the viewer went somewhere else:
+  // the queue starts over from where they are.
+  const queue = useQueue((s) => s.entries);
+  useEffect(() => {
+    if (!info || useQueue.getState().has(fileId)) return;
+    if (info.kind !== "series") {
+      useQueue.getState().clear();
+      return;
+    }
+    let cancelled = false;
+    void api<ItemDetail>(`/api/items/${info.itemId}`)
+      .then((d) => {
+        if (cancelled) return;
+        const season = d.seasons?.find((s) => s.episodes.some((e) => e.fileId === fileId));
+        if (!season) return;
+        useQueue.getState().start(
+          season.episodes
+            .filter((e) => e.fileId)
+            .map((e) => ({ fileId: e.fileId, title: d.item.title, subtitle: `S${e.season} E${e.episode}${e.title ? ` · ${e.title}` : ""}` })),
+          false,
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [info, fileId]);
 
   const defaultAudio = streams?.audio.find((a) => a.default)?.index ?? 0;
   const burnIndex = sub.kind === "burn" ? sub.track.index : null;
@@ -513,6 +542,11 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
       preview={trick ? (t) => (info?.durationSec && t > info.durationSec ? null : previewFrame(fileId, trick, t)) : undefined}
       breakMode={breakMode}
       onBack={exit}
+      queue={
+        queue.length > 0 && !parts
+          ? { entries: queue, current: fileId, onPlay: (id) => go(`/play/${id}`, { replace: true }), onRemove: (id) => useQueue.getState().remove(id) }
+          : undefined
+      }
       loading={errorText ? null : loading}
       notice={notice}
       noticeAction={notice ? noticeAction : null}
