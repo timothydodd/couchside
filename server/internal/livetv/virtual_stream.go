@@ -405,7 +405,7 @@ func (s *Service) watchVirtual(ctx context.Context, id int64, ch db.Channel, o W
 	if vc, err := s.db.VirtualChannel(ctx, id); err != nil {
 		return nil, err
 	} else if cfg, err := ParseVirtualConfig(vc.Config); err == nil && cfg.Stream != nil {
-		return s.live.startStream(ctx, ch.Number, ch.Name, cfg.Stream.URL, o.spec("", ""))
+		return s.live.startStream(ctx, ch.Number, ch.Name, cfg.Stream.URL, streamSpec(s.streamInfo(ctx, cfg.Stream.URL), o))
 	}
 	if end, err := s.db.PlayoutEnd(ctx, id); err != nil {
 		return nil, err

@@ -127,9 +127,10 @@ on the web and the Roku. No tuner is needed.
   MPEG-TS stream over http or https that the server can reach, such as an IPTV
   feed, a camera behind a restreamer, or another program's output (a
   WeatherStar 4000 recreation captured by `ws4channels`, say). Couchside
-  connects only while someone is watching, converts the picture like a tuner
-  channel (one of `COUCHSIDE_MAX_TRANSCODES`), and shares the stream between
-  viewers. The guide shows the channel's name around the clock, since
+  connects only while someone is watching and shares the stream between
+  viewers. A stream that is already H.264 with AAC or MP3 audio is passed on
+  untouched; anything else is converted like a tuner channel (one of
+  `COUCHSIDE_MAX_TRANSCODES`). The guide shows the channel's name around the clock, since
   Couchside can't know what a stream is showing. Stream channels can't be
   recorded, and the address is only ever shown to admins.
 - **Export and import:** **Export** in Your channels saves the line-up as a
