@@ -61,6 +61,8 @@ export function parseRoute(path: string): Route {
 interface RouterState {
   path: string;
   route: Route;
+  /** The last change came from the browser's Back or Forward, not a link: a page may put its scroll position back. */
+  pop: boolean;
   go: (path: string, opts?: { replace?: boolean }) => void;
   back: (fallback: string) => void;
 }
@@ -69,11 +71,12 @@ interface RouterState {
 export const useRouter = create<RouterState>((set, get) => ({
   path: here(),
   route: parseRoute(here()),
+  pop: false,
   go: (path, opts) => {
     if (path === get().path) return;
     if (opts?.replace) history.replaceState({ couchside: true }, "", path);
     else history.pushState({ couchside: true }, "", path);
-    set({ path, route: parseRoute(path) });
+    set({ path, route: parseRoute(path), pop: false });
   },
   back: (fallback) => {
     // Only go back if the previous entry is ours; otherwise go to the fallback.
@@ -87,5 +90,5 @@ function here() {
 }
 
 window.addEventListener("popstate", () => {
-  useRouter.setState({ path: here(), route: parseRoute(here()) });
+  useRouter.setState({ path: here(), route: parseRoute(here()), pop: true });
 });

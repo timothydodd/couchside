@@ -1,4 +1,4 @@
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef } from "react";
 import { MobileTabBar, MobileTopBar } from "./components/MobileNav";
 import Sidebar from "./components/Sidebar";
 import StatusBar from "./components/StatusBar";
@@ -56,9 +56,35 @@ function Redirect({ to }: { to: string }) {
 }
 
 /** The app proper, once there's someone to show it to. */
+// Where each page was scrolled to, so Back lands where you were (a long list
+// of episodes, say) instead of at the top. Grid pages keep their own.
+const scrollMemory = new Map<string, number>();
+
 function Signed() {
   const route = useRouter((s) => s.route);
   const path = useRouter((s) => s.path);
+  const pop = useRouter((s) => s.pop);
+  const main = useRef<HTMLElement>(null);
+  // Coming back: put the scroll position back once the page is tall enough
+  // (its data may still be loading), giving up after a couple of seconds.
+  useLayoutEffect(() => {
+    const el = main.current;
+    const want = pop ? scrollMemory.get(path) : undefined;
+    if (!el || !want) return;
+    const apply = () => {
+      el.scrollTop = want;
+      return Math.abs(el.scrollTop - want) < 2;
+    };
+    if (apply()) return;
+    const ro = new ResizeObserver(() => apply() && ro.disconnect());
+    for (const child of Array.from(el.children)) ro.observe(child);
+    ro.observe(el);
+    const stop = setTimeout(() => ro.disconnect(), 2000);
+    return () => {
+      ro.disconnect();
+      clearTimeout(stop);
+    };
+  }, [path, pop]);
   const loaded = useProfile((s) => s.loaded);
   const admin = useIsAdmin();
   const adminOnly = route.name === "activity" || route.name === "libraries" || route.name === "manage";
@@ -88,6 +114,8 @@ function Signed() {
         <Sidebar />
         {/* Grid pages manage their own scroll (virtualised); the rest scroll here. */}
         <main
+          ref={main}
+          onScroll={(e) => scrollMemory.set(path, e.currentTarget.scrollTop)}
           key={route.name === "livetv" || route.name === "search" ? route.name : path}
           className={`min-w-0 flex-1 ${route.name === "movies" || route.name === "tv" || route.name === "livetv" ? "overflow-hidden" : "overflow-auto"}`}
         >
