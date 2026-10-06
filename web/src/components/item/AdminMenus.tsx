@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Cpu, Eye, EyeOff, FastForward, FolderOpen, MoreHorizontal, Pencil, RefreshCw, RotateCcw, Scissors, Trash2 } from "lucide-react";
+import { Copy, Cpu, Eye, EyeOff, FastForward, FolderOpen, MoreHorizontal, Pencil, RefreshCw, RotateCcw, Scissors, Trash2 } from "lucide-react";
 import EditDetails from "./EditDetails";
 import { MenuButton, type MenuItem } from "../ui";
 import { api } from "../../lib/api";
 import { attempt, notify } from "../../lib/notices";
-import type { DeleteResult, EpisodeRow, Item } from "../../lib/types";
+import type { DeleteResult, EpisodeRow, Item, MediaFile } from "../../lib/types";
 import { useRouter } from "../../stores/router";
 import { useStatus } from "../../stores/status";
 
@@ -87,6 +87,83 @@ export function EpisodeActions({ item, e, onChange }: { item: Item; e: EpisodeRo
 }
 
 /** The "⋯" beside Mark watched, for admins: the whole movie or show. */
+/** The "⋯" beside one of a movie's extras: rename it, make it a copy of the film instead, and the file actions. */
+export function ExtraActions({ item, f, onChange }: { item: Item; f: MediaFile; onChange: () => void }) {
+  const go = useRouter((s) => s.go);
+  const file = `/api/files/${f.id}`;
+  const name = f.extraTitle || "this extra";
+  const items: MenuItem[] = [
+    {
+      id: "rename",
+      label: "Rename",
+      detail: "The name shown after the film's title.",
+      icon: <Pencil size={15} />,
+      onSelect: attempt("Couldn't rename", async () => {
+        const t = prompt("Name of this extra:", f.extraTitle);
+        if (t == null || !t.trim()) return;
+        await api(`${file}/role`, { method: "PUT", json: { role: "extra", partNo: 0, extraTitle: t.trim() } });
+        onChange();
+      }),
+    },
+    {
+      id: "copy",
+      label: "This is a copy of the film",
+      detail: "Not bonus material: list it with the film's other copies.",
+      icon: <Copy size={15} />,
+      onSelect: attempt("Couldn't change the file's role", async () => {
+        await api(`${file}/role`, { method: "PUT", json: { role: "copy", partNo: 0, extraTitle: "" } });
+        onChange();
+      }),
+    },
+    {
+      id: "watched",
+      label: f.watched ? "Mark unwatched" : "Mark watched",
+      icon: f.watched ? <EyeOff size={15} /> : <Eye size={15} />,
+      onSelect: attempt("Couldn't change watched", async () => {
+        await api(`${file}/watched`, { method: "POST", json: { watched: !f.watched } });
+        onChange();
+      }),
+    },
+    {
+      id: "rescan",
+      label: "Re-scan file",
+      detail: "Reads it again: length, codecs and a new frame.",
+      icon: <RefreshCw size={15} />,
+      onSelect: attempt("Couldn't re-scan", async () => {
+        await api(`${file}/rescan`, { method: "POST" });
+        notify(`Re-scanned ${name}.`, "info");
+        onChange();
+      }),
+    },
+  ];
+  if (!f.problem)
+    items.push({
+      id: "optimize",
+      label: "Optimize",
+      detail: "Encode a browser-friendly H.264 copy.",
+      icon: <Cpu size={15} />,
+      onSelect: attempt("Couldn't queue the encode", async () => {
+        await api(`${file}/optimize`, { method: "POST" });
+        queued(`Encoding ${name}`);
+      }),
+    });
+  items.push({
+    id: "delete",
+    label: "Delete from disk",
+    detail: "Removes the video file and its subtitles. This can't be undone.",
+    icon: <Trash2 size={15} />,
+    danger: true,
+    onSelect: attempt("Couldn't delete", async () => {
+      if (!confirm(`Delete ${name} (${item.title}) from disk? This can't be undone.`)) return;
+      const r = await api<DeleteResult>(file, { method: "DELETE" });
+      notify(`Deleted ${name}.`, "info");
+      if (r.itemsRemoved.includes(item.id)) go("/movies", { replace: true });
+      else onChange();
+    }),
+  });
+  return <MenuButton label={`Actions for ${name}`} icon={<MoreHorizontal size={16} />} items={items} align="end" className="btn-quiet !p-2" />;
+}
+
 export function TitleActions({ item, onChange }: { item: Item; onChange: () => void }) {
   const comskip = useStatus((s) => s.status?.comskip);
   const go = useRouter((s) => s.go);
