@@ -87,7 +87,7 @@ func (d *DB) MarkIntroChecked(ctx context.Context, f EpisodeFile) error {
 // SeriesNeedingIntros lists a library's series that have an episode intro
 // detection hasn't looked at yet.
 func (d *DB) SeriesNeedingIntros(ctx context.Context, libraryID int64) ([]ItemRef, error) {
-	rows, err := d.sql.QueryContext(ctx, `SELECT m.id, m.title FROM media_items m WHERE m.library_id = ? AND m.kind = 'series'
+	rows, err := d.sql.QueryContext(ctx, `SELECT m.id, m.title FROM media_items m WHERE (m.library_id = ?1 OR EXISTS (SELECT 1 FROM files fl WHERE fl.media_item_id = m.id AND fl.library_id = ?1)) AND m.kind = 'series'
 		AND EXISTS (SELECT 1 FROM files f WHERE f.media_item_id = m.id AND f.episode_id IS NOT NULL AND f.problem = '' AND f.role <> 'extra'
 		  AND NOT EXISTS (SELECT 1 FROM intro_checks c WHERE c.file_id = f.id AND c.size = f.size AND c.mtime = f.mtime))`, libraryID)
 	if err != nil {

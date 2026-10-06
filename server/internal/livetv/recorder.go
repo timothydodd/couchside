@@ -24,6 +24,7 @@ import (
 // broadcast it can play is passed through instead of re-encoded.
 type WatchOpts struct {
 	Height      int
+	Source      bool // keep the broadcast's own size ("Auto"); Height is then ignored
 	VideoCodecs []string
 	AudioCodecs []string
 }
@@ -63,7 +64,9 @@ func hasCodec(list []string, codec string) bool {
 func (o WatchOpts) spec(videoCodec, audioCodec string) Spec {
 	v, a := NormalizeCodec(videoCodec), NormalizeCodec(audioCodec)
 	sp := Spec{Height: o.Height, VideoCodec: v, CopyVideo: hasCodec(o.VideoCodecs, v), CopyAudio: hasCodec(o.AudioCodecs, a)}
-	if sp.Height <= 0 {
+	if o.Source {
+		sp.Height = 0 // the broadcast's own size
+	} else if sp.Height <= 0 {
 		sp.Height = 720
 	}
 	return sp
@@ -84,7 +87,18 @@ func (s *Service) Watch(ctx context.Context, channel string, o WatchOpts) (*Live
 	if s.hdhr == nil {
 		return nil, usererr.New("no tuner is set up")
 	}
-	return s.live.start(ctx, ch.Number, ch.Name, ch.URL, o.spec(ch.VideoCodec, ch.AudioCodec))
+	sp := o.spec(ch.VideoCodec, ch.AudioCodec)
+	sp.SrcHeight = guessHeight(ch.HD)
+	return s.live.start(ctx, ch.Number, ch.Name, ch.URL, sp)
+}
+
+// guessHeight is what a tuner channel's picture probably is, from the
+// lineup's HD flag: enough to pick a bitrate for an "as broadcast" stream.
+func guessHeight(hd bool) int {
+	if hd {
+		return 1080
+	}
+	return 480
 }
 
 // WatchRecording plays a recording that's still in progress from its start.
@@ -102,12 +116,15 @@ func (s *Service) WatchRecording(ctx context.Context, id int64, o WatchOpts) (*L
 	}
 	// A recording holds the channel's broadcast as is, so the same codecs apply.
 	var vc, ac string
+	hd := true
 	if ch, err := s.db.Channel(ctx, r.Channel); err == nil {
-		vc, ac = ch.VideoCodec, ch.AudioCodec
+		vc, ac, hd = ch.VideoCodec, ch.AudioCodec, ch.HD
 	}
+	sp := o.spec(vc, ac)
+	sp.SrcHeight = guessHeight(hd)
 	// Follow the part being written. After a dropped signal that's only the
 	// latest piece; the rest joins up once the recording finishes.
-	return s.live.startRecordingPlayback(ctx, r.ID, r.Channel, r.Title, parts[len(parts)-1], o.spec(vc, ac))
+	return s.live.startRecordingPlayback(ctx, r.ID, r.Channel, r.Title, parts[len(parts)-1], sp)
 }
 
 func (s *Service) LiveFile(id, name string) (string, error) { return s.live.file(id, name) }

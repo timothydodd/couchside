@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { ChevronDown, Clapperboard, Eye, EyeOff, Settings2, Trash2, Tv, X } from "lucide-react";
+import { Bookmark, BookmarkX, ChevronDown, Clapperboard, Combine, Eye, EyeOff, Play, RefreshCw, Scissors, Settings2, Trash2, Tv, X } from "lucide-react";
 import Link from "../components/Link";
 import PosterGrid from "../components/PosterGrid";
 import DeleteSelected from "../components/manage/DeleteSelected";
+import MergeTitles from "../components/manage/MergeTitles";
 import FilterMenu, { Choices } from "../components/FilterMenu";
 import { EmptyState, ErrorNote, MenuButton, SearchInput, Spinner } from "../components/ui";
 import { api, useApi } from "../lib/api";
-import { attempt } from "../lib/notices";
+import { attempt, notify } from "../lib/notices";
 import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
-import type { Item, ItemKind, ItemSummary } from "../lib/types";
+import { useQueue } from "../stores/queue";
+import { useStatus } from "../stores/status";
+import type { Item, ItemDetail, ItemKind, ItemSummary } from "../lib/types";
 
 type Sort = "title" | "added" | "year" | "rating";
 type Filter = "all" | "unwatched" | "watched" | "list" | "unmatched";
@@ -71,6 +74,8 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
   const [picked, setPicked] = useState<Set<number>>(() => new Set());
   const anchor = useRef<number | null>(null); // the last title clicked, where a Shift-click range starts
   const [deleting, setDeleting] = useState(false);
+  const [merging, setMerging] = useState(false);
+  const comskip = useStatus((s) => !!s.status?.comskip);
   const chosen = useMemo(() => items.filter((i) => picked.has(i.id)), [items, picked]);
   const clear = () => {
     setPicked(new Set());
@@ -97,6 +102,41 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [selecting, deleting]);
+  // Everything playable in the selected titles, in grid order: a movie's
+  // chosen copy (or its parts), a show's episodes in order.
+  const playAll = attempt("Couldn't start playing", async () => {
+    const ids: number[] = [];
+    for (const it of chosen) {
+      const d = await api<ItemDetail & { versionFileId?: number | null }>(`/api/items/${it.id}`);
+      if (it.kind === "series") {
+        for (const s of d.seasons ?? []) for (const e of s.episodes) if (e.fileId) ids.push(e.fileId);
+      } else {
+        const parts = d.files.filter((f) => f.role === "part").sort((a, b) => a.partNo - b.partNo);
+        if (parts.length) ids.push(...parts.map((f) => f.id));
+        else if (d.versionFileId) ids.push(d.versionFileId);
+        else if (d.files.find((f) => f.role === "copy")) ids.push(d.files.find((f) => f.role === "copy")!.id);
+      }
+    }
+    if (!ids.length) throw new Error("nothing to play in the selection");
+    useQueue.getState().start(ids);
+    go(`/play/${ids[0]}`);
+  });
+  const allListed = chosen.length > 0 && chosen.every((i) => i.inWatchlist);
+  const setListed = (on: boolean) =>
+    attempt(on ? "Couldn't add to My list" : "Couldn't remove from My list", async () => {
+      for (const it of chosen) if (it.inWatchlist !== on) await api(`/api/items/${it.id}/watchlist`, { method: on ? "PUT" : "DELETE" });
+      await reload();
+    })();
+  const refreshMeta = attempt("Couldn't refresh metadata", async () => {
+    for (const it of chosen) await api(`/api/items/${it.id}/match`, { method: "POST", json: { refresh: true } });
+    notify(`Refreshing metadata for ${chosen.length} ${chosen.length === 1 ? "title" : "titles"}; see Activity.`, "info");
+    clear();
+  });
+  const findCommercials = attempt("Couldn't queue commercial detection", async () => {
+    for (const it of chosen) await api(`/api/items/${it.id}/commercials`, { method: "POST", json: { redo: false } });
+    notify(`Looking for commercials in ${chosen.length} ${chosen.length === 1 ? "title" : "titles"}; see Activity.`, "info");
+    clear();
+  });
   const setWatched = (watched: boolean) =>
     attempt(`Couldn't mark ${watched ? "watched" : "unwatched"}`, async () => {
       for (const it of chosen) await api(`/api/items/${it.id}/watched`, { method: "POST", json: { watched } });
@@ -177,8 +217,17 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
                 </>
               }
               items={[
+                { id: "play", label: "Play all", detail: "One after another, in this order", icon: <Play size={14} />, onSelect: () => void playAll() },
+                allListed
+                  ? { id: "unlist", label: "Remove from My list", icon: <BookmarkX size={14} />, onSelect: () => void setListed(false) }
+                  : { id: "list", label: "Add to My list", icon: <Bookmark size={14} />, onSelect: () => void setListed(true) },
                 { id: "watched", label: "Mark watched", icon: <Eye size={14} />, onSelect: () => void setWatched(true) },
                 { id: "unwatched", label: "Mark unwatched", icon: <EyeOff size={14} />, onSelect: () => void setWatched(false) },
+                { id: "refresh", label: "Refresh metadata", detail: "Fetches details and artwork again; a fixed match stays", icon: <RefreshCw size={14} />, onSelect: () => void refreshMeta() },
+                ...(comskip ? [{ id: "commercials", label: "Find commercials", detail: "In recordings not yet checked", icon: <Scissors size={14} />, onSelect: () => void findCommercials() }] : []),
+                ...(chosen.length > 1
+                  ? [{ id: "merge", label: "Merge…", detail: kind === "movie" ? "Into one film: duplicates or bonus material" : "Into one show", icon: <Combine size={14} />, onSelect: () => setMerging(true) }]
+                  : []),
                 ...(chosen.length === 1
                   ? [
                       {
@@ -228,6 +277,16 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
         <EmptyState title="Nothing matches those filters" />
       ) : (
         <PosterGrid items={items} memoryKey={kind} selection={admin ? { ids: picked, onClick: pick } : undefined} />
+      )}
+      {merging && (
+        <MergeTitles
+          items={chosen}
+          onClose={() => setMerging(false)}
+          onMerged={() => {
+            clear();
+            void reload();
+          }}
+        />
       )}
       {deleting && (
         <DeleteSelected

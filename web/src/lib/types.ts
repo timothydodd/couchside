@@ -178,7 +178,7 @@ export interface Prefs {
   commercials?: BreakMode; // default "auto"
   intros?: BreakMode; // skip intros: default "button"
   subtitleLang?: string; // turn on text subtitles in this language; "" = only forced ones (default)
-  liveHeight?: number; // live TV and in-progress recording quality, default 720
+  liveHeight?: number; // live TV and in-progress recording quality, default 720; 0 = as broadcast
   livePassthrough?: boolean; // TV apps play broadcasts they can decode untouched; default true
 }
 

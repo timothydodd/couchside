@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
 )
 
 // ManageRow is one movie or show in a library's Manage view.
@@ -43,15 +42,14 @@ func (d *DB) ManageRows(ctx context.Context, libraryID int64) ([]ManageRow, erro
 		COALESCE(best.height, 0),
 		(SELECT COALESCE(MIN(COALESCE(f.height, 0)), 0) FROM files f WHERE f.media_item_id = m.id AND f.role <> 'extra'),
 		COALESCE(best.video_codec, ''),
-		(SELECT COUNT(*) FROM media_items m2 WHERE m2.library_id = m.library_id AND m2.id <> m.id
-		   AND m.imdb_id <> '' AND m2.imdb_id = m.imdb_id),
+		(SELECT COUNT(*) FROM media_items m2 WHERE m2.id <> m.id AND m.imdb_id <> '' AND m2.imdb_id = m.imdb_id),
 		(SELECT COUNT(*) FROM files f WHERE f.media_item_id = m.id AND f.role = 'part'),
 		(SELECT COUNT(*) FROM files f WHERE f.media_item_id = m.id AND f.role = 'extra'),
 		(SELECT COUNT(DISTINCT f.edition) FROM files f WHERE f.media_item_id = m.id AND f.role = 'copy')
 		FROM media_items m
 		LEFT JOIN files best ON best.id = (SELECT f.id FROM files f WHERE f.media_item_id = m.id AND f.role <> 'extra'
 		  ORDER BY COALESCE(f.height, 0) DESC, f.size DESC LIMIT 1)
-		WHERE m.library_id = ? ORDER BY m.sort_title`, libraryID)
+		WHERE EXISTS (SELECT 1 FROM files fl WHERE fl.media_item_id = m.id AND fl.library_id = ?) ORDER BY m.sort_title`, libraryID)
 	if err != nil {
 		return nil, err
 	}
@@ -116,50 +114,24 @@ func (d *DB) ManageFiles(ctx context.Context, itemID int64) ([]ManageFile, error
 	return out, rows.Err()
 }
 
-// DeleteFileRows forgets files (already deleted on disk), then any of the
-// library's items and episodes left without files. It returns the items that went.
-func (d *DB) DeleteFileRows(ctx context.Context, libraryID int64, fileIDs []int64) ([]int64, error) {
+// DeleteFileRows forgets files (already deleted on disk), then any items and
+// episodes left without files. It returns the items that went.
+func (d *DB) DeleteFileRows(ctx context.Context, fileIDs []int64) ([]int64, error) {
 	tx, err := d.sql.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
 	for _, id := range fileIDs {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM files WHERE id = ? AND library_id = ?`, id, libraryID); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM files WHERE id = ?`, id); err != nil {
 			return nil, err
 		}
 	}
-	gone, err := orphanItems(ctx, tx, libraryID)
+	gone, err := tidyItems(ctx, tx)
 	if err != nil {
-		return nil, err
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM media_items WHERE library_id = ?
-		AND NOT EXISTS (SELECT 1 FROM files f WHERE f.media_item_id = media_items.id)`, libraryID); err != nil {
-		return nil, err
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM episodes WHERE series_id IN (SELECT id FROM media_items WHERE library_id = ?)
-		AND NOT EXISTS (SELECT 1 FROM files f WHERE f.episode_id = episodes.id)`, libraryID); err != nil {
 		return nil, err
 	}
 	return gone, tx.Commit()
-}
-
-func orphanItems(ctx context.Context, tx *sql.Tx, libraryID int64) ([]int64, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT id FROM media_items WHERE library_id = ?
-		AND NOT EXISTS (SELECT 1 FROM files f WHERE f.media_item_id = media_items.id)`, libraryID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		out = append(out, id)
-	}
-	return out, rows.Err()
 }
 
 // DeleteRecordingsAt drops DVR recording rows whose file was deleted.

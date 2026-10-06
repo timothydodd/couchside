@@ -60,8 +60,9 @@ export default function ProfileSettings() {
                 label="Live TV quality"
                 value={p.liveHeight ?? 720}
                 onChange={(h) => setPrefs({ liveHeight: h })}
-                options={[1080, 720, 480].map((h) => ({ id: h, label: `${h}p` }))}
+                options={[0, 1080, 720, 480].map((h) => ({ id: h, label: h ? `${h}p` : "Auto" }))}
               />
+              <p className="mt-1 text-xs text-content-muted">Auto keeps each channel's own size. A chosen quality is a cap: a standard-definition channel is never scaled up.</p>
             </div>
             <span className="text-content-muted">On TVs</span>
             <label className="flex items-center gap-2 text-content-secondary">

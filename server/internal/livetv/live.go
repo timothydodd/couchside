@@ -116,7 +116,7 @@ var LiveHeights = []int{360, 480, 720, 1080}
 
 func snapHeight(h int) int {
 	if h <= 0 {
-		return 720
+		return 0 // as broadcast
 	}
 	out := LiveHeights[0]
 	for _, p := range LiveHeights {
@@ -204,7 +204,8 @@ func (m *liveManager) count() int {
 
 // Spec says how to stream a channel or recording.
 type Spec struct {
-	Height     int    // output height when transcoding
+	Height     int    // output height when transcoding; 0 keeps the broadcast's own size ("Auto")
+	SrcHeight  int    // the broadcast's height, known (a probed stream) or guessed from the lineup's HD flag; picks the bitrate when Height is 0
 	CopyVideo  bool   // repackage the broadcast's video as is (height is then the source's)
 	CopyAudio  bool   // repackage the broadcast's audio as is (e.g. AC-3 for a Roku)
 	VideoCodec string // the broadcast's video codec, normalized ("mpeg2", "h264", "hevc"); "" if unknown
@@ -301,7 +302,17 @@ func (m *liveManager) liveArgs(input []string, spec Spec, hwDecode bool, dir str
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
 	var vIn, vOut []string
 	if !spec.CopyVideo {
-		vIn, vOut = m.enc.Video(transcode.VideoOpts{MaxHeight: spec.Height, BitrateK: transcode.BitrateFor(spec.Height),
+		// A chosen height is a cap (the picture is never scaled up); none
+		// keeps the broadcast's size. The bitrate is for the smaller of the
+		// cap and what the broadcast is (or probably is, from the HD flag).
+		h := spec.Height
+		if h == 0 {
+			h = 1080
+		}
+		if spec.SrcHeight > 0 && spec.SrcHeight < h {
+			h = spec.SrcHeight
+		}
+		vIn, vOut = m.enc.Video(transcode.VideoOpts{MaxHeight: spec.Height, BitrateK: transcode.BitrateFor(h),
 			Deinterlace: true, Live: true, HWDecode: hwDecode})
 	}
 	args = append(args, vIn...)

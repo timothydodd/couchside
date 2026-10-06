@@ -274,7 +274,7 @@ func (d *DB) VirtualFiles(ctx context.Context, libraries []int64) ([]VirtualFile
 		WHERE f.problem = '' AND f.role <> 'extra' AND f.duration_sec > 0 AND (m.kind = 'movie' OR f.episode_id IS NOT NULL)`
 	var args []any
 	if len(libraries) > 0 {
-		q += ` AND m.library_id IN (?` + strings.Repeat(",?", len(libraries)-1) + `)`
+		q += ` AND f.library_id IN (?` + strings.Repeat(",?", len(libraries)-1) + `)`
 		for _, l := range libraries {
 			args = append(args, l)
 		}

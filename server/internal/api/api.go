@@ -318,6 +318,7 @@ func (s *Server) adminRoutes(r chi.Router) {
 	r.Get("/fs", s.browse)
 
 	r.Post("/items/{id}/match", s.rematch)
+	r.Post("/items/merge", s.mergeItems)
 	r.Post("/items/{id}/optimize", s.optimizeItem)
 	r.Post("/items/{id}/commercials", s.findItemCommercials)
 	r.Post("/files/{id}/commercials/dismissed", s.dismissCommercial)

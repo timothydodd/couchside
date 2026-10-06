@@ -26,7 +26,7 @@ type Library struct {
 }
 
 const libraryCols = `l.id, l.name, l.path, l.kind, l.last_scan_at, l.created_at,
-	(SELECT COUNT(*) FROM media_items m WHERE m.library_id = l.id),
+	(SELECT COUNT(DISTINCT f.media_item_id) FROM files f WHERE f.library_id = l.id),
 	(SELECT COUNT(*) FROM files f WHERE f.library_id = l.id), l.trickplay, l.intros`
 
 func scanLibrary(r interface{ Scan(...any) error }) (Library, error) {
@@ -99,9 +99,24 @@ func pathInUse(err error) error {
 	return err
 }
 
+// DeleteLibrary removes a library and its files. A title that also has
+// files in another library stays, re-homed there; the rest go.
 func (d *DB) DeleteLibrary(ctx context.Context, id int64) error {
-	_, err := d.sql.ExecContext(ctx, `DELETE FROM libraries WHERE id = ?`, id)
-	return err
+	tx, err := d.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM files WHERE library_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tidyItems(ctx, tx); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM libraries WHERE id = ?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (d *DB) MarkLibraryScanned(ctx context.Context, id, at int64) error {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueue } from "../stores/queue";
 import type HlsType from "hls.js";
 import PlayerFrame from "../components/player/PlayerFrame";
 import { useProgressReports } from "../components/player/useProgressReports";
@@ -338,7 +339,8 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
       // The rest of the same movie: always carry on, from the start of the next part.
       partStart = { fileId: parts.list[parts.at + 1].fileId, at: 0 };
       go(`/play/${parts.list[parts.at + 1].fileId}`, { replace: true });
-    } else if (info?.nextFileId && !parts && prefs.autoplayNext !== false) go(`/play/${info.nextFileId}`, { replace: true });
+    } else if (useQueue.getState().after(fileId)) go(`/play/${useQueue.getState().after(fileId)}`, { replace: true }); // "Play all": the next title lined up
+    else if (info?.nextFileId && !parts && prefs.autoplayNext !== false) go(`/play/${info.nextFileId}`, { replace: true });
     else exit();
   };
   const onEndedRef = useRef(onEnded);

@@ -62,6 +62,16 @@ in the Manage view and pick *Copy*, *Part N* or *Extra* for the file. Choices
 made by hand stick through rescans; marking a file as Part 2 makes the movie's
 single other copy Part 1.
 
+## One title across libraries
+
+A movie or show is one entry however many libraries hold files for it. A
+series you keep in the TV library and also record with the DVR shows once,
+with the episodes from both; the Manage view of each library lists it, and a
+profile limited to one of the libraries sees only that library's files. Titles
+match by name and year as Couchside reads them from the folders, so a show
+folder called `MacGyver (2016)` in one library and `MacGyver` in another are
+two shows.
+
 ## Library management
 
 - **Rename** a library or point it at another folder; watch history follows.
@@ -71,9 +81,20 @@ single other copy Part 1.
   its files into copies, parts and extras, or delete files.
 - **Select several titles** (admins) on the Movies or TV page: Ctrl-click
   (Cmd-click on a Mac) each one, or Shift-click for a range. An **Actions**
-  menu appears above the grid: mark them watched or unwatched, delete them,
-  or, with one selected, open it in the Manage view. Escape clears the
-  selection.
+  menu appears above the grid:
+  - **Play all** plays them one after another in the order shown (a movie's
+    chosen copy, a show's episodes in order).
+  - **Add to / Remove from My list**, **Mark watched / unwatched**.
+  - **Refresh metadata** fetches details and artwork again; a match you fixed
+    by hand stays. **Find commercials** queues detection for recordings not
+    yet checked.
+  - **Merge** (two or more) makes them one title. For movies you choose
+    whether the other files are duplicates (extra copies of the same film) or
+    bonus material (listed under the film, named after the title they were);
+    shows merge by season and episode number. Nothing on disk moves, and
+    scans leave merged files where you put them.
+  - **Delete**, and with one selected, **Manage** in its library's view.
+  Escape clears the selection.
 - **Deleting** removes files from disk, along with subtitle sidecars and
   cached artwork. Empty folders are removed; folders that still hold other
   files (artwork, `.nfo`) are left and reported. This needs the media mounted

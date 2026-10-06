@@ -123,7 +123,7 @@ func (d *DB) RequeueRunning(ctx context.Context) error {
 // provider couldn't be reached (network, rate limit, server error). Items it
 // answered "not found" are 'unmatched' and aren't listed.
 func (d *DB) PendingMatches(ctx context.Context, libraryID int64) ([]ItemRef, error) {
-	rows, err := d.sql.QueryContext(ctx, `SELECT m.id, m.parsed_title FROM media_items m WHERE m.library_id = ? AND m.match_status = 'pending'
+	rows, err := d.sql.QueryContext(ctx, `SELECT m.id, m.parsed_title FROM media_items m WHERE (m.library_id = ?1 OR EXISTS (SELECT 1 FROM files fl WHERE fl.media_item_id = m.id AND fl.library_id = ?1)) AND m.match_status = 'pending'
 		AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.kind = 'match' AND j.ref_id = m.id AND j.status IN ('queued', 'running'))`, libraryID)
 	if err != nil {
 		return nil, err

@@ -44,7 +44,12 @@ type playoutSource func(ctx context.Context, ms int64) ([]db.PlayoutPiece, error
 // startVirtual starts (or joins) a virtual channel's stream.
 func (m *liveManager) startVirtual(ctx context.Context, channel, name string, spec Spec, src playoutSource) (*LiveSession, error) {
 	spec.CopyVideo, spec.CopyAudio = false, false
+	// Pieces are joined into one stream, so they all need one size: "as
+	// broadcast" means 720p here.
 	spec.Height = snapHeight(spec.Height)
+	if spec.Height == 0 {
+		spec.Height = 720
+	}
 	key := "vc:" + channel
 	k := fmt.Sprintf("%s|%d", key, spec.Height)
 	m.mu.Lock()
@@ -233,7 +238,7 @@ type pieceVideo struct {
 func (m *liveManager) virtualArgs(p db.PlayoutPiece, v pieceVideo, hwDecode bool, inMs, durMs, offsetMs int64, realtime bool, spec Spec, dir string, run int) []string {
 	secs := func(ms int64) string { return strconv.FormatFloat(float64(ms)/1000, 'f', 3, 64) }
 	vIn, vOut := m.enc.Video(transcode.VideoOpts{MaxHeight: spec.Height, BitrateK: transcode.BitrateFor(spec.Height),
-		Deinterlace: true, Live: true, HDR: v.HDR, HWDecode: hwDecode})
+		Deinterlace: true, Live: true, HDR: v.HDR, HWDecode: hwDecode, Exact: true})
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
 	args = append(args, vIn...)
 	if realtime {

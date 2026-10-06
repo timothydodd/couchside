@@ -154,16 +154,18 @@ type FileStamp struct {
 	RolePinned  bool
 	Problem     string // unreadable | no-video | ""
 	Edition     string
+	ItemPinned  bool // put under its title by hand (Merge): the scan leaves it there
+	MediaItemID int64
 }
 
 func (d *DB) FileStamp(ctx context.Context, path string) (*FileStamp, error) {
 	var s FileStamp
 	err := d.sql.QueryRowContext(ctx, `SELECT f.id, f.size, f.mtime, m.parsed_title, m.parsed_year,
 		COALESCE(e.season, 0), COALESCE(e.episode, 0),
-		f.role, f.part_no, f.extra_title, f.role_pinned, f.problem, f.edition
+		f.role, f.part_no, f.extra_title, f.role_pinned, f.problem, f.edition, f.item_pinned, f.media_item_id
 		FROM files f JOIN media_items m ON m.id = f.media_item_id LEFT JOIN episodes e ON e.id = f.episode_id
 		WHERE f.path = ?`, path).Scan(&s.ID, &s.Size, &s.Mtime, &s.ParsedTitle, &s.ParsedYear, &s.Season, &s.Episode,
-		&s.Role, &s.PartNo, &s.ExtraTitle, &s.RolePinned, &s.Problem, &s.Edition)
+		&s.Role, &s.PartNo, &s.ExtraTitle, &s.RolePinned, &s.Problem, &s.Edition, &s.ItemPinned, &s.MediaItemID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -181,8 +183,11 @@ func (d *DB) UpsertFile(ctx context.Context, f File, seen int64) (int64, error) 
 	err := d.sql.QueryRowContext(ctx, `INSERT INTO files (library_id, media_item_id, episode_id, path, size, mtime,
 		duration_sec, container, video_codec, audio_codec, width, height, audio_tracks, subtitle_tracks, problem, last_seen)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT (path) DO UPDATE SET library_id = excluded.library_id, media_item_id = excluded.media_item_id,
-		  episode_id = excluded.episode_id, size = excluded.size, mtime = excluded.mtime,
+		ON CONFLICT (path) DO UPDATE SET library_id = excluded.library_id,
+		  -- a file merged under another title by hand stays there, whatever its name says
+		  media_item_id = CASE WHEN files.item_pinned THEN files.media_item_id ELSE excluded.media_item_id END,
+		  episode_id = CASE WHEN files.item_pinned THEN files.episode_id ELSE excluded.episode_id END,
+		  size = excluded.size, mtime = excluded.mtime,
 		  duration_sec = excluded.duration_sec, container = excluded.container, video_codec = excluded.video_codec,
 		  audio_codec = excluded.audio_codec, width = excluded.width, height = excluded.height,
 		  audio_tracks = excluded.audio_tracks, subtitle_tracks = excluded.subtitle_tracks,
@@ -234,15 +239,41 @@ func (d *DB) PruneLibrary(ctx context.Context, libraryID, scanStart int64) (int6
 		return 0, err
 	}
 	n, _ := res.RowsAffected()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM media_items WHERE library_id = ?
-		AND NOT EXISTS (SELECT 1 FROM files f WHERE f.media_item_id = media_items.id)`, libraryID); err != nil {
-		return 0, err
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM episodes WHERE series_id IN (SELECT id FROM media_items WHERE library_id = ?)
-		AND NOT EXISTS (SELECT 1 FROM files f WHERE f.episode_id = episodes.id)`, libraryID); err != nil {
+	if _, err := tidyItems(ctx, tx); err != nil {
 		return 0, err
 	}
 	return n, tx.Commit()
+}
+
+// tidyItems is the housekeeping after files go: items and episodes left
+// without files are deleted, and an item whose home library has no files
+// for it any more moves home to one that has. It returns the items deleted.
+func tidyItems(ctx context.Context, tx *sql.Tx) ([]int64, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM media_items WHERE NOT EXISTS (SELECT 1 FROM files f WHERE f.media_item_id = media_items.id)`)
+	if err != nil {
+		return nil, err
+	}
+	gone := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		gone = append(gone, id)
+	}
+	rows.Close()
+	for _, q := range []string{
+		`DELETE FROM media_items WHERE NOT EXISTS (SELECT 1 FROM files f WHERE f.media_item_id = media_items.id)`,
+		`DELETE FROM episodes WHERE NOT EXISTS (SELECT 1 FROM files f WHERE f.episode_id = episodes.id)`,
+		`UPDATE media_items SET library_id = (SELECT f.library_id FROM files f WHERE f.media_item_id = media_items.id ORDER BY f.id LIMIT 1)
+		   WHERE NOT EXISTS (SELECT 1 FROM files f WHERE f.media_item_id = media_items.id AND f.library_id = media_items.library_id)`,
+	} {
+		if _, err := tx.ExecContext(ctx, q); err != nil {
+			return nil, err
+		}
+	}
+	return gone, nil
 }
 
 // BackdropSource picks the file to grab a backdrop frame from: the first

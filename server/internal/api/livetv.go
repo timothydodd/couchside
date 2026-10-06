@@ -150,6 +150,7 @@ func (s *Server) tvWatch(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Channel string `json:"channel"`
 		Height  int    `json:"height"`
+		Source  bool   `json:"source"` // keep the broadcast's own size; height is ignored
 		// Codecs the client can decode itself (a Roku: mpeg2, h264, ac3…): a
 		// channel in them is passed through instead of transcoded.
 		VideoCodecs []string `json:"videoCodecs"`
@@ -159,7 +160,7 @@ func (s *Server) tvWatch(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	sess, err := s.tv.Watch(r.Context(), in.Channel, livetv.WatchOpts{Height: in.Height, VideoCodecs: in.VideoCodecs, AudioCodecs: in.AudioCodecs})
+	sess, err := s.tv.Watch(r.Context(), in.Channel, livetv.WatchOpts{Height: in.Height, Source: in.Source, VideoCodecs: in.VideoCodecs, AudioCodecs: in.AudioCodecs})
 	switch {
 	case errors.Is(err, livetv.ErrNoTuner):
 		writeErr(w, httpError{http.StatusServiceUnavailable, "All tuners are busy (recordings, other viewers or Plex). Try again when one frees up."})
@@ -352,11 +353,12 @@ func (s *Server) dvrWatch(w http.ResponseWriter, r *http.Request) {
 	}
 	var in struct {
 		Height      int      `json:"height"`
+		Source      bool     `json:"source"`
 		VideoCodecs []string `json:"videoCodecs"`
 		AudioCodecs []string `json:"audioCodecs"`
 	}
 	_ = decode(r, &in)
-	sess, err := s.tv.WatchRecording(r.Context(), id, livetv.WatchOpts{Height: in.Height, VideoCodecs: in.VideoCodecs, AudioCodecs: in.AudioCodecs})
+	sess, err := s.tv.WatchRecording(r.Context(), id, livetv.WatchOpts{Height: in.Height, Source: in.Source, VideoCodecs: in.VideoCodecs, AudioCodecs: in.AudioCodecs})
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			writeErr(w, err)

@@ -51,6 +51,9 @@ func streamSpec(info *probe.Info, o WatchOpts) Spec {
 	if info == nil {
 		return sp
 	}
+	if info.Height != nil {
+		sp.SrcHeight = *info.Height
+	}
 	if info.VideoCodec == "h264" && info.EightBit420() && !info.HDR() && info.DVProfile == 0 {
 		sp.CopyVideo, sp.VideoCodec = true, "h264"
 	}

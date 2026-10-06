@@ -20,10 +20,13 @@ Broadcast TV needs an [HDHomeRun](https://www.silicondust.com) tuner: set
 
 ## Watching
 
-- **Browsers** get the tuner stream deinterlaced and transcoded to HLS at
-  1080p, 720p or 480p (on the GPU when VAAPI is set up; TV apps can also ask
-  for 360p). Viewers of the same
-  channel share one tuner, released about 20 seconds after the last leaves.
+- **Browsers** get the tuner stream deinterlaced and transcoded to HLS (on the
+  GPU when VAAPI is set up). The quality is **Auto** (the broadcast's own size)
+  or a cap of 1080p, 720p or 480p; a picture is never scaled up, so a
+  standard-definition channel comes through at 480 whatever is chosen, and
+  its menu only offers Auto and 480p. TV apps can also ask for 360p. Viewers
+  of the same channel share one tuner, released about 20 seconds after the
+  last leaves.
 - **TVs** (the Roku app) play broadcasts they can decode (MPEG-2 or H.264 with
   AC-3, most channels) straight off the tuner: no server work and full
   broadcast quality. **Settings → Your settings → On TVs** turns this off for

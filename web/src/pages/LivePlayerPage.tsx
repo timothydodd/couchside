@@ -13,7 +13,10 @@ import { useRouter } from "../stores/router";
 import { useCanRecord } from "../stores/auth";
 import { errText } from "../lib/errors";
 
-const LIVE_QUALITIES = [1080, 720, 480] as const;
+/** Quality choices: 0 is the broadcast's own size. A chosen height is a cap; the server never scales a picture up. */
+export const LIVE_QUALITIES = [0, 1080, 720, 480] as const;
+export const qualityLabel = (h: number) => (h ? `${h}p` : "Auto");
+export const qualityDetail = (h: number) => (h === 0 ? "As broadcast" : h === 1080 ? "8 Mbps" : h === 720 ? "4 Mbps" : "1.5 Mbps");
 
 /** Live TV: the server tunes and transcodes; you can pause and rewind within the session. */
 export default function LivePlayerPage({ channel }: { channel: string }) {
@@ -91,7 +94,7 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
     (async () => {
       let s: LiveSessionInfo;
       try {
-        s = await api<LiveSessionInfo>("/api/livetv/watch", { method: "POST", json: { channel, height } });
+        s = await api<LiveSessionInfo>("/api/livetv/watch", { method: "POST", json: { channel, height, source: height === 0 } });
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof ApiError ? e.message : String(e));
@@ -158,7 +161,7 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
           sp.warned = true;
           setNotice(
             `The server is encoding this channel slower than real time (${sp.value.toFixed(2)}×), so it will keep buffering. ` +
-              (height > 480 ? "Pick a lower quality in Settings, or set up hardware transcoding." : "Set up hardware transcoding on the server."),
+              (height === 0 || height > 480 ? "Pick a lower quality in Settings, or set up hardware transcoding." : "Set up hardware transcoding on the server."),
           );
         }
       });
@@ -204,15 +207,16 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
     {
       id: "quality",
       label: "Quality",
-      value: `${height}p`,
-      options: LIVE_QUALITIES.map((h) => ({ id: String(h), label: `${h}p`, detail: h === 1080 ? "8 Mbps" : h === 720 ? "4 Mbps" : "1.5 Mbps", active: h === height })),
+      value: qualityLabel(height),
+      // A standard-definition channel has nothing above 480 to offer.
+      options: LIVE_QUALITIES.filter((h) => h <= 480 || current?.hd !== false).map((h) => ({ id: String(h), label: qualityLabel(h), detail: qualityDetail(h), active: h === height })),
       onSelect: (id) => {
         const h = Number(id);
         useProfile.getState().setPrefs({ liveHeight: h });
         setHeight(h);
       },
     },
-    { id: "info", label: "Playback info", value: session ? `${session.height}p` : "", content: <LiveInfo session={session} videoRef={videoRef} hlsRef={hlsRef} channelName={current?.name} speed={() => speed.current.value} /> },
+    { id: "info", label: "Playback info", value: session ? qualityLabel(session.height) : "", content: <LiveInfo session={session} videoRef={videoRef} hlsRef={hlsRef} channelName={current?.name} speed={() => speed.current.value} /> },
   ];
 
   return (
@@ -295,7 +299,7 @@ function LiveInfo({
     <InfoRows
       rows={[
         ["Channel", session ? `${session.channel} ${channelName ?? session.name}` : "–"],
-        ["Stream", session ? `H.264 ${session.height}p · deinterlaced` : "–"],
+        ["Stream", session ? `H.264 ${session.height ? `${session.height}p` : "as broadcast"} · deinterlaced` : "–"],
         [
           "Transcoder",
           session?.copyVideo
