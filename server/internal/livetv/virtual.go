@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"math/rand"
+	"net/url"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -49,6 +50,30 @@ type VirtualConfig struct {
 	Items         []int64  `json:"items"` // only these movies and shows
 	Order         string   `json:"order"` // shuffle | sequential
 	Filler        Filler   `json:"filler"`
+	// Stream makes this a stream channel: it shows a live stream from
+	// somewhere else, and everything above is unused.
+	Stream *StreamSource `json:"stream,omitempty"`
+}
+
+// StreamSource is a live stream a channel passes on: an IPTV feed, a camera
+// behind a restreamer, another program's output. Couchside reads it only
+// while someone is watching, and converts it like a tuner channel.
+type StreamSource struct {
+	URL string `json:"url"` // http or https: an HLS playlist or an MPEG-TS stream
+}
+
+// check validates the address. Only http(s): ffmpeg opens whatever it's
+// given, and a "file:" or "concat:" address would read the server's disk.
+func (s *StreamSource) check() error {
+	s.URL = strings.TrimSpace(s.URL)
+	u, err := url.Parse(s.URL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return usererr.New("the stream address must start with http:// or https://")
+	}
+	if len(s.URL) > 2000 {
+		return usererr.New("the stream address is too long")
+	}
+	return nil
 }
 
 // Filler is the optional commercials: a folder of clips played between
@@ -78,6 +103,11 @@ func (c *VirtualConfig) Validate() error {
 	}
 	if c.Items == nil {
 		c.Items = []int64{}
+	}
+	if c.Stream != nil {
+		if err := c.Stream.check(); err != nil {
+			return err
+		}
 	}
 	if c.Order == "" {
 		c.Order = "shuffle"
@@ -423,6 +453,10 @@ func (s *Service) extendVirtualLocked(ctx context.Context, vc db.VirtualChannel,
 	if err != nil {
 		return err
 	}
+	if cfg.Stream != nil {
+		// Nothing to schedule: the guide just says the channel is on.
+		return s.db.ExtendPlayout(ctx, vc.ID, nil, streamGuide(vc.Number, vc.Name, now, virtualAhead), vc.State)
+	}
 	files, err := s.db.VirtualFiles(ctx, cfg.Libraries)
 	if err != nil {
 		return err
@@ -536,6 +570,18 @@ func guideProgram(channel string, p vprogram, start, end int64) db.Program {
 	return g
 }
 
+// streamGuide is a stream channel's listings: Couchside doesn't know what the
+// stream shows, so each hour from the current one is an entry with the
+// channel's name. Writing them again replaces the same entries.
+func streamGuide(number, name string, now time.Time, ahead time.Duration) []db.Program {
+	var out []db.Program
+	for t := now.Truncate(time.Hour); t.Before(now.Add(ahead)); t = t.Add(time.Hour) {
+		out = append(out, db.Program{Channel: number, StartAt: t.Unix(), EndAt: t.Add(time.Hour).Unix(), Title: name,
+			Synopsis: "A live stream.", Categories: []string{"Live"}})
+	}
+	return out
+}
+
 // --- running -----------------------------------------------------------------
 
 // virtualLoop keeps every virtual channel's schedule built ahead.
@@ -603,6 +649,9 @@ func (s *Service) RebuildVirtual() {
 // PreviewVirtual lays out the next hours of a config without saving it, for
 // the setup wizard.
 func (s *Service) PreviewVirtual(ctx context.Context, cfg VirtualConfig, hours int) ([]db.Program, int, error) {
+	if cfg.Stream != nil {
+		return streamGuide("preview", "Live stream", time.Now(), time.Duration(hours)*time.Hour), 0, nil
+	}
 	files, err := s.db.VirtualFiles(ctx, cfg.Libraries)
 	if err != nil {
 		return nil, 0, err

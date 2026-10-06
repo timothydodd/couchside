@@ -134,7 +134,7 @@ func (s *Service) Record(ctx context.Context, programID, owner int64) (id int64,
 		return 0, 0, false, usererr.New("this channel is copy-protected (ATSC 3.0 DRM) and can't be recorded")
 	}
 	if ch.Virtual {
-		return 0, 0, false, usererr.New("Couchside's own channels play from your library, so there's nothing to record")
+		return 0, 0, false, usererr.New("Couchside's own channels (from your library or a stream address) can't be recorded")
 	}
 	r := db.Recording{Channel: p.Channel, ChannelName: ch.Name, Title: p.Title, EpisodeTitle: p.EpisodeTitle,
 		EpisodeNum: p.EpisodeNum, Synopsis: p.Synopsis, ImageURL: p.ImageURL, SeriesID: p.SeriesID,

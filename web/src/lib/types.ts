@@ -703,6 +703,8 @@ export interface VirtualConfig {
   items: number[];
   order: "shuffle" | "sequential";
   filler: { folder: string; align: number; breakEvery: number; breakLength: number };
+  /** A stream channel: it shows this live stream (http or https) and nothing above applies. */
+  stream?: { url: string } | null;
 }
 
 export interface VirtualChannel {

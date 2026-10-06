@@ -45,6 +45,8 @@ type portableConfig struct {
 	Items         []portableTitle `json:"items"`
 	Order         string          `json:"order"`
 	Filler        livetv.Filler   `json:"filler"`
+	// A stream channel's address travels as it is.
+	Stream *livetv.StreamSource `json:"stream,omitempty"`
 }
 
 type portableTitle struct {
@@ -86,7 +88,7 @@ func (s *Server) channelNames(r *http.Request) (channelNames, error) {
 // export swaps a config's ids for names. Ids that no longer exist are left out.
 func (n channelNames) export(c livetv.VirtualConfig) portableConfig {
 	p := portableConfig{Libraries: []string{}, Kinds: c.Kinds, Genres: c.Genres, ExcludeGenres: c.ExcludeGenres,
-		YearFrom: c.YearFrom, YearTo: c.YearTo, MinRating: c.MinRating, Items: []portableTitle{}, Order: c.Order, Filler: c.Filler}
+		YearFrom: c.YearFrom, YearTo: c.YearTo, MinRating: c.MinRating, Items: []portableTitle{}, Order: c.Order, Filler: c.Filler, Stream: c.Stream}
 	for _, id := range c.Libraries {
 		if name, ok := n.libraries[id]; ok {
 			p.Libraries = append(p.Libraries, name)
@@ -105,7 +107,10 @@ func (n channelNames) export(c livetv.VirtualConfig) portableConfig {
 // are here it's an error, because the channel would play everything instead.
 func (n channelNames) resolve(p portableConfig) (livetv.VirtualConfig, []string, error) {
 	c := livetv.VirtualConfig{Kinds: p.Kinds, Genres: p.Genres, ExcludeGenres: p.ExcludeGenres,
-		YearFrom: p.YearFrom, YearTo: p.YearTo, MinRating: p.MinRating, Order: p.Order, Filler: p.Filler}
+		YearFrom: p.YearFrom, YearTo: p.YearTo, MinRating: p.MinRating, Order: p.Order, Filler: p.Filler, Stream: p.Stream}
+	if c.Stream != nil {
+		return c, nil, nil // nothing from the library to look up
+	}
 	var warnings []string
 	libs := map[string]int64{}
 	for id, name := range n.libraries {

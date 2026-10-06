@@ -57,6 +57,9 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
   // A stored config can have null where a list belongs (channels imported
   // before 0.14.3): those take the blank's empty lists.
   const [cfg, setCfg] = useState<VirtualConfig>(channel ? { ...BLANK, ...present(channel.config), filler: { ...BLANK.filler, ...present(channel.config.filler) } } : BLANK);
+  // From the library, or a live stream from somewhere else (its address).
+  const [source, setSource] = useState<"library" | "stream">(channel?.config.stream ? "stream" : "library");
+  const [streamUrl, setStreamUrl] = useState(channel?.config.stream?.url ?? "");
   const [preset, setPreset] = useState<string | null>(null);
   const [ads, setAds] = useState(!!channel?.config.filler?.folder);
   const [busy, setBusy] = useState(false);
@@ -83,10 +86,15 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
     if (p.name) setName(p.name);
   };
   // Commercials off means no folder, whatever was typed.
-  const sent: VirtualConfig = ads ? cfg : { ...cfg, filler: { ...cfg.filler, folder: "" } };
+  const sent: VirtualConfig =
+    source === "stream" ? { ...BLANK, stream: { url: streamUrl.trim() } } : { ...(ads ? cfg : { ...cfg, filler: { ...cfg.filler, folder: "" } }), stream: null };
 
   const save = async () => {
-    if (ads && !cfg.filler.folder.trim()) {
+    if (source === "stream" && !/^https?:\/\/\S+$/i.test(streamUrl.trim())) {
+      setErr("Enter the stream's address, starting with http:// or https://.");
+      return;
+    }
+    if (source === "library" && ads && !cfg.filler.folder.trim()) {
       setErr("Choose the folder your commercials are in, or turn commercials off.");
       return;
     }
@@ -116,14 +124,27 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
         <div className="flex items-center gap-3 px-4 py-4">
           <div className="min-w-0 flex-1">
             <div className="text-base font-semibold text-content">{channel ? `Edit ${channel.name}` : "New channel"}</div>
-            <div className="text-xs text-content-muted">Plays around the clock from your library, in Live TV and the guide.</div>
+            <div className="text-xs text-content-muted">Plays around the clock in Live TV and the guide, from your library or a stream.</div>
           </div>
           <button className="btn-quiet" onClick={onClose} aria-label="Close">
             <X size={16} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {!channel && (
+          <section className="panel-section">
+            <div className="card-title mb-2">Plays</div>
+            <Segmented
+              label="What the channel plays"
+              value={source}
+              onChange={setSource}
+              options={[
+                { id: "library", label: "Your library" },
+                { id: "stream", label: "A stream address" },
+              ]}
+            />
+          </section>
+
+          {!channel && source === "library" && (
             <section className="panel-section">
               <div className="card-title mb-2">Start from</div>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -156,6 +177,30 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
             </div>
           </section>
 
+          {source === "stream" && (
+            <section className="panel-section">
+              <label className="block">
+                <span className="field-label">Stream address</span>
+                <input
+                  className="field mono w-full"
+                  value={streamUrl}
+                  onChange={(e) => setStreamUrl(e.target.value)}
+                  placeholder="http://192.168.1.50:9798/stream.m3u8"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                />
+              </label>
+              <p className="mt-2 text-xs text-content-muted">
+                An HLS playlist (.m3u8) or an MPEG-TS stream over http or https that this server can reach: an IPTV feed, a camera behind a restreamer, another
+                program's output. Couchside connects only while someone is watching and converts the picture like a tuner channel, so it counts as one
+                conversion. The guide shows the channel's name around the clock. It can't be recorded.
+              </p>
+            </section>
+          )}
+
+          {source === "library" && (
+          <>
           <section className="panel-section flex flex-col gap-4">
             <div className="card-title">What plays</div>
             <div>
@@ -233,6 +278,8 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
           </section>
 
           <Preview config={sent} />
+          </>
+          )}
         </div>
         <div className="flex items-center gap-2 border-t border-border-light px-4 py-3">
           <button className="btn-primary" disabled={busy || !name.trim() || !number.trim()} onClick={() => void save()}>

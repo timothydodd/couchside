@@ -209,7 +209,8 @@ type Spec struct {
 	CopyAudio  bool   // repackage the broadcast's audio as is (e.g. AC-3 for a Roku)
 	VideoCodec string // the broadcast's video codec, normalized ("mpeg2", "h264", "hevc"); "" if unknown
 
-	window int // segments kept in the playlist; 0 keeps all (a recording watched from its start)
+	window int  // segments kept in the playlist; 0 keeps all (a recording watched from its start)
+	stream bool // a stream channel's source, not the tuner: no audio is fine, and failures say "stream"
 }
 
 // liveWindow keeps 3 hours of a tuner stream (the rewind the live player
@@ -224,6 +225,23 @@ func (m *liveManager) start(ctx context.Context, channel, name, streamURL string
 	spec.window = liveWindow
 	return m.startInput(ctx, "ch:"+channel, channel, name, []string{
 		"-rw_timeout", "15000000", // 15s without data from the tuner → give up
+		"-fflags", "+genpts+discardcorrupt", "-err_detect", "ignore_err", "-i", streamURL,
+	}, spec)
+}
+
+// startStream plays a stream channel's source (or joins a running stream of
+// it), like a tuner channel: one ffmpeg per quality, a sliding window, gone
+// when nobody watches. The picture is always converted, since nothing says
+// what the stream holds. Its key is a virtual channel's ("vc:"), so saving
+// or deleting the channel stops it.
+func (m *liveManager) startStream(ctx context.Context, channel, name, streamURL string, spec Spec) (*LiveSession, error) {
+	spec.window, spec.stream = liveWindow, true
+	spec.CopyVideo, spec.CopyAudio = false, false
+	return m.startInput(ctx, "vc:"+channel, channel, name, []string{
+		// A playlist can't point ffmpeg at the server's own files.
+		"-protocol_whitelist", "http,https,tcp,tls,crypto",
+		"-rw_timeout", "15000000",
+		"-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5",
 		"-fflags", "+genpts+discardcorrupt", "-err_detect", "ignore_err", "-i", streamURL,
 	}, spec)
 }
@@ -289,7 +307,11 @@ func (m *liveManager) liveArgs(input []string, spec Spec, hwDecode bool, dir str
 	}
 	args = append(args, vIn...)
 	args = append(args, input...)
-	args = append(args, "-map", "0:v:0", "-map", "0:a:0", "-sn", "-dn")
+	audio := "0:a:0"
+	if spec.stream {
+		audio += "?" // a camera or a screen capture may have no sound
+	}
+	args = append(args, "-map", "0:v:0", "-map", audio, "-sn", "-dn")
 	if spec.CopyVideo {
 		// Segments are cut at the broadcast's own keyframes (MPEG-2 sends one about every half second).
 		args = append(args, "-c:v", "copy")
@@ -343,11 +365,21 @@ func (m *liveManager) launch(ctx context.Context, key, channel, name string, inp
 		if !s.running() {
 			msg := strings.TrimSpace(stderr.String())
 			_ = os.RemoveAll(dir)
-			if strings.Contains(msg, "503") || strings.Contains(strings.ToLower(msg), "service unavailable") {
-				return nil, ErrNoTuner
-			}
 			if msg == "" {
 				msg = "ffmpeg exited without output"
+			}
+			if spec.stream {
+				// ffmpeg's line starts with the address, which can hold a
+				// password or token: that goes to the log, not to viewers.
+				slog.Warn("live tv: a stream channel's source failed", "channel", channel, "err", lastLine(msg))
+				why := lastLine(msg)
+				if i := strings.LastIndex(why, ": "); i >= 0 {
+					why = why[i+2:]
+				}
+				return nil, usererr.Errorf("couldn't open channel %s's stream: %s", channel, why)
+			}
+			if strings.Contains(msg, "503") || strings.Contains(strings.ToLower(msg), "service unavailable") {
+				return nil, ErrNoTuner
 			}
 			return nil, usererr.Errorf("couldn't tune %s: %s", channel, lastLine(msg))
 		}
@@ -359,6 +391,9 @@ func (m *liveManager) launch(ctx context.Context, key, channel, name string, inp
 				// This viewer left. Say so, not "weak signal": anyone who
 				// joined this start then tunes for themselves (claimLocked).
 				return nil, err
+			}
+			if spec.stream {
+				return nil, usererr.New("the stream didn't deliver video in time; is its source running?")
 			}
 			return nil, usererr.New("the tuner didn't deliver video in time; weak signal?")
 		}
