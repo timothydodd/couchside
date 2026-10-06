@@ -215,5 +215,77 @@ func (s *Server) mergeItems(w http.ResponseWriter, r *http.Request) {
 	for _, id := range in.From {
 		_ = os.RemoveAll(worker.ItemArtDir(s.cfg.CacheDir, id))
 	}
+	// Bonus material shows a frame from the file, like extras a scan finds.
+	if files, err := s.db.ItemFiles(r.Context(), in.Into); err == nil {
+		for _, f := range files {
+			if f.Role == "extra" && !f.HasStill && f.Problem == "" {
+				_ = s.worker.Enqueue(r.Context(), worker.KindStill, f.ID, "Still "+filepath.Base(f.Path))
+			}
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// setItemDetails stores details set by hand (admins): title, year, plot,
+// genres and content rating. Each is optional; one left out goes back to
+// the provider's, which a match fetches again when something was cleared.
+func (s *Server) setItemDetails(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	var in db.Overrides
+	if err := decode(r, &in); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if in.Title != nil {
+		t := strings.TrimSpace(*in.Title)
+		if t == "" || len(t) > 200 {
+			writeErr(w, badRequest("the title is 1 to 200 characters"))
+			return
+		}
+		in.Title = &t
+	}
+	if in.Year != nil && (*in.Year < 1880 || *in.Year > 2100) {
+		writeErr(w, badRequest("the year must be between 1880 and 2100"))
+		return
+	}
+	if in.Plot != nil && len(*in.Plot) > 5000 {
+		writeErr(w, badRequest("the description is too long"))
+		return
+	}
+	if in.Genres != nil {
+		var gs []string
+		for _, g := range *in.Genres {
+			if g = strings.TrimSpace(g); g != "" {
+				gs = append(gs, g)
+			}
+		}
+		if gs == nil {
+			gs = []string{}
+		}
+		in.Genres = &gs
+	}
+	if in.Rated != nil {
+		t := strings.TrimSpace(*in.Rated)
+		in.Rated = &t
+	}
+	ctx := r.Context()
+	item, err := s.db.Item(ctx, id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	cleared, err := s.db.SetItemDetails(ctx, id, in)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	// Something went back to the provider's: fetch it again (keeping a fixed match).
+	if cleared && item.MatchStatus == "matched" {
+		_ = s.worker.Enqueue(ctx, worker.KindMatch, id, "Match "+item.ParsedTitle)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }

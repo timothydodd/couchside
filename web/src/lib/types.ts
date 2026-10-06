@@ -32,6 +32,8 @@ export interface Item extends ItemSummary {
   totalSeasons: number | null;
   /** Where the details came from: tmdb, omdb, or "" when unmatched. */
   matchProvider: string;
+  /** Details set by hand (Edit details); each stays through re-matches. */
+  overrides?: { title?: string; year?: number; plot?: string; genres?: string[]; rated?: string };
 }
 
 /** What a movie file is to its movie: another copy, one part of a split movie, or an extra. */

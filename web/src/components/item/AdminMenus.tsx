@@ -1,4 +1,6 @@
-import { Cpu, Eye, EyeOff, FastForward, FolderOpen, MoreHorizontal, RefreshCw, RotateCcw, Scissors, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Cpu, Eye, EyeOff, FastForward, FolderOpen, MoreHorizontal, Pencil, RefreshCw, RotateCcw, Scissors, Trash2 } from "lucide-react";
+import EditDetails from "./EditDetails";
 import { MenuButton, type MenuItem } from "../ui";
 import { api } from "../../lib/api";
 import { attempt, notify } from "../../lib/notices";
@@ -88,11 +90,19 @@ export function EpisodeActions({ item, e, onChange }: { item: Item; e: EpisodeRo
 export function TitleActions({ item, onChange }: { item: Item; onChange: () => void }) {
   const comskip = useStatus((s) => s.status?.comskip);
   const go = useRouter((s) => s.go);
+  const [editing, setEditing] = useState(false);
   const series = item.kind === "series";
   const what = series ? "episode" : "file";
   const count = (n: number) => `${n} ${what}${n === 1 ? "" : "s"}`;
 
   const items: MenuItem[] = [
+    {
+      id: "edit",
+      label: "Edit details",
+      detail: "Title, year, rating, genres and description, by hand.",
+      icon: <Pencil size={15} />,
+      onSelect: () => setEditing(true),
+    },
     {
       id: "scan",
       label: "Scan library",
@@ -174,5 +184,10 @@ export function TitleActions({ item, onChange }: { item: Item; onChange: () => v
     },
   );
 
-  return <MenuButton label="More actions" icon={<MoreHorizontal size={16} />} items={items} align="end" className="btn-ghost !px-2.5 !py-2" />;
+  return (
+    <>
+      <MenuButton label="More actions" icon={<MoreHorizontal size={16} />} items={items} align="end" className="btn-ghost !px-2.5 !py-2" />
+      {editing && <EditDetails item={item} onClose={() => setEditing(false)} onSaved={onChange} />}
+    </>
+  );
 }

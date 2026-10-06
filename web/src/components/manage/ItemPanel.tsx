@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Cpu, ExternalLink, MoreHorizontal, RotateCcw, Scissors, Trash2, X } from "lucide-react";
+import { Cpu, ExternalLink, MoreHorizontal, RotateCcw, Scissors, Trash2, X, Pencil } from "lucide-react";
 import Link from "../Link";
 import { PosterArt } from "../PosterCard";
 import { ErrorNote, JobNote, MenuButton, type MenuItem } from "../ui";
@@ -8,7 +8,8 @@ import FileList from "./FileList";
 import MetadataSearch from "./MetadataSearch";
 import { api, useApi } from "../../lib/api";
 import { fmtBytes, relPath } from "../../lib/format";
-import type { DeleteResult, Library, ManageFile, ManageRow } from "../../lib/types";
+import type { DeleteResult, ItemDetail, Library, ManageFile, ManageRow } from "../../lib/types";
+import EditDetails from "../item/EditDetails";
 import { useStatus } from "../../stores/status";
 import { useDialog } from "../../lib/dialog";
 import { errText } from "../../lib/errors";
@@ -24,6 +25,9 @@ export default function ItemPanel({ row, library, onClose, onChanged }: { row: M
   const dialog = useRef<HTMLElement>(null);
   useDialog(dialog, onClose);
   useEffect(() => setNote(null), [row.id]);
+  // Edit details needs the full title (its description and what's set by hand), fetched when asked for.
+  const [editing, setEditing] = useState(false);
+  const { data: detail } = useApi<ItemDetail>(editing ? `/api/items/${row.id}` : null);
 
   const changed = () => {
     void reloadFiles();
@@ -56,9 +60,14 @@ export default function ItemPanel({ row, library, onClose, onChanged }: { row: M
                 .filter(Boolean)
                 .join(" · ")}
             </div>
-            <Link to={`/item/${row.id}`} className="mt-1.5 inline-flex items-center gap-1 text-xs text-content-secondary hover:text-accent">
-              <ExternalLink size={12} /> Open page
-            </Link>
+            <div className="mt-1.5 flex items-center gap-3">
+              <Link to={`/item/${row.id}`} className="inline-flex items-center gap-1 text-xs text-content-secondary hover:text-accent">
+                <ExternalLink size={12} /> Open page
+              </Link>
+              <button type="button" className="inline-flex items-center gap-1 text-xs text-content-secondary hover:text-accent" onClick={() => setEditing(true)}>
+                <Pencil size={12} /> Edit details
+              </button>
+            </div>
           </div>
           <ItemActions row={row} onNote={setNote} />
           <button className="btn-quiet" onClick={onClose} aria-label="Close">
@@ -83,6 +92,15 @@ export default function ItemPanel({ row, library, onClose, onChanged }: { row: M
           <DeleteItem row={row} onDeleted={deleted} />
         </div>
       </aside>
+      {editing && detail && (
+        <EditDetails
+          item={detail.item}
+          onClose={() => setEditing(false)}
+          onSaved={() => {
+            onChanged();
+          }}
+        />
+      )}
     </>
   );
 }

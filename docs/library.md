@@ -32,6 +32,14 @@ Libraries page; Couchside scans it, matches every title, and fetches artwork.
   automatic re-matches keep it.
 - **Libraries → Re-match** refreshes a whole library's details, artwork and cast.
 
+## Editing details
+
+Admins can set a title's details by hand: on the title's page, **⋯ → Edit
+details** (also in the Manage view's panel). Title, year, content rating,
+genres and description are each optional; a field left empty uses what the
+metadata provider says, and what you fill in stays even when the title is
+matched again. Clearing a field fetches the provider's value back.
+
 ## Artwork
 
 - Posters and backdrops from TMDB, resized to WebP. A frame from the video

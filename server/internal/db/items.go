@@ -32,17 +32,18 @@ type ItemSummary struct {
 // Item is the full detail record.
 type Item struct {
 	ItemSummary
-	LibraryID    int64  `json:"libraryId"`
-	ParsedTitle  string `json:"parsedTitle"`
-	ParsedYear   int    `json:"parsedYear"`
-	Plot         string `json:"plot"`
-	Rated        string `json:"rated"`
-	ImdbID       string `json:"imdbId"`
-	ImdbPinned   bool   `json:"imdbPinned"` // set by "Fix match"; automatic re-matches keep it
-	TotalSeasons *int   `json:"totalSeasons"`
-	PosterURL    string `json:"-"`
-	BackdropURL  string `json:"-"`
-	Provider     string `json:"matchProvider"` // tmdb | omdb | "" (where the rating and details came from)
+	LibraryID    int64     `json:"libraryId"`
+	ParsedTitle  string    `json:"parsedTitle"`
+	ParsedYear   int       `json:"parsedYear"`
+	Plot         string    `json:"plot"`
+	Rated        string    `json:"rated"`
+	ImdbID       string    `json:"imdbId"`
+	ImdbPinned   bool      `json:"imdbPinned"` // set by "Fix match"; automatic re-matches keep it
+	TotalSeasons *int      `json:"totalSeasons"`
+	PosterURL    string    `json:"-"`
+	BackdropURL  string    `json:"-"`
+	Provider     string    `json:"matchProvider"` // tmdb | omdb | "" (where the rating and details came from)
+	Overrides    Overrides `json:"overrides"`     // details set by hand (Edit details)
 }
 
 // summaryCols counts watched files, and says whether the title is on "My
@@ -136,11 +137,13 @@ func (d *DB) querySummaries(ctx context.Context, q string, args ...any) ([]ItemS
 
 func (d *DB) Item(ctx context.Context, id int64) (Item, error) {
 	var it Item
+	var raw string
 	err := d.sql.QueryRowContext(ctx, `SELECT `+summaryCols(ctx)+`, m.library_id, m.parsed_title, m.parsed_year,
-		m.plot, m.rated, m.imdb_id, m.imdb_pinned, m.total_seasons, m.poster_url, m.backdrop_url, m.match_provider
+		m.plot, m.rated, m.imdb_id, m.imdb_pinned, m.total_seasons, m.poster_url, m.backdrop_url, m.match_provider, m.overrides
 		FROM media_items m WHERE m.id = ?`+visible(ctx, "m"), id).
 		Scan(scanSummary(&it.ItemSummary, &it.LibraryID, &it.ParsedTitle, &it.ParsedYear, &it.Plot, &it.Rated,
-			&it.ImdbID, &it.ImdbPinned, &it.TotalSeasons, &it.PosterURL, &it.BackdropURL, &it.Provider)...)
+			&it.ImdbID, &it.ImdbPinned, &it.TotalSeasons, &it.PosterURL, &it.BackdropURL, &it.Provider, &raw)...)
+	it.Overrides = parseOverrides(raw)
 	return it, notFound(err)
 }
 
@@ -192,6 +195,10 @@ type Metadata struct {
 }
 
 func (d *DB) ApplyMetadata(ctx context.Context, id int64, m Metadata) error {
+	// Details set by hand win over the provider's.
+	if o, err := d.ItemOverrides(ctx, id); err == nil {
+		o.apply(&m)
+	}
 	_, err := d.sql.ExecContext(ctx, `UPDATE media_items SET title = ?, sort_title = ?, year = NULLIF(?, 0), plot = ?,
 		genres = ?, rated = ?, rating = ?, runtime_min = ?, imdb_id = ?, total_seasons = ?, poster_url = ?,
 		backdrop_url = CASE WHEN ? AND ? = '' THEN backdrop_url ELSE ? END,
@@ -211,12 +218,19 @@ func (d *DB) ClearMatch(ctx context.Context, id int64) error {
 	if _, err := d.sql.ExecContext(ctx, `DELETE FROM item_credits WHERE item_id = ?`, id); err != nil {
 		return err
 	}
-	_, err := d.sql.ExecContext(ctx, `UPDATE media_items SET match_status = 'unmatched', title = parsed_title,
+	if _, err := d.sql.ExecContext(ctx, `UPDATE media_items SET match_status = 'unmatched', title = parsed_title,
 		sort_title = ?, year = NULLIF(parsed_year, 0), plot = '', genres = '', rated = '', rating = NULL,
 		runtime_min = NULL, total_seasons = NULL, poster_url = '', backdrop_url = '', has_poster = custom_poster, match_provider = '',
 		imdb_id = CASE WHEN imdb_pinned = 1 THEN imdb_id ELSE '' END, updated_at = unixepoch()
-		WHERE id = ?`, SortTitle(parsed), id)
-	return err
+		WHERE id = ?`, SortTitle(parsed), id); err != nil {
+		return err
+	}
+	// What was set by hand stays, matched or not.
+	if o, err := d.ItemOverrides(ctx, id); err == nil && !o.empty() {
+		_, err = d.SetItemDetails(ctx, id, o)
+		return err
+	}
+	return nil
 }
 
 // SetImdbOverride pins (or clears, with "") the IMDb id used for the next match.
