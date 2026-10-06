@@ -7,7 +7,7 @@ import { EmptyState, ErrorNote, Meter, Spinner } from "../components/ui";
 import { api, backdropUrl, posterUrl, stillUrl, useApi } from "../lib/api";
 import { fmtAirDate, fmtBytes, fmtClock, fmtResolution, fmtRuntime, titleLink } from "../lib/format";
 import { canDirectPlay } from "../lib/playback";
-import { EpisodeActions, TitleActions } from "../components/item/AdminMenus";
+import { EpisodeActions, ExtraActions, TitleActions } from "../components/item/AdminMenus";
 import { PROBLEM_TEXT, type EpisodeRow, type ItemDetail, type MediaFile } from "../lib/types";
 import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
@@ -186,7 +186,7 @@ export default function ItemPage({ id }: { id: number }) {
         <CastRow cast={data.cast ?? []} />
       </div>
       {isSeries && seasons && <Seasons item={item} seasons={seasons} admin={admin} onChange={reload} />}
-      {extras.length > 0 && <Extras title={item.title} files={extras} />}
+      {extras.length > 0 && <Extras item={item} files={extras} admin={admin} onChange={reload} />}
       {!isSeries && files.length > extras.length && <FilesCard files={files.filter((f) => f.role !== "extra")} onChange={reload} />}
       {error && (
         <div className="gutter pt-4">
@@ -360,13 +360,14 @@ function EpisodeItem({ e, actions }: { e: EpisodeRow; actions?: React.ReactNode 
 }
 
 /** A movie's bonus material, listed like episodes and titled "Movie - Extra". */
-function Extras({ title, files }: { title: string; files: MediaFile[] }) {
+function Extras({ item, files, admin, onChange }: { item: ItemDetail["item"]; files: MediaFile[]; admin: boolean; onChange: () => void }) {
+  const title = item.title;
   return (
     <section className="mt-10 gutter">
       <h2 className="row-title mb-1">Extras</h2>
       <ol className="flex flex-col">
         {files.map((f) => (
-          <StillRow key={f.id} file={{ ...f, fileId: f.id }}>
+          <StillRow key={f.id} file={{ ...f, fileId: f.id }} actions={admin && <ExtraActions item={item} f={f} onChange={onChange} />}>
             <div className="truncate text-sm font-medium text-content">
               <span className="text-content-muted">{title} - </span>
               {f.extraTitle}

@@ -40,6 +40,9 @@ genres and description are each optional; a field left empty uses what the
 metadata provider says, and what you fill in stays even when the title is
 matched again. Clearing a field fetches the provider's value back.
 
+Each of a movie's extras has its own ⋯ (admins): rename it, say it's really a
+copy of the film, mark it watched, re-scan, optimize or delete it.
+
 ## Artwork
 
 - Posters and backdrops from TMDB, resized to WebP. A frame from the video
