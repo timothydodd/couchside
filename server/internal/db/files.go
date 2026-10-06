@@ -234,15 +234,41 @@ func (d *DB) PruneLibrary(ctx context.Context, libraryID, scanStart int64) (int6
 		return 0, err
 	}
 	n, _ := res.RowsAffected()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM media_items WHERE library_id = ?
-		AND NOT EXISTS (SELECT 1 FROM files f WHERE f.media_item_id = media_items.id)`, libraryID); err != nil {
-		return 0, err
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM episodes WHERE series_id IN (SELECT id FROM media_items WHERE library_id = ?)
-		AND NOT EXISTS (SELECT 1 FROM files f WHERE f.episode_id = episodes.id)`, libraryID); err != nil {
+	if _, err := tidyItems(ctx, tx); err != nil {
 		return 0, err
 	}
 	return n, tx.Commit()
+}
+
+// tidyItems is the housekeeping after files go: items and episodes left
+// without files are deleted, and an item whose home library has no files
+// for it any more moves home to one that has. It returns the items deleted.
+func tidyItems(ctx context.Context, tx *sql.Tx) ([]int64, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM media_items WHERE NOT EXISTS (SELECT 1 FROM files f WHERE f.media_item_id = media_items.id)`)
+	if err != nil {
+		return nil, err
+	}
+	gone := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		gone = append(gone, id)
+	}
+	rows.Close()
+	for _, q := range []string{
+		`DELETE FROM media_items WHERE NOT EXISTS (SELECT 1 FROM files f WHERE f.media_item_id = media_items.id)`,
+		`DELETE FROM episodes WHERE NOT EXISTS (SELECT 1 FROM files f WHERE f.episode_id = episodes.id)`,
+		`UPDATE media_items SET library_id = (SELECT f.library_id FROM files f WHERE f.media_item_id = media_items.id ORDER BY f.id LIMIT 1)
+		   WHERE NOT EXISTS (SELECT 1 FROM files f WHERE f.media_item_id = media_items.id AND f.library_id = media_items.library_id)`,
+	} {
+		if _, err := tx.ExecContext(ctx, q); err != nil {
+			return nil, err
+		}
+	}
+	return gone, nil
 }
 
 // BackdropSource picks the file to grab a backdrop frame from: the first

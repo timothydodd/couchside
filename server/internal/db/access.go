@@ -56,7 +56,8 @@ func visible(ctx context.Context, m string) string {
 		for i, id := range a.Libraries {
 			ids[i] = strconv.FormatInt(id, 10)
 		}
-		cond += fmt.Sprintf(" AND %s.library_id IN (%s)", m, strings.Join(ids, ","))
+		// A title can have files in several libraries: it's visible when any of them is.
+		cond += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM files fl WHERE fl.media_item_id = %s.id AND fl.library_id IN (%s))", m, strings.Join(ids, ","))
 	}
 	if lvl := ratingLevel(a.MaxRating); lvl > 0 {
 		cond += fmt.Sprintf(" AND (%s) <= %d", ratingLevelSQL(m+".rated"), lvl)
@@ -66,7 +67,18 @@ func visible(ctx context.Context, m string) string {
 
 // visibleFileJoin limits files f to those of titles ctx's profile may see.
 func visibleFileJoin(ctx context.Context) string {
-	cond := visible(ctx, "mv")
+	a, _ := ctx.Value(accessKey{}).(Access)
+	cond := ""
+	if len(a.Libraries) > 0 {
+		ids := make([]string, len(a.Libraries))
+		for i, id := range a.Libraries {
+			ids[i] = strconv.FormatInt(id, 10)
+		}
+		cond += " AND f.library_id IN (" + strings.Join(ids, ",") + ")"
+	}
+	if lvl := ratingLevel(a.MaxRating); lvl > 0 {
+		cond += fmt.Sprintf(" AND (%s) <= %d", ratingLevelSQL("mv.rated"), lvl)
+	}
 	if cond == "" {
 		return ""
 	}

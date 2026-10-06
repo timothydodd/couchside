@@ -178,9 +178,19 @@ func (s *Server) deleteFiles(ctx context.Context, lib db.Library, files []db.Fil
 	res := deleteResult{ItemsRemoved: []int64{}, KeptFolders: []string{}}
 	var done []int64
 	var failure error
-	dirs := map[string]bool{}
+	dirs := map[string]string{} // folder → its library's root
+	// A title's files can be in several libraries: each is checked against its own.
+	libs := map[int64]db.Library{lib.ID: lib}
 	for _, f := range files {
-		if !insideDir(f.Path, lib.Path) {
+		l, ok := libs[f.LibraryID]
+		if !ok {
+			var err error
+			if l, err = s.db.Library(ctx, f.LibraryID); err != nil {
+				return res, err
+			}
+			libs[f.LibraryID] = l
+		}
+		if !insideDir(f.Path, l.Path) {
 			failure = fmt.Errorf("%s is outside the library folder; not deleting it", f.Path)
 			break
 		}
@@ -200,10 +210,10 @@ func (s *Server) deleteFiles(ctx context.Context, lib db.Library, files []db.Fil
 		done = append(done, f.ID)
 		res.Deleted++
 		res.Bytes += f.Size
-		dirs[filepath.Dir(f.Path)] = true
+		dirs[filepath.Dir(f.Path)] = l.Path
 	}
 	if len(done) > 0 {
-		gone, err := s.db.DeleteFileRows(ctx, lib.ID, done)
+		gone, err := s.db.DeleteFileRows(ctx, done)
 		if err != nil {
 			return res, err
 		}
@@ -212,8 +222,8 @@ func (s *Server) deleteFiles(ctx context.Context, lib db.Library, files []db.Fil
 		}
 		res.ItemsRemoved = append(res.ItemsRemoved, gone...)
 	}
-	for d := range dirs {
-		if kept := removeEmptyDirs(d, lib.Path); kept != "" {
+	for d, root := range dirs {
+		if kept := removeEmptyDirs(d, root); kept != "" {
 			res.KeptFolders = append(res.KeptFolders, kept)
 		}
 	}

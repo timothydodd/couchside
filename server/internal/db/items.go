@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // ItemSummary is the lightweight shape used by grids and rows.
@@ -145,21 +146,29 @@ func (d *DB) Item(ctx context.Context, id int64) (Item, error) {
 
 // EnsureItem finds or creates the item for a parsed title, reporting whether it was created.
 func (d *DB) EnsureItem(ctx context.Context, libraryID int64, kind, title string, year int) (int64, bool, error) {
+	// One title is one item whichever libraries hold files for it, so look
+	// across them first. The library a title was first seen in stays its
+	// home (Manage view, counts); its files each know their own.
+	ensureMu.Lock()
+	defer ensureMu.Unlock()
 	var id int64
-	err := d.sql.QueryRowContext(ctx, `INSERT INTO media_items (library_id, kind, parsed_title, parsed_year, title, sort_title, year)
-		VALUES (?, ?, ?, ?, ?, ?, NULLIF(?, 0))
-		ON CONFLICT (library_id, kind, parsed_title, parsed_year) DO NOTHING RETURNING id`,
-		libraryID, kind, title, year, title, SortTitle(title), year).Scan(&id)
+	err := d.sql.QueryRowContext(ctx, `SELECT id FROM media_items WHERE kind = ? AND parsed_title = ? AND parsed_year = ?
+		ORDER BY id LIMIT 1`, kind, title, year).Scan(&id)
 	if err == nil {
-		return id, true, nil
+		return id, false, nil
 	}
 	if err != sql.ErrNoRows {
 		return 0, false, err
 	}
-	err = d.sql.QueryRowContext(ctx, `SELECT id FROM media_items WHERE library_id = ? AND kind = ? AND parsed_title = ? AND parsed_year = ?`,
-		libraryID, kind, title, year).Scan(&id)
-	return id, false, err
+	err = d.sql.QueryRowContext(ctx, `INSERT INTO media_items (library_id, kind, parsed_title, parsed_year, title, sort_title, year)
+		VALUES (?, ?, ?, ?, ?, ?, NULLIF(?, 0)) RETURNING id`,
+		libraryID, kind, title, year, title, SortTitle(title), year).Scan(&id)
+	return id, err == nil, err
 }
+
+// ensureMu keeps two scans from creating the same title at once: the table's
+// unique key is per library, and titles are shared across them.
+var ensureMu sync.Mutex
 
 // Metadata is what a provider contributes to an item.
 type Metadata struct {

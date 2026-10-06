@@ -156,7 +156,7 @@ func (d *DB) PersonItems(ctx context.Context, personID int64) ([]PersonItem, err
 
 // ItemIDsInLibrary lists a library's items, for re-matching them all.
 func (d *DB) ItemIDsInLibrary(ctx context.Context, libraryID int64) ([]ItemRef, error) {
-	rows, err := d.sql.QueryContext(ctx, `SELECT id, parsed_title FROM media_items WHERE library_id = ? ORDER BY id`, libraryID)
+	rows, err := d.sql.QueryContext(ctx, `SELECT id, parsed_title FROM media_items m WHERE m.library_id = ?1 OR EXISTS (SELECT 1 FROM files fl WHERE fl.media_item_id = m.id AND fl.library_id = ?1) ORDER BY id`, libraryID)
 	if err != nil {
 		return nil, err
 	}

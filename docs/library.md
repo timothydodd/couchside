@@ -62,6 +62,16 @@ in the Manage view and pick *Copy*, *Part N* or *Extra* for the file. Choices
 made by hand stick through rescans; marking a file as Part 2 makes the movie's
 single other copy Part 1.
 
+## One title across libraries
+
+A movie or show is one entry however many libraries hold files for it. A
+series you keep in the TV library and also record with the DVR shows once,
+with the episodes from both; the Manage view of each library lists it, and a
+profile limited to one of the libraries sees only that library's files. Titles
+match by name and year as Couchside reads them from the folders, so a show
+folder called `MacGyver (2016)` in one library and `MacGyver` in another are
+two shows.
+
 ## Library management
 
 - **Rename** a library or point it at another folder; watch history follows.

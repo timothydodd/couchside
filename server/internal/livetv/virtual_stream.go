@@ -238,7 +238,7 @@ type pieceVideo struct {
 func (m *liveManager) virtualArgs(p db.PlayoutPiece, v pieceVideo, hwDecode bool, inMs, durMs, offsetMs int64, realtime bool, spec Spec, dir string, run int) []string {
 	secs := func(ms int64) string { return strconv.FormatFloat(float64(ms)/1000, 'f', 3, 64) }
 	vIn, vOut := m.enc.Video(transcode.VideoOpts{MaxHeight: spec.Height, BitrateK: transcode.BitrateFor(spec.Height),
-		Deinterlace: true, Live: true, HDR: v.HDR, HWDecode: hwDecode})
+		Deinterlace: true, Live: true, HDR: v.HDR, HWDecode: hwDecode, Exact: true})
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
 	args = append(args, vIn...)
 	if realtime {

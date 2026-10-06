@@ -122,6 +122,7 @@ type VideoOpts struct {
 	Deinterlace bool // broadcast TV: deinterlace frames flagged interlaced
 	Live        bool // live TV: steady frame-by-frame output over compression
 	HWDecode    bool // VAAPI: decode, scale and tone map on the GPU (needs Encoder.HWDecode)
+	Exact       bool // scale to MaxHeight exactly, up as well as down: pieces joined into one stream need one size
 }
 
 // Video returns ffmpeg arguments that go before -i (device setup) and after
@@ -143,6 +144,8 @@ func (e Encoder) VideoParts(o VideoOpts) (in []string, chain string, codec []str
 		f = append(f, "yadif=mode=send_frame:parity=auto:deint=interlaced")
 	}
 	switch {
+	case o.MaxHeight > 0 && o.Exact:
+		f = append(f, fmt.Sprintf("scale=-2:%d", o.MaxHeight))
 	case o.MaxHeight > 0 && o.SrcHeight == 0:
 		// Size unknown (a live stream): cap the height, never scale up.
 		f = append(f, fmt.Sprintf("scale=-2:'min(ih,%d)'", o.MaxHeight))
@@ -212,6 +215,8 @@ func (e Encoder) vaapiFull(o VideoOpts) (in []string, chain string, codec []stri
 	}
 	size := ""
 	switch {
+	case o.MaxHeight > 0 && o.Exact:
+		size = fmt.Sprintf("w=-2:h=%d:", o.MaxHeight)
 	case o.MaxHeight > 0 && o.SrcHeight == 0:
 		size = fmt.Sprintf(`w=-2:h=min(ih\,%d):`, o.MaxHeight) // size unknown: cap it, never scale up
 	case o.MaxHeight > 0 && o.SrcHeight > o.MaxHeight:
