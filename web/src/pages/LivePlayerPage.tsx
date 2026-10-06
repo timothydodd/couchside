@@ -145,8 +145,9 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
         setError(`The live stream stopped (${data.details}). The signal may have dropped.`);
       });
       player.on(Hls.Events.LEVEL_UPDATED, (_e, data) => {
-        // Couchside's own channels pause briefly between clips, which this would read as slow encoding.
-        if (s.virtual) return;
+        // Couchside's own channels pause briefly between clips, which this would read as slow encoding;
+        // and with the picture passed through nothing is being encoded, so the warning would be wrong.
+        if (s.virtual || s.copyVideo) return;
         const sp = speed.current;
         const now = performance.now() / 1000;
         sp.samples = [...sp.samples.filter(([t]) => now - t < 30), [now, data.details.totalduration]];
