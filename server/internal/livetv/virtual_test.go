@@ -2,6 +2,7 @@ package livetv
 
 import (
 	"context"
+	"github.com/timothydodd/couchside/internal/probe"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -274,5 +275,26 @@ func TestStreamGuide(t *testing.T) {
 	}
 	if g[0].Channel != "950" || g[0].Title != "Weather" {
 		t.Fatalf("entry = %+v", g[0])
+	}
+}
+
+// A stream that's already H.264 and AAC is passed through; anything else is
+// converted, and an unreadable one too.
+func TestStreamSpec(t *testing.T) {
+	o := WatchOpts{Height: 720}
+	h264 := &probe.Info{VideoCodec: "h264", PixFmt: "yuv420p", AudioCodec: "aac", AudioChannels: 2}
+	if sp := streamSpec(h264, o); !sp.CopyVideo || !sp.CopyAudio || sp.VideoCodec != "h264" {
+		t.Fatalf("h264+aac: %+v", sp)
+	}
+	tenBit := &probe.Info{VideoCodec: "h264", PixFmt: "yuv420p10le", AudioCodec: "ac3", AudioChannels: 6}
+	if sp := streamSpec(tenBit, o); sp.CopyVideo || sp.CopyAudio {
+		t.Fatalf("10-bit + ac3: %+v", sp)
+	}
+	hevc := &probe.Info{VideoCodec: "hevc", PixFmt: "yuv420p", AudioCodec: "aac", AudioChannels: 2}
+	if sp := streamSpec(hevc, o); sp.CopyVideo || !sp.CopyAudio {
+		t.Fatalf("hevc+aac: %+v", sp)
+	}
+	if sp := streamSpec(nil, o); sp.CopyVideo || sp.CopyAudio || sp.Height != 720 {
+		t.Fatalf("unknown: %+v", sp)
 	}
 }

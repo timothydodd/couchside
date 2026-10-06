@@ -231,12 +231,11 @@ func (m *liveManager) start(ctx context.Context, channel, name, streamURL string
 
 // startStream plays a stream channel's source (or joins a running stream of
 // it), like a tuner channel: one ffmpeg per quality, a sliding window, gone
-// when nobody watches. The picture is always converted, since nothing says
-// what the stream holds. Its key is a virtual channel's ("vc:"), so saving
-// or deleting the channel stops it.
+// when nobody watches. spec says what to copy (streamSpec: H.264 and AAC are
+// passed through) and what to convert. Its key is a virtual channel's
+// ("vc:"), so saving or deleting the channel stops it.
 func (m *liveManager) startStream(ctx context.Context, channel, name, streamURL string, spec Spec) (*LiveSession, error) {
 	spec.window, spec.stream = liveWindow, true
-	spec.CopyVideo, spec.CopyAudio = false, false
 	return m.startInput(ctx, "vc:"+channel, channel, name, []string{
 		// A playlist can't point ffmpeg at the server's own files.
 		"-protocol_whitelist", "http,https,tcp,tls,crypto",
