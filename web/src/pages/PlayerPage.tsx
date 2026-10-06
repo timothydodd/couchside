@@ -75,28 +75,36 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
 
   const exit = useCallback(() => back(info ? `/item/${info.itemId}` : "/"), [back, info]);
 
-  // The play queue: what Play all lined up, or else this episode's season.
-  // A file outside the current queue means the viewer went somewhere else:
-  // the queue starts over from where they are.
+  // The play queue: what Play all lined up, or else this episode's season,
+  // or this extra's fellow extras. A file outside the current queue means
+  // the viewer went somewhere else: the queue starts over from where they are.
   const queue = useQueue((s) => s.entries);
   useEffect(() => {
     if (!info || useQueue.getState().has(fileId)) return;
-    if (info.kind !== "series") {
-      useQueue.getState().clear();
+    if (info.kind !== "series" && info.role !== "extra") {
+      useQueue.getState().clear(); // a film on its own
       return;
     }
     let cancelled = false;
     void api<ItemDetail>(`/api/items/${info.itemId}`)
       .then((d) => {
         if (cancelled) return;
-        const season = d.seasons?.find((s) => s.episodes.some((e) => e.fileId === fileId));
-        if (!season) return;
-        useQueue.getState().start(
-          season.episodes
-            .filter((e) => e.fileId)
-            .map((e) => ({ fileId: e.fileId, title: d.item.title, subtitle: `S${e.season} E${e.episode}${e.title ? ` · ${e.title}` : ""}` })),
-          false,
-        );
+        if (info.kind === "series") {
+          const season = d.seasons?.find((s) => s.episodes.some((e) => e.fileId === fileId));
+          if (!season) return;
+          useQueue.getState().start(
+            season.episodes
+              .filter((e) => e.fileId)
+              .map((e) => ({ fileId: e.fileId, title: d.item.title, subtitle: `S${e.season} E${e.episode}${e.title ? ` · ${e.title}` : ""}` })),
+            false,
+          );
+        } else {
+          // Bonus material: the film's extras, in the order its page lists them.
+          useQueue.getState().start(
+            d.files.filter((f) => f.role === "extra").map((f) => ({ fileId: f.id, title: f.extraTitle || "Extra", subtitle: `${d.item.title} · Extra` })),
+            false,
+          );
+        }
       })
       .catch(() => {});
     return () => {

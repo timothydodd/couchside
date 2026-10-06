@@ -98,7 +98,8 @@ two shows.
     button shows what's lined up (pausing while it's open): click to jump,
     × to drop something. Previous and Next step through it; Previous starts
     the current one over once it's five seconds in. Playing an episode on
-    its own queues the rest of its season.
+    its own queues the rest of its season; playing one of a movie's extras
+    queues the rest of them.
   - **Add to / Remove from My list**, **Mark watched / unwatched**.
   - **Refresh metadata** fetches details and artwork again; a match you fixed
     by hand stays. **Find commercials** queues detection for recordings not
