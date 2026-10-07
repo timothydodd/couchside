@@ -55,7 +55,7 @@ export default function ActivityPage() {
         <button className="btn-ghost" onClick={() => void scanAll()}>
           <ScanSearch size={15} /> Scan all libraries
         </button>
-        <button className="btn-ghost" onClick={() => void clear()} disabled={!data?.jobs.some((j) => j.status === "done")}>
+        <button className="btn-ghost" onClick={() => void clear()} disabled={!data?.jobs.some((j) => j.status === "done" || j.status === "failed")}>
           <Trash2 size={15} /> Clear finished
         </button>
       </PageHeader>

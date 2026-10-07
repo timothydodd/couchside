@@ -23,7 +23,7 @@ export default function LibraryForm({ library, onDone, onCancel }: { library?: L
     setBusy(true);
     setErr(null);
     try {
-      const n = name.trim() || (kind === "movies" ? "Movies" : "TV Shows");
+      const n = name.trim() || (kind === "movies" ? "Movies" : "TV shows");
       if (library) await api(`/api/libraries/${library.id}`, { method: "PUT", json: { name: n, path, trickplay, intros } });
       else {
         const made = await api<Library>("/api/libraries", { method: "POST", json: { name: n, path, kind } });
@@ -45,7 +45,7 @@ export default function LibraryForm({ library, onDone, onCancel }: { library?: L
           <label className="field-label" htmlFor="lib-name">
             Name
           </label>
-          <input id="lib-name" className="field w-full" placeholder={kind === "movies" ? "Movies" : "TV Shows"} value={name} onChange={(e) => setName(e.target.value)} />
+          <input id="lib-name" className="field w-full" placeholder={kind === "movies" ? "Movies" : "TV shows"} value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div>
           <label className="field-label" htmlFor="lib-kind">

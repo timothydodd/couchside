@@ -27,8 +27,8 @@ Suggested order: **P6** first (the dialogs everything else confirms with),
 | P9  | Phone layout: rows that crowd or run off                | Fix      | S    | Done |
 | P10 | Home: the hero plays, and says why it's empty           | Fix      | S    | Done |
 | P11 | Guide: time shifts show a loading state                 | Fix      | S    | Done |
-| P12 | Copy: one name for things, admin-only advice to admins  | Fix      | S    |      |
-| P13 | Status is summarised once                               | Cleanup  | S    |      |
+| P12 | Copy: one name for things, admin-only advice to admins  | Fix      | S    | Done |
+| P13 | Status is summarised once                               | Cleanup  | S    | Done |
 | P14 | Keyboard: tabs, radios, menus                           | A11y     | S    |      |
 | P15 | Search: see more, locked channels explained             | Fix      | S    |      |
 | P16 | Small smells                                            | Cleanup  | S    |      |
@@ -221,49 +221,30 @@ the new time and the old grid dims and ignores clicks (`stale`:
 where nothing is kept. The time controls sit in `FilterBar`'s slot, so
 the guide no longer pulls the filter bar up over its own row.
 
-## P12 · Copy: one name for things, admin-only advice to admins
+## P12 · Copy: one name for things, admin-only advice to admins · Done
 
-**Scope**
-- "TV Shows" (`LibraryPage.tsx:155`, `Sidebar.tsx:17`, the library form's
-  default name `LibrariesPage.tsx:147,169`), "TV shows" (`HomePage.tsx:33,60`,
-  `SearchPage.tsx:61`, `PersonPage.tsx:64`, `LibrariesPage.tsx:37,184`),
-  "TV" (`MobileNav.tsx:51`, `LibrariesPage.tsx:83`, `LibraryPage.tsx:275`).
-  Use "TV shows" in headings and rows, "TV" only where space is short
-  (bottom tabs, badges).
-- `LiveTvPage.tsx:23`: the empty state links to `/settings` (Live TV is
-  `/settings/livetv`, admin-only) and shows restart and env-var
-  instructions to everyone. `LibraryPage.tsx:274` sends non-admins to
-  Libraries. Copy `HomePage.tsx:29`'s admin split.
-- `ProgramDialog.tsx:47` names Plex in the tuner-conflict message; say
-  "another recorder".
-- `ActivityPage.tsx:57`: "Clear finished" is enabled only for `done` jobs;
-  failed jobs are finished too.
-- `StatusBar.tsx:20` says "N jobs queued", `MobileNav.tsx:141` "N jobs
-  running" (never singular) for the same number; `Sidebar.tsx:49` shows
-  failed and hides active, `MobileNav.tsx:127` the reverse. One wording and order (P13
-  gives them one source).
-- `Sidebar.tsx:94`: the "Manage" section heading shows for users who only
-  have Settings in it. `MobileNav.tsx:57` highlights "More" on the search
-  page although search is in the top bar (`:60`).
+**Done.** "TV shows" everywhere (the phone tab keeps "TV" as its short
+label, from the shared nav table). Live TV's and the Movies/TV empty
+states link admins to Settings → Live TV or Libraries and tell others to
+ask an admin. The tuner-conflict message says "other recorders", not Plex.
+"Clear finished" counts failed jobs as finished. The job summary has one
+wording and order (`useJobsSummary`, P13). The sidebar's "Manage" heading
+is for admins; users get a visually hidden "Account" one. "More" on
+phones lights up only for the pages it holds.
 
-## P13 · Status is summarised once
+## P13 · Status is summarised once · Done
 
-**Scope**
-- The REC badge is built in `Sidebar.tsx:43`, `MobileNav.tsx:30` and
-  `StatusBar.tsx:42`; the job summary in `Sidebar.tsx:48`,
-  `MobileNav.tsx:94,127` and `StatusBar.tsx:10,20` (`fmtVersion` is
-  shared now, placed in the same three spots). A `useStatusSummary()` in `stores/status.ts` returning `{recording,
-  jobs: {active, queued, failed}, label, version}` and a `RecBadge`
-  component.
-- Nav items are listed twice (`Sidebar.tsx:14-26`, `MobileNav.tsx:45-56`
-  plus the hard-coded More sheet rows at `:121-134`). One `NAV` table in
-  `stores/router.ts` with `phone: "tab" | "more"`.
-- `SearchPage.tsx:118` `Section` and `PersonPage.tsx:68` repeat `Row`'s
-  heading; the rec-dot rule is in `SearchPage.tsx:90` and `Guide.tsx:159`;
-  `ChannelHit` (`SearchPage.tsx:127`) repeats the guide's channel cell
-  (`Guide.tsx:117`); `LibraryPage.tsx:30` `ActiveChip` and `FilterBar`'s
-  chips (`FilterBar.tsx:78`) are the same thing. Share each, in `components/livetv/ChannelBits`
-  and `ui.tsx`.
+**Done.** `components/StatusBits.tsx` has `useJobsSummary` (active,
+failed, one label), `RecBadge` and `JobsBadge`, used by the sidebar, the
+phone bars and the status bar. `components/nav.ts` is the one nav table
+(`NAV_MAIN`, `NAV_LIVE`, `NAV_MANAGE` with `admin` and `short`, and
+`sectionOf`) for the sidebar, the bottom tabs and the More sheet. `ui.tsx`
+`Section` replaces the search page's and person page's hand-rolled
+headings; `RecDot` (`livetv/ChannelBits.tsx`) is the one rule for the red
+dot in the guide, the channels list and search; `ActiveChip` lives in
+`FilterMenu.tsx` for both the library pages and the Live TV filter bar.
+The search page's channel hit keeps its own card layout; it isn't the
+guide's cell.
 
 ## P14 · Keyboard: tabs, radios, menus
 

@@ -6,6 +6,12 @@ import { WEAK_SIGNAL } from "./filters";
 import { notify } from "../../lib/notices";
 import { errText } from "../../lib/errors";
 
+/** The red dot for a program that will record (pulsing while it is). */
+export function RecDot({ status, className = "" }: { status?: string; className?: string }) {
+  if (status !== "recording" && status !== "scheduled") return null;
+  return <span className={`rec-dot ${status === "recording" ? "animate-pulse" : ""} ${className}`} />;
+}
+
 /** Four bars from the tuner's signal-quality reading; amber when marginal. */
 export function SignalBars({ c }: { c: TvChannel }) {
   const q = c.signalQuality;

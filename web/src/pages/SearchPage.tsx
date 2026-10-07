@@ -1,9 +1,10 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState } from "react";
 import { Lock, Play, Search, SearchX } from "lucide-react";
 import Link from "../components/Link";
 import { ContinueCard, PosterRow, Row } from "../components/Rows";
 import ProgramDialog from "../components/livetv/ProgramDialog";
-import { EmptyState, ErrorNote, PageHeader, Spinner, Loading } from "../components/ui";
+import { RecDot } from "../components/livetv/ChannelBits";
+import { EmptyState, ErrorNote, Loading, PageHeader, Section, Spinner } from "../components/ui";
 import { SearchBox } from "../components/Sidebar";
 import { useApi } from "../lib/api";
 import { fmtSlot } from "../lib/format";
@@ -85,7 +86,7 @@ export default function SearchPage({ q }: { q: string }) {
                     <span className="w-14 shrink-0 text-center text-xs font-semibold tabular-nums text-content-secondary">{p.channel}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-content">
-                        {(p.recordingStatus === "recording" || p.recordingStatus === "scheduled") && <span className="rec-dot mr-1.5" />}
+                        <RecDot status={p.recordingStatus} className="mr-1.5" />
                         {p.title}
                         {p.episodeTitle && <span className="font-normal text-content-secondary"> · {p.episodeTitle}</span>}
                       </span>
@@ -110,15 +111,6 @@ export default function SearchPage({ q }: { q: string }) {
         />
       )}
     </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="gutter py-3">
-      <h2 className="row-title mb-3">{title}</h2>
-      {children}
-    </section>
   );
 }
 

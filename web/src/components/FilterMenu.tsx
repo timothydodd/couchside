@@ -87,3 +87,13 @@ export function Choices<T extends string>({
     </div>
   );
 }
+
+/** An active filter shown under the search box; tap to clear it. */
+export function ActiveChip({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <button type="button" onClick={onClear} className="choice choice-on inline-flex items-center gap-1 !min-h-7 !text-xs" aria-label={`Clear ${label}`}>
+      {label}
+      <X size={12} />
+    </button>
+  );
+}

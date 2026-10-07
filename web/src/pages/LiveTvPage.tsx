@@ -6,6 +6,7 @@ import Recordings from "../components/livetv/Recordings";
 import { useTvFilters } from "../components/livetv/filters";
 import { EmptyState, PageHeader, WarningNote } from "../components/ui";
 import { useApi } from "../lib/api";
+import { useIsAdmin } from "../stores/auth";
 import type { LiveTvStatus } from "../lib/types";
 
 const TABS = [
@@ -17,12 +18,22 @@ const TABS = [
 export default function LiveTvPage({ tab }: { tab: "guide" | "channels" | "recordings" }) {
   const { data: st } = useApi<LiveTvStatus>("/api/livetv/status", { pollMs: 15000 });
   const [filters, setFilters] = useTvFilters();
+  const admin = useIsAdmin();
 
   if (st && !st.configured)
     return (
       <EmptyState icon={<RadioTower size={36} strokeWidth={1.5} />} title="Live TV isn't set up">
-        Make your own channels from your library in <Link to="/settings" className="text-accent hover:underline">Settings</Link>, or set{" "}
-        <span className="mono">COUCHSIDE_HDHOMERUN</span> to your HDHomeRun's IP address and restart Couchside for broadcast TV.
+        {admin ? (
+          <>
+            Make your own channels from your library in{" "}
+            <Link to="/settings/livetv" className="text-accent hover:underline">
+              Settings &rarr; Live TV
+            </Link>
+            , or set <span className="mono">COUCHSIDE_HDHOMERUN</span> to your HDHomeRun's IP address and restart Couchside for broadcast TV.
+          </>
+        ) : (
+          "Ask an admin to add a tuner or make channels from the library."
+        )}
       </EmptyState>
     );
 

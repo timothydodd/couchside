@@ -1,6 +1,6 @@
-import { Lock, SignalLow, Sparkles, Star, X } from "lucide-react";
+import { Lock, SignalLow, Sparkles, Star } from "lucide-react";
 import type { ReactNode } from "react";
-import FilterMenu, { Choices } from "../FilterMenu";
+import FilterMenu, { ActiveChip, Choices } from "../FilterMenu";
 import { SearchInput } from "../ui";
 import { DEFAULT_FILTERS, isFiltering, type QualityFilter, type TvFilters } from "./filters";
 
@@ -75,10 +75,7 @@ export default function FilterBar({
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {on.map((c) => (
-          <button key={c.label} type="button" onClick={() => patch(c.clear)} className="choice choice-on inline-flex items-center gap-1 !min-h-7 !text-xs" aria-label={`Clear ${c.label}`}>
-            {c.label}
-            <X size={12} />
-          </button>
+          <ActiveChip key={c.label} label={c.label} onClear={() => patch(c.clear)} />
         ))}
         <span className="ml-auto text-xs text-content-muted">{isFiltering(f) ? `${shown} of ${total} channels` : `${total} channels`}</span>
       </div>

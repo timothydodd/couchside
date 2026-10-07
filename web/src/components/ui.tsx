@@ -114,6 +114,16 @@ export function BackButton({ fallback, label = "Back", overlay = false }: { fall
   );
 }
 
+/** A page section with a row-style heading (a `Row` without the scroller). */
+export function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="gutter py-3">
+      <h2 className="row-title mb-3">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
 /** A centred spinner while a page or card loads; `fill` takes the whole of a flex or full-height parent. */
 export function Loading({ fill = false }: { fill?: boolean }) {
   return (

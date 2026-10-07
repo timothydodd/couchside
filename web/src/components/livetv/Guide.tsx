@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarX, ChevronLeft, ChevronRight, Lock, Repeat, SearchX } from "lucide-react";
-import { PinButton, SignalBars } from "./ChannelBits";
+import { PinButton, RecDot, SignalBars } from "./ChannelBits";
 import FilterBar from "./FilterBar";
 import { channelNameMatches, channelPasses, genresOf, programFilterActive, programMatches, type TvFilters } from "./filters";
 import ProgramDialog from "./ProgramDialog";
@@ -156,9 +156,7 @@ export default function Guide({ filters, setFilters }: { filters: TvFilters; set
                         title={`${p.title}${p.episodeTitle ? ` · ${p.episodeTitle}` : ""}`}
                       >
                         <div className="flex min-w-0 items-center gap-1.5">
-                          {(p.recordingStatus === "scheduled" || p.recordingStatus === "recording") && (
-                            <span className={`rec-dot ${p.recordingStatus === "recording" ? "animate-pulse" : ""}`} />
-                          )}
+                          <RecDot status={p.recordingStatus} />
                           <span className="truncate text-sm font-medium text-content">{p.title}</span>
                           {p.ruleId && <Repeat size={11} className="shrink-0 text-accent" aria-label="Series recording" />}
                           {p.isNew && w > 140 && <span className="tint-good shrink-0 rounded px-1 text-[10px] font-bold">NEW</span>}

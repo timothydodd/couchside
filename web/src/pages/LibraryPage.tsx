@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { Bookmark, BookmarkX, ChevronDown, Clapperboard, Combine, Eye, EyeOff, Play, RefreshCw, Scissors, SearchX, Settings2, Trash2, Tv, X } from "lucide-react";
+import { Bookmark, BookmarkX, ChevronDown, Clapperboard, Combine, Eye, EyeOff, Play, RefreshCw, Scissors, SearchX, Settings2, Trash2, Tv } from "lucide-react";
 import Link from "../components/Link";
 import PosterGrid from "../components/PosterGrid";
 import DeleteSelected from "../components/manage/DeleteSelected";
 import MergeTitles from "../components/manage/MergeTitles";
-import FilterMenu, { Choices } from "../components/FilterMenu";
+import FilterMenu, { ActiveChip, Choices } from "../components/FilterMenu";
 import { EmptyState, ErrorNote, MenuButton, SearchInput, Loading } from "../components/ui";
 import { api, useApi } from "../lib/api";
 import { attempt, notify } from "../lib/notices";
@@ -25,16 +25,6 @@ const SORTS: Record<Sort, (a: ItemSummary, b: ItemSummary) => number> = {
 };
 
 const FILTER_LABELS: Record<Filter, string> = { all: "All", unwatched: "Unwatched", watched: "Watched", list: "My list", unmatched: "Unmatched" };
-
-/** An active filter under the search box; tap to clear it. */
-function ActiveChip({ label, onClear }: { label: string; onClear: () => void }) {
-  return (
-    <button type="button" onClick={onClear} className="choice choice-on inline-flex items-center gap-1 !min-h-7 !text-xs" aria-label={`Clear ${label}`}>
-      {label}
-      <X size={12} />
-    </button>
-  );
-}
 
 // Keep filter choices per library view across navigation.
 const saved: Record<string, { q: string; sort: Sort; filter: Filter; genre: string }> = {};
@@ -152,7 +142,7 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
     setGenre("");
     setSort("title");
   };
-  const title = kind === "movie" ? "Movies" : "TV Shows";
+  const title = kind === "movie" ? "Movies" : "TV shows";
   const noun = kind === "movie" ? "movie" : "show";
   const total = data?.length ?? 0;
 
@@ -266,8 +256,14 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
         <Loading fill />
       ) : total === 0 ? (
         <EmptyState icon={kind === "movie" ? <Clapperboard size={36} strokeWidth={1.5} /> : <Tv size={36} strokeWidth={1.5} />} title={`No ${noun}s yet`}>
-          Add a {kind === "movie" ? "Movies" : "TV"} library on the <Link to="/libraries" className="text-accent hover:underline">Libraries</Link> page, or
-          wait for the current scan to finish.
+          {admin ? (
+            <>
+              Add a {kind === "movie" ? "Movies" : "TV shows"} library on the <Link to="/libraries" className="text-accent hover:underline">Libraries</Link> page,
+              or wait for the current scan to finish.
+            </>
+          ) : (
+            "Nothing has been scanned in yet. Ask an admin to add a library."
+          )}
         </EmptyState>
       ) : items.length === 0 ? (
         <EmptyState

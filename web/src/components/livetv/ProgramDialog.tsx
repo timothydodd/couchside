@@ -45,7 +45,7 @@ export default function ProgramDialog({
       if (r.conflict)
         setMsg({
           tone: "warning",
-          text: `Scheduled, but ${r.overlapping} other recordings overlap and there are only ${r.tuners} tuners. Plex or live viewers can also take tuners.`,
+          text: `Scheduled, but ${r.overlapping} other recordings overlap and there are only ${r.tuners} tuners. Other recorders and live viewers can also take tuners.`,
         });
       onChange();
     } catch (e) {

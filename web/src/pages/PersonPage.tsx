@@ -1,7 +1,7 @@
 import { PersonPhoto } from "../components/Credits";
 import EpisodeCard from "../components/EpisodeCard";
 import PosterCard from "../components/PosterCard";
-import { BackButton, EmptyState, ErrorNote, Loading } from "../components/ui";
+import { BackButton, EmptyState, ErrorNote, Loading, Section } from "../components/ui";
 import { personPhotoUrl, useApi } from "../lib/api";
 import { usePhone } from "../lib/media";
 import type { PersonDetail } from "../lib/types";
@@ -69,8 +69,7 @@ export default function PersonPage({ id }: { id: number }) {
       ].map(
         (g) =>
           g.list.length > 0 && (
-            <section key={g.title} className="gutter py-3">
-              <h2 className="row-title mb-3">{g.title}</h2>
+            <Section key={g.title} title={g.title}>
               <div className="poster-wrap">
                 {g.list.map((it) => (
                   <div key={it.id}>
@@ -79,12 +78,11 @@ export default function PersonPage({ id }: { id: number }) {
                   </div>
                 ))}
               </div>
-            </section>
+            </Section>
           ),
       )}
       {episodes.length > 0 && (
-        <section className="gutter py-3">
-          <h2 className="row-title mb-3">Episodes</h2>
+        <Section title="Episodes">
           <ol className={phone ? "flex flex-col" : "grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-5"}>
             {episodes.map((e) => (
               <li key={e.id}>
@@ -105,7 +103,7 @@ export default function PersonPage({ id }: { id: number }) {
               </li>
             ))}
           </ol>
-        </section>
+        </Section>
       )}
     </div>
   );
