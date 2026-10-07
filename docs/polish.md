@@ -19,7 +19,7 @@ Suggested order: **P6** first (the dialogs everything else confirms with),
 | P1  | Episodes as a grid, list on phones                      | Feature  | S    |      |
 | P2  | Episode page: plot, still, guest stars, crew            | Feature  | M    |      |
 | P3  | Picture plays, everything else opens the page           | Feature  | S    |      |
-| P4  | Rows that scroll: cast, Home, search                    | Fix      | S    |      |
+| P4  | Rows that scroll: cast, Home, search                    | Fix      | S    | Done |
 | P5  | Edit a title from its page; Manage is library settings  | Feature  | M    |      |
 | P6  | Couchside's own confirm and prompt dialogs              | Fix      | S    | Done |
 | P7  | Shared badge, empty, loading and error blocks           | Cleanup  | S    |      |
@@ -154,36 +154,19 @@ the page.
 **Done when** clicking the still plays, clicking the title opens the
 episode page, and Tab reaches both.
 
-## P4 · Rows that scroll: cast, Home, search
+## P4 · Rows that scroll: cast, Home, search · Done
 
-**Why.** `Row` (`components/Rows.tsx:9`) hides the scrollbar (`.row-scroll`,
-`index.css:458`) and offers nothing else, so with a mouse the cast strip,
-Continue Watching, Recently Added and the search result rows can only be
-scrolled with shift-wheel. A cast of 20 runs off the right edge with no
-sign there's more.
+**Why.** `Row` (`components/Rows.tsx`) hid the scrollbar and offered nothing
+else, so with a mouse the cast strip, Continue Watching, Recently Added and
+the search result rows could only be scrolled with shift-wheel, and a cast
+of 20 ran off the right edge with no sign there was more.
 
-**Scope**
-- `Row` owns a scroll element ref and renders two `btn-quiet` arrow buttons
-  (`ChevronLeft`/`ChevronRight`, `aria-label="Scroll left/right"`) in its
-  heading row next to `action`, each disabled at its end (`scrollLeft`
-  0 / max, tracked with a scroll listener and a `ResizeObserver`). A click
-  scrolls by the visible width less one card
-  (`scrollBy({left: ±(clientWidth - 160), behavior: "smooth"})`). The
-  buttons render only when `scrollWidth > clientWidth`, and only for fine
-  pointers (`@media (pointer: fine)` via a class, so phones keep swiping
-  without buttons).
-- Edge fades: a `mask-image: linear-gradient(to right, transparent, black
-  24px, black calc(100% - 24px), transparent)` on the scroller, applied
-  only on the side that can still scroll (`data-fade="left|right|both"`),
-  so the cut-off card reads as "more here" rather than a clipped layout.
-  Put it in `index.css` as `.row-scroll[data-fade=…]`.
-- Keyboard: focusing a card already scrolls it into view (native); add
-  `scroll-padding-inline: 24px` so the focused card isn't under the fade.
-- The Settings phone tab bar (`SettingsPage.tsx:41`) and the season tabs
-  use the same fade (no buttons).
-
-**Done when** every horizontal row on Home, Search and a title page can be
-paged with the mouse, and the last visible card fades instead of being cut.
+**Done.** `useScrollEdges` (`lib/scroll.ts`) watches a scroller and sets
+`data-fade`; `.row-scroll` masks the end that can still scroll, and
+`scroll-padding-inline` keeps a focused card clear of the fade. `Row`
+shows paging arrows in its heading when there's more than fits, disabled at
+each end and hidden for coarse pointers (`.row-nav`). The Settings phone
+tab bar gets the fade. The season tabs follow in P1.
 
 ## P5 · Edit a title from its page; Manage is library settings
 

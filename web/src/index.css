@@ -454,16 +454,36 @@ body {
   color: var(--scrim-fg);
 }
 
-/* Horizontal poster rows scroll without a visible bar. */
+/* Horizontal poster rows scroll without a visible bar. The end that can
+   still scroll fades out (data-fade is set by useScrollEdges), so a cut-off
+   card reads as "more here" rather than a clipped layout. */
 .row-scroll {
   scrollbar-width: none;
   scroll-snap-type: x proximity;
+  scroll-padding-inline: 28px;
+  --fade-l: 0px;
+  --fade-r: 0px;
+  mask-image: linear-gradient(to right, transparent, black var(--fade-l), black calc(100% - var(--fade-r)), transparent);
 }
 .row-scroll::-webkit-scrollbar {
   display: none;
 }
 .row-scroll > * {
   scroll-snap-align: start;
+}
+.row-scroll[data-fade="left"],
+.row-scroll[data-fade="both"] {
+  --fade-l: 28px;
+}
+.row-scroll[data-fade="right"],
+.row-scroll[data-fade="both"] {
+  --fade-r: 28px;
+}
+/* Paging arrows: only for a mouse; fingers swipe. */
+@media (pointer: coarse) {
+  .row-nav {
+    display: none;
+  }
 }
 
 /* ---------------------------------------------------------------------------

@@ -1,20 +1,42 @@
-import type { ReactNode } from "react";
-import { Play, X } from "lucide-react";
+import { useRef, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight, Play, X } from "lucide-react";
 import Link from "./Link";
 import PosterCard from "./PosterCard";
 import { backdropUrl, stillUrl } from "../lib/api";
 import { fmtClock } from "../lib/format";
+import { useScrollEdges } from "../lib/scroll";
 import type { ItemSummary, PlayInfo } from "../lib/types";
 
+/**
+ * A titled row of cards that scrolls sideways. The cut-off edge fades, and
+ * with a mouse there are arrows in the heading to page it (touch screens
+ * swipe, so `.row-nav` hides them there).
+ */
 export function Row({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const { left, right, page } = useScrollEdges(scroller);
   return (
     <section className="gutter py-3">
-      <div className="mb-3 flex items-baseline justify-between">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="row-title">{title}</h2>
-        {action}
+        <div className="flex items-center gap-2">
+          {action}
+          {(left || right) && (
+            <div className="row-nav flex gap-0.5">
+              <button type="button" className="btn-quiet !p-1" aria-label={`Scroll ${title} left`} disabled={!left} onClick={() => page(-1)}>
+                <ChevronLeft size={16} />
+              </button>
+              <button type="button" className="btn-quiet !p-1" aria-label={`Scroll ${title} right`} disabled={!right} onClick={() => page(1)}>
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
       {/* Inset to the page margin; the 4px of padding keeps hover shadows from being cut off. */}
-      <div className="row-scroll -mx-1 flex gap-3 overflow-x-auto px-1 pb-2 pt-1 sm:gap-5">{children}</div>
+      <div ref={scroller} className="row-scroll -mx-1 flex gap-3 overflow-x-auto px-1 pb-2 pt-1 sm:gap-5">
+        {children}
+      </div>
     </section>
   );
 }
