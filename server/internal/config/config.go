@@ -19,10 +19,11 @@ type Config struct {
 	TMDBKey      string        // TMDB_API_KEY: overrides the built-in key; "off" disables TMDB
 	Workers      int           // COUCHSIDE_WORKERS: concurrent background jobs
 	ScanInterval time.Duration // COUCHSIDE_SCAN_INTERVAL: periodic rescan, 0 disables
-	FFmpeg       string        // COUCHSIDE_FFMPEG
-	FFprobe      string        // COUCHSIDE_FFPROBE
+	FFmpeg       string        // COUCHSIDE_FFMPEG, default ffmpeg beside the executable, else on the PATH
+	FFprobe      string        // COUCHSIDE_FFPROBE, likewise
+	EnvFile      string        // the settings file that was read (see envFilePath), or ""
 
-	HWAccel        string // COUCHSIDE_HWACCEL: none | vaapi | qsv | nvenc (falls back to none if unusable)
+	HWAccel        string // COUCHSIDE_HWACCEL: auto (default) | none | vaapi | qsv | nvenc (falls back to none if unusable)
 	VAAPIDevice    string // COUCHSIDE_VAAPI_DEVICE, default /dev/dri/renderD128
 	MaxTranscodes  int    // COUCHSIDE_MAX_TRANSCODES: concurrent live transcode sessions
 	EncodeWorkers  int    // COUCHSIDE_ENCODE_WORKERS: concurrent background "optimize" encodes
@@ -54,6 +55,7 @@ type Config struct {
 }
 
 func Load() Config {
+	envFile := loadEnvFile()
 	data := env("COUCHSIDE_DATA_DIR", "./data")
 	c := Config{
 		Addr:         env("COUCHSIDE_ADDR", ":8080"),
@@ -65,10 +67,11 @@ func Load() Config {
 		TMDBKey:      tmdbKey(),
 		Workers:      2,
 		ScanInterval: 6 * time.Hour,
-		FFmpeg:       env("COUCHSIDE_FFMPEG", "ffmpeg"),
-		FFprobe:      env("COUCHSIDE_FFPROBE", "ffprobe"),
+		FFmpeg:       env("COUCHSIDE_FFMPEG", besideExe("ffmpeg")),
+		FFprobe:      env("COUCHSIDE_FFPROBE", besideExe("ffprobe")),
+		EnvFile:      envFile,
 
-		HWAccel:        env("COUCHSIDE_HWACCEL", "none"),
+		HWAccel:        env("COUCHSIDE_HWACCEL", "auto"),
 		VAAPIDevice:    env("COUCHSIDE_VAAPI_DEVICE", "/dev/dri/renderD128"),
 		MaxTranscodes:  envInt("COUCHSIDE_MAX_TRANSCODES", 2),
 		EncodeWorkers:  envInt("COUCHSIDE_ENCODE_WORKERS", 1),

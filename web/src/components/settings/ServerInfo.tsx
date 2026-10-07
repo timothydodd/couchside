@@ -11,9 +11,10 @@ export default function ServerInfo() {
           <dt className="text-content-muted">Encoder</dt>
           <dd>
             {status?.transcode ? (status.transcode.hwaccel === "none" ? "Software (CPU)" : `Hardware: ${status.transcode.hwaccel.toUpperCase()}`) : "–"}
-            {status?.transcode && status.transcode.requested !== "none" && status.transcode.hwaccel === "none" && (
-              <span className="ml-2 text-xs text-warning">
-                {status.transcode.requested.toUpperCase()} was requested but isn't usable; check the server log
+            {status?.transcode && status.transcode.hwaccel === "none" && status.transcode.note && (
+              <span className={`mt-1 block text-xs ${status.transcode.requested === "auto" ? "text-content-muted" : "text-warning"}`}>
+                {status.transcode.requested === "auto" ? "No usable GPU" : `${status.transcode.requested.toUpperCase()} isn't usable`}:{" "}
+                {status.transcode.note}
               </span>
             )}
           </dd>
@@ -43,8 +44,10 @@ export default function ServerInfo() {
           <dd>{status?.transcode ? `Up to ${status.transcode.optimizeHeight}p, ${status.transcode.encodeWorkers} at a time` : "–"}</dd>
         </dl>
         <p className="mt-3 text-xs text-content-muted">
-          Set <span className="mono">COUCHSIDE_HWACCEL=vaapi</span> (Intel/AMD, needs <span className="mono">/dev/dri</span>), <span className="mono">qsv</span> or{" "}
-          <span className="mono">nvenc</span> on the server to use a GPU. Unusable settings fall back to software automatically.
+          The server picks a GPU encoder it can use (NVENC, Quick Sync, or VAAPI on Linux with{" "}
+          <span className="mono">/dev/dri</span>). Set <span className="mono">COUCHSIDE_HWACCEL</span> to{" "}
+          <span className="mono">nvenc</span>, <span className="mono">qsv</span>, <span className="mono">vaapi</span> or{" "}
+          <span className="mono">none</span> to choose.
         </p>
       </section>
 

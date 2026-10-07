@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -35,12 +36,23 @@ var logs = logbuf.New(2000)
 // version is stamped at build time with -ldflags "-X main.version=...".
 var version = "dev"
 
-func main() {
+// setLogger sends the log to w, and to System → Console.
+func setLogger(w io.Writer) {
 	level := slog.LevelInfo
 	if os.Getenv("COUCHSIDE_DEBUG") != "" {
 		level = slog.LevelDebug
 	}
-	slog.SetDefault(slog.New(logs.Handler(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level}))))
+	slog.SetDefault(slog.New(logs.Handler(slog.NewTextHandler(w, &slog.HandlerOptions{Level: level}))))
+}
+
+func main() {
+	// Started by the Windows service manager: it has no console, and stops
+	// the server through the service's control requests (service_windows.go).
+	if isService() {
+		serviceMain()
+		return
+	}
+	setLogger(os.Stdout)
 
 	if len(os.Args) > 1 && os.Args[1] == "reset-password" {
 		if err := resetPassword(os.Args[2:]); err != nil {
@@ -56,14 +68,18 @@ func main() {
 		}
 		return
 	}
-	if err := run(); err != nil {
+	if err := run(context.Background()); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+// run serves until parent is cancelled, Ctrl-C or SIGTERM.
+func run(parent context.Context) error {
 	cfg := config.Load()
+	if cfg.EnvFile != "" {
+		slog.Info("settings file", "path", cfg.EnvFile)
+	}
 	for _, dir := range []string{cfg.DataDir, cfg.CacheDir} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err
@@ -88,7 +104,7 @@ func run() error {
 		slog.Warn("no metadata provider: set TMDB_API_KEY (or OMDB_API_KEY); items will show with filename titles and no posters")
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	enc := transcode.Detect(ctx, cfg.FFmpeg, cfg.HWAccel, cfg.VAAPIDevice)

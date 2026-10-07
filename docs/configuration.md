@@ -3,13 +3,19 @@
 Couchside is configured with environment variables, plus settings in the web
 UI that are stored in its database. Release builds work with none of them set.
 
+The same variables can go in a settings file, one `KEY=value` per line (`#`
+starts a comment). Couchside reads `COUCHSIDE_CONFIG` if it's set, and on
+Windows `%ProgramData%\Couchside\couchside.env`, which the installer writes.
+A variable set in the environment wins over the file.
+
 ## Environment variables
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `COUCHSIDE_MEDIA_ROOT` | none | Libraries must live under it; enables the folder picker |
 | `COUCHSIDE_ADDR` | `:8080` | Listen address |
-| `COUCHSIDE_DATA_DIR` | `./data` | SQLite database, plus `auth.key` (signs sessions) and `server.id`: back up all three |
+| `COUCHSIDE_DATA_DIR` | `./data` | SQLite database, plus `auth.key` (signs sessions) and `server.id`: back up all three. The Windows service defaults to `%ProgramData%\Couchside\data` |
+| `COUCHSIDE_CONFIG` | see above | Settings file to read |
 | `COUCHSIDE_CACHE_DIR` | `$DATA_DIR/cache` | Artwork, stills, subtitles, optimized copies |
 | `COUCHSIDE_WEB_DIR` | none | Serve the UI from this folder instead of the one built into release binaries |
 | `COUCHSIDE_WORKERS` | `2` | Background jobs at once (scans, matching, artwork) |
@@ -28,8 +34,8 @@ UI that are stored in its database. Release builds work with none of them set.
 | `COUCHSIDE_DISCOVERY_URL` | this machine's address and port | Base URL to advertise instead, when the LAN reaches Couchside on another port or name (Docker `-p 8095:8080`, a NodePort) |
 | `COUCHSIDE_DISCOVERY_INTERFACE` | the default one | Network interface to listen on, on a machine with several |
 | **Transcoding** | | |
-| `COUCHSIDE_FFMPEG` / `COUCHSIDE_FFPROBE` | `ffmpeg` / `ffprobe` | Paths to ffmpeg and ffprobe |
-| `COUCHSIDE_HWACCEL` | `none` | `vaapi`, `qsv` or `nvenc`; falls back to software if unusable |
+| `COUCHSIDE_FFMPEG` / `COUCHSIDE_FFPROBE` | beside `couchside`, else on the PATH | Paths to ffmpeg and ffprobe |
+| `COUCHSIDE_HWACCEL` | `auto` | `auto` tries the GPU encoders this machine might have (Windows: NVENC, then Quick Sync; Linux: VAAPI when `/dev/dri` is there, then NVENC, Quick Sync) and keeps the first that works. `nvenc`, `qsv`, `vaapi` or `none` picks one; an unusable choice falls back to software. The container and Helm chart set `none` unless you change it |
 | `COUCHSIDE_VAAPI_DEVICE` | `/dev/dri/renderD128` | VAAPI render node |
 | `COUCHSIDE_MAX_TRANSCODES` | `2` | Live transcode sessions at once; idle ones are evicted |
 | `COUCHSIDE_ENCODE_WORKERS` | `1` | Background optimize encodes at once |

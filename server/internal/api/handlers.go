@@ -39,6 +39,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		"transcode": map[string]any{
 			"hwaccel":        s.tc.Encoder().HW,
 			"requested":      s.cfg.HWAccel,
+			"note":           s.tc.Encoder().Note,
 			"tonemap":        s.tc.Encoder().Tonemap || s.tc.Encoder().HWTonemap,
 			"gpuDecode":      s.tc.Encoder().HWDecode,
 			"gpuTonemap":     s.tc.Encoder().HWTonemap,

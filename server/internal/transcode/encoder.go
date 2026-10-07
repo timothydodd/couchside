@@ -5,11 +5,13 @@ package transcode
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -26,6 +28,9 @@ type Encoder struct {
 	// most of the work on the CPU.
 	HWDecode  bool
 	HWTonemap bool
+	// Note says why no GPU is used, when one was asked for (or "auto" tried
+	// some): each encoder tried and ffmpeg's reason it failed.
+	Note string
 }
 
 // HWDecodable lists codecs worth handing to the GPU's decoder. Anything it
@@ -36,7 +41,9 @@ var hwEncoders = map[string]string{"nvenc": "h264_nvenc", "vaapi": "h264_vaapi",
 
 // Detect checks which encoder actually works. A requested hardware encoder
 // that's missing from ffmpeg or fails a one-frame test encode falls back to
-// software, with a warning, rather than breaking playback.
+// software, with a warning, rather than breaking playback. "auto" tries each
+// encoder this platform might have (autoCandidates) and keeps the first that
+// works.
 func Detect(ctx context.Context, ffmpeg, want, vaapiDevice string) Encoder {
 	e := Encoder{FFmpeg: ffmpeg, HW: "none", VAAPIDevice: vaapiDevice}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
@@ -48,33 +55,112 @@ func Detect(ctx context.Context, ffmpeg, want, vaapiDevice string) Encoder {
 	if want == "" || want == "none" || want == "software" {
 		return e
 	}
-	enc, ok := hwEncoders[want]
-	if !ok {
+	auto := want == "auto"
+	candidates := []string{want}
+	if auto {
+		candidates = autoCandidates(vaapiDevice)
+	} else if _, ok := hwEncoders[want]; !ok {
 		slog.Warn("unknown COUCHSIDE_HWACCEL, using software encoding", "value", want)
+		e.Note = "unknown COUCHSIDE_HWACCEL " + want
 		return e
 	}
 	encoders, _ := exec.CommandContext(ctx, ffmpeg, "-hide_banner", "-encoders").Output()
-	if !strings.Contains(string(encoders), " "+enc+" ") {
-		slog.Warn("ffmpeg has no hardware encoder for COUCHSIDE_HWACCEL, using software", "hwaccel", want, "encoder", enc)
+	var notes []string
+	for _, hw := range candidates {
+		if err := testEncoder(ctx, Encoder{FFmpeg: ffmpeg, HW: hw, VAAPIDevice: vaapiDevice}, string(encoders)); err != nil {
+			notes = append(notes, hw+": "+err.Error())
+			if !auto {
+				slog.Warn("hardware encoder test failed, using software", "hwaccel", hw, "err", err)
+			}
+			continue
+		}
+		e.HW = hw
+		break
+	}
+	if e.HW == "none" {
+		e.Note = strings.Join(notes, "; ")
+		if auto && len(notes) > 0 {
+			slog.Info("no usable GPU encoder, using software", "tried", e.Note)
+		}
 		return e
 	}
-	test := Encoder{FFmpeg: ffmpeg, HW: want, VAAPIDevice: vaapiDevice}
-	in, out := test.Video(VideoOpts{MaxHeight: 240, SrcHeight: 240, BitrateK: 500})
-	args := append([]string{"-hide_banner", "-loglevel", "error"}, in...)
-	args = append(args, "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=25:duration=0.4")
-	args = append(args, out...)
-	args = append(args, "-f", "null", "-")
-	if msg, err := exec.CommandContext(ctx, ffmpeg, args...).CombinedOutput(); err != nil {
-		slog.Warn("hardware encoder test failed, using software", "hwaccel", want, "err", err, "ffmpeg", Tail(string(msg), 300))
-		return e
-	}
-	e.HW = want
-	if want == "vaapi" {
-		e.HWDecode = testHWDecode(ctx, test, string(filters))
+	if e.HW == "vaapi" {
+		e.HWDecode = testHWDecode(ctx, e, string(filters))
 		e.HWTonemap = e.HWDecode && strings.Contains(string(filters), " tonemap_vaapi ")
 		slog.Info("vaapi pipeline", "gpuDecode", e.HWDecode, "gpuTonemap", e.HWTonemap)
 	}
 	return e
+}
+
+// autoCandidates are the encoders "auto" tries, best first. A discrete
+// NVIDIA card beats the Intel iGPU beside it; VAAPI is Linux only and needs
+// its render node.
+func autoCandidates(vaapiDevice string) []string {
+	switch runtime.GOOS {
+	case "windows":
+		return []string{"nvenc", "qsv"}
+	case "linux":
+		var c []string
+		if _, err := os.Stat(vaapiDevice); err == nil {
+			c = append(c, "vaapi")
+		}
+		return append(c, "nvenc", "qsv")
+	}
+	return nil
+}
+
+// testEncoder runs a one-frame test encode with e's hardware encoder. The
+// error is ffmpeg's own reason, such as an NVIDIA driver too old for this
+// ffmpeg, so Settings can show why the GPU isn't used.
+func testEncoder(ctx context.Context, e Encoder, encoders string) error {
+	if enc := hwEncoders[e.HW]; !strings.Contains(encoders, " "+enc+" ") {
+		return fmt.Errorf("this ffmpeg has no %s", enc)
+	}
+	in, out := e.Video(VideoOpts{MaxHeight: 240, SrcHeight: 240, BitrateK: 500})
+	args := append([]string{"-hide_banner", "-loglevel", "error"}, in...)
+	args = append(args, "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=25:duration=0.4")
+	args = append(args, out...)
+	args = append(args, "-f", "null", "-")
+	if msg, err := exec.CommandContext(ctx, e.FFmpeg, args...).CombinedOutput(); err != nil {
+		if r := ffmpegReason(string(msg)); r != "" {
+			return errors.New(r)
+		}
+		return err
+	}
+	return nil
+}
+
+// ffmpegReason picks the line of ffmpeg's error output that says what's
+// wrong, without its "[h264_nvenc @ 0x…]" prefix: the first two lines naming
+// a driver or device (NVENC says which driver it needs), else the first line.
+func ffmpegReason(out string) string {
+	var lines []string
+	for _, l := range strings.Split(strings.ReplaceAll(out, "\r", ""), "\n") {
+		if i := strings.Index(l, "] "); strings.HasPrefix(l, "[") && i > 0 {
+			l = l[i+2:]
+		}
+		if l = strings.TrimSpace(l); l != "" {
+			lines = append(lines, l)
+		}
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	var picked []string
+	for _, l := range lines {
+		low := strings.ToLower(l)
+		if strings.Contains(low, "driver") || strings.Contains(low, "device") || strings.Contains(low, "no capable") {
+			picked = append(picked, l)
+		}
+	}
+	if len(picked) == 0 {
+		picked = lines[:1]
+	}
+	r := strings.Join(picked[:min(len(picked), 2)], " ")
+	if len(r) > 240 {
+		r = r[:240] + "…"
+	}
+	return r
 }
 
 // testHWDecode checks the whole GPU pipeline: it encodes a short clip on the
