@@ -4,6 +4,7 @@ import Link from "../components/Link";
 import { ContinueCard, PosterRow, Row } from "../components/Rows";
 import ProgramDialog from "../components/livetv/ProgramDialog";
 import { RecDot } from "../components/livetv/ChannelBits";
+import { PersonPhoto } from "../components/Credits";
 import { EmptyState, ErrorNote, Loading, PageHeader, Section, Spinner } from "../components/ui";
 import { SearchBox } from "../components/Sidebar";
 import { useApi } from "../lib/api";
@@ -40,7 +41,7 @@ export default function SearchPage({ q }: { q: string }) {
       </>
     );
 
-  const groups = res ? [res.movies, res.series, res.episodes, res.channels, res.programs] : [];
+  const groups = res ? [res.movies, res.series, res.episodes, res.people ?? [], res.channels, res.programs] : [];
   const total = groups.reduce((n, g) => n + g.length, 0);
   const capped = groups.some((g) => g.length >= LIMIT);
 
@@ -67,6 +68,16 @@ export default function SearchPage({ q }: { q: string }) {
             <Row title="Episodes">
               {res.episodes.map((p) => (
                 <ContinueCard key={p.fileId} p={p} />
+              ))}
+            </Row>
+          )}
+          {!!res.people?.length && (
+            <Row title="People">
+              {res.people.map((p) => (
+                <Link key={p.id} to={`/person/${p.id}`} className="group w-28 shrink-0" aria-label={p.name}>
+                  <PersonPhoto person={p} className="transition-transform group-hover:-translate-y-0.5 group-focus-visible:ring-2 group-focus-visible:ring-accent" />
+                  <div className="poster-title truncate group-hover:text-accent">{p.name}</div>
+                </Link>
               ))}
             </Row>
           )}

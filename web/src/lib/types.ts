@@ -661,6 +661,8 @@ export interface SearchResult {
   movies: ItemSummary[];
   series: ItemSummary[];
   episodes: PlayInfo[];
+  /** Cast and crew whose names match, from the library's credits. */
+  people: Person[];
   channels: TvChannel[];
   programs: { program: Program; channel: TvChannel | null }[];
 }
