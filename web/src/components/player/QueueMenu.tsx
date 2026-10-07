@@ -31,7 +31,7 @@ export default function QueueMenu({
   const at = entries.findIndex((e) => e.fileId === current);
   return (
     <div
-      className="card absolute bottom-16 right-3 z-30 flex max-h-[70vh] w-96 max-w-[calc(100vw-1.5rem)] flex-col p-1.5 text-sm shadow-[var(--shadow-md)]"
+      className="anim-pop card absolute bottom-16 right-3 z-30 flex max-h-[70vh] w-96 origin-bottom-right max-w-[calc(100vw-1.5rem)] flex-col p-1.5 text-sm shadow-[var(--shadow-md)]"
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
       role="dialog"

@@ -93,8 +93,8 @@ function MoreSheet({ onClose }: { onClose: () => void }) {
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-backdrop/55 md:hidden" onClick={onClose}>
-      <div ref={sheet} role="dialog" aria-modal="true" aria-label="More" className="sheet" onClick={(e) => e.stopPropagation()}>
+    <div className="anim-fade fixed inset-0 z-50 flex flex-col justify-end bg-backdrop/55 md:hidden" onClick={onClose}>
+      <div ref={sheet} role="dialog" aria-modal="true" aria-label="More" className="sheet anim-slide-up" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3 px-4 pb-2 pt-4">
           {profile && <ProfileAvatar profile={profile} size={36} />}
           <div className="min-w-0 flex-1">

@@ -118,7 +118,7 @@ function Signed() {
           ref={main}
           onScroll={(e) => scrollMemory.set(path, e.currentTarget.scrollTop)}
           key={route.name === "livetv" || route.name === "search" ? route.name : path}
-          className={`min-w-0 flex-1 ${route.name === "movies" || route.name === "tv" || route.name === "livetv" ? "overflow-hidden" : "overflow-auto"}`}
+          className={`anim-page min-w-0 flex-1 ${route.name === "movies" || route.name === "tv" || route.name === "livetv" ? "overflow-hidden" : "overflow-auto"}`}
         >
           <Suspense
             fallback={

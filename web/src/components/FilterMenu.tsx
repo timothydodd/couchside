@@ -41,8 +41,8 @@ function Panel({ active, onReset, onClose, children }: { active: number; onReset
   const phone = usePhone();
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-backdrop/55 md:bg-transparent" onClick={onClose} />
-      <div ref={ref} role="dialog" aria-modal={phone || undefined} aria-label="Filters" className="filter-panel">
+      <div className="anim-fade fixed inset-0 z-40 bg-backdrop/55 md:bg-transparent" onClick={onClose} />
+      <div ref={ref} role="dialog" aria-modal={phone || undefined} aria-label="Filters" className={`filter-panel ${phone ? "anim-slide-up" : "anim-pop"}`}>
         <div className="flex items-center justify-between gap-2 px-4 pt-4">
           <div className="card-title">Filters</div>
           <div className="flex items-center gap-1">
