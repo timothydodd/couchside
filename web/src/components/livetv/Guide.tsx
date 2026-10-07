@@ -6,7 +6,7 @@ import { channelNameMatches, channelPasses, genresOf, programFilterActive, progr
 import ProgramDialog from "./ProgramDialog";
 import { usePhone } from "../../lib/media";
 import { useRouter } from "../../stores/router";
-import { EmptyState, ErrorNote, Loading } from "../ui";
+import { EmptyState, ErrorNote, Loading, Spinner } from "../ui";
 import { useApi } from "../../lib/api";
 import { fmtDay, fmtTime } from "../../lib/format";
 import type { GuideResponse, Program, TvChannel } from "../../lib/types";
@@ -61,10 +61,14 @@ export default function Guide({ filters, setFilters }: { filters: TvFilters; set
   );
   const lastPinned = rows.reduce((i, c, idx) => (c.pinned ? idx : i), -1);
 
+  // The window shown is a different one from the data on screen while a shift loads.
+  const stale = loading && !!data && data.start !== start;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center gap-2 gutter py-3">
-        <button className="btn-ghost" onClick={() => shift(-3)} aria-label="Earlier">
+      <FilterBar f={filters} set={setFilters} genres={genres} shown={rows.length} total={data?.channels.length ?? 0}>
+        {/* Nothing older than a day is kept, so Earlier stops there. */}
+        <button className="btn-ghost" onClick={() => shift(-3)} aria-label="Earlier" disabled={start - 3 * 3600 < floorHalfHour(now) - 24 * 3600}>
           <ChevronLeft size={15} />
         </button>
         <button className="btn-ghost" onClick={() => setStart(floorHalfHour(Date.now() / 1000))} disabled={atNow}>
@@ -73,14 +77,12 @@ export default function Guide({ filters, setFilters }: { filters: TvFilters; set
         <button className="btn-ghost" onClick={() => shift(3)} aria-label="Later" disabled={!!data && start + 3 * 3600 >= data.through}>
           <ChevronRight size={15} />
         </button>
-        <span className="ml-1 text-sm font-medium text-content">
+        <span className="ml-1 inline-flex items-center gap-2 text-sm font-medium text-content" aria-live="polite">
           {fmtDay(start)} · {fmtTime(start)} – {fmtTime(end)}
+          {stale && <Spinner size={14} />}
         </span>
         {data?.through ? <span className="ml-auto text-xs text-content-muted">Guide through {fmtDay(data.through)} {fmtTime(data.through)}</span> : null}
-      </div>
-      <div className="-mt-3">
-        <FilterBar f={filters} set={setFilters} genres={genres} shown={rows.length} total={data?.channels.length ?? 0} />
-      </div>
+      </FilterBar>
       {error && (
         <div className="gutter pb-3">
           <ErrorNote>{error}</ErrorNote>
@@ -91,7 +93,7 @@ export default function Guide({ filters, setFilters }: { filters: TvFilters; set
       ) : rows.length === 0 ? (
         <EmptyState icon={<SearchX size={36} strokeWidth={1.5} />} title="No channels match">Try another search or genre, or look at a different time.</EmptyState>
       ) : (
-        <div ref={scroller} className="min-h-0 flex-1 overflow-auto border-t border-border-light">
+        <div ref={scroller} className={`min-h-0 flex-1 overflow-auto border-t border-border-light transition-opacity ${stale ? "pointer-events-none opacity-40" : ""}`} aria-busy={stale || undefined}>
           <div className="relative" style={{ width: CHANNEL_COL + width }}>
             {/* time header */}
             <div className="sticky top-0 z-20 flex h-9 border-b border-border-light bg-surface">

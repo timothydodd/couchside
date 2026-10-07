@@ -26,7 +26,7 @@ Suggested order: **P6** first (the dialogs everything else confirms with),
 | P8  | Back buttons and page headers behave alike              | Fix      | S    | Done |
 | P9  | Phone layout: rows that crowd or run off                | Fix      | S    | Done |
 | P10 | Home: the hero plays, and says why it's empty           | Fix      | S    | Done |
-| P11 | Guide: time shifts show a loading state                 | Fix      | S    |      |
+| P11 | Guide: time shifts show a loading state                 | Fix      | S    | Done |
 | P12 | Copy: one name for things, admin-only advice to admins  | Fix      | S    |      |
 | P13 | Status is summarised once                               | Cleanup  | S    |      |
 | P14 | Keyboard: tabs, radios, menus                           | A11y     | S    |      |
@@ -213,17 +213,13 @@ once per visit and only re-picked if it leaves the recent rows, so the
 now button for admins. The Unmatched tile links admins to Settings →
 Metadata instead of naming an environment variable.
 
-## P11 · Guide: time shifts show a loading state
+## P11 · Guide: time shifts show a loading state · Done
 
-**Scope** (`components/livetv/Guide.tsx`)
-- `:44`: shifting the window changes the header at once but the old
-  programs stay (`useApi` with `keep`) until the fetch returns, and the
-  spinner only shows on first load (`:49`). Dim the grid (`opacity-50 pointer-events-none`) while
-  `loading`, or keep the old window's header until the new data lands.
-- `:69`: "Earlier" is never disabled; disable it at the guide's start.
-- `:68-83`: the time controls are a separate row pulled up with `-mt-3`,
-  while `FilterBar` has a `children` slot for them (`FilterBar.tsx:21,35`).
-  Use the slot.
+**Done.** While a shifted window loads, the header shows a spinner beside
+the new time and the old grid dims and ignores clicks (`stale`:
+`loading` with data for another `start`). "Earlier" stops a day back,
+where nothing is kept. The time controls sit in `FilterBar`'s slot, so
+the guide no longer pulls the filter bar up over its own row.
 
 ## P12 · Copy: one name for things, admin-only advice to admins
 
