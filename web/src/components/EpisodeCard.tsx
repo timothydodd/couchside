@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Check, Play } from "lucide-react";
 import Link from "./Link";
+import FadeImg from "./FadeImg";
 import { stillUrl } from "../lib/api";
 import { PROBLEM_TEXT, type EpisodeRow } from "../lib/types";
 
@@ -44,7 +45,7 @@ export default function EpisodeCard({
   const picture = (
     <div className={`still ${row ? "w-40 shrink-0 sm:w-44" : ""}`}>
       {f.hasStill ? (
-        <img src={stillUrl(f.fileId)} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+        <FadeImg src={stillUrl(f.fileId)} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
       ) : (
         <div className="poster-placeholder absolute inset-0" />
       )}

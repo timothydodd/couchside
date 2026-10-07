@@ -1,6 +1,7 @@
 import { useState, type MouseEvent } from "react";
 import { Check, Star } from "lucide-react";
 import Link from "./Link";
+import FadeImg from "./FadeImg";
 import { useQueue } from "../stores/queue";
 import { posterUrl } from "../lib/api";
 import { placeholderAngle } from "../lib/format";
@@ -19,7 +20,7 @@ export function PosterArt({
   const [failed, setFailed] = useState(false);
   if (item.hasPoster && !failed) {
     return (
-      <img
+      <FadeImg
         src={posterUrl(item, size)}
         alt=""
         loading="lazy"

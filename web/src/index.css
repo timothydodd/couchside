@@ -721,6 +721,22 @@ video::cue {
     transform: translateY(8px);
   }
 }
+/* Artwork fades in once loaded (FadeImg); cached images are shown at once.
+   --img-opacity is the resting opacity, for the blurred hero fallbacks. */
+.img-fade {
+  opacity: 0;
+  transition: opacity 220ms ease-out;
+}
+.img-fade-in {
+  opacity: var(--img-opacity, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .img-fade {
+    opacity: var(--img-opacity, 1);
+    transition: none;
+  }
+}
+
 /* A dimmed backdrop behind a dialog or panel. */
 .anim-fade {
   animation: anim-fade 120ms ease-out both;

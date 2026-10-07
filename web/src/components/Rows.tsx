@@ -1,6 +1,7 @@
 import { useRef, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Play, X } from "lucide-react";
 import Link from "./Link";
+import FadeImg from "./FadeImg";
 import PosterCard from "./PosterCard";
 import { backdropUrl, stillUrl } from "../lib/api";
 import { fmtClock } from "../lib/format";
@@ -77,7 +78,7 @@ export function ContinueCard({ p, onRemove }: { p: PlayInfo; onRemove?: () => vo
       <Link to={`/play/${p.fileId}`} className="still-link group block" aria-label={`${p.positionSec > 0 ? "Resume" : "Play"} ${p.title}`}>
         <div className="still">
           {img ? (
-            <img src={img} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
+            <FadeImg src={img} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
           ) : (
             <div className="poster-placeholder absolute inset-0" />
           )}

@@ -5,6 +5,7 @@ import FilesCard from "../components/item/FilesCard";
 import ItemPanel, { type PanelSection } from "../components/manage/ItemPanel";
 import { CastRow, CrewLine } from "../components/Credits";
 import Link from "../components/Link";
+import FadeImg from "../components/FadeImg";
 import { PosterArt } from "../components/PosterCard";
 import { BackButton, EmptyState, ErrorNote, Loading } from "../components/ui";
 import { api, backdropUrl, posterUrl, useApi } from "../lib/api";
@@ -82,9 +83,9 @@ export default function ItemPage({ id, season, edit }: { id: number; season?: nu
       {/* Backdrop: the grabbed frame, or a blown-up blurred poster as a fallback. */}
       <section className="relative h-[40vh] min-h-64 max-h-[460px] overflow-hidden">
         {item.hasBackdrop ? (
-          <img src={backdropUrl(item)} alt="" className="hero-art" />
+          <FadeImg src={backdropUrl(item)} alt="" className="hero-art" />
         ) : item.hasPoster ? (
-          <img src={posterUrl(item, "full")} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-60 blur-2xl" />
+          <FadeImg src={posterUrl(item, "full")} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl" style={{ "--img-opacity": 0.6 } as React.CSSProperties} />
         ) : (
           <div className="poster-placeholder absolute inset-0" />
         )}

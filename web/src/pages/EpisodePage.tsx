@@ -5,6 +5,7 @@ import FilesCard from "../components/item/FilesCard";
 import { EpisodeActions } from "../components/item/AdminMenus";
 import ItemPanel from "../components/manage/ItemPanel";
 import Link from "../components/Link";
+import FadeImg from "../components/FadeImg";
 import { BackButton, EmptyState, ErrorNote, Loading } from "../components/ui";
 import { api, backdropUrl, stillUrl, useApi } from "../lib/api";
 import { fmtAirDate, fmtClock, fmtResolution, fmtRuntime } from "../lib/format";
@@ -56,9 +57,9 @@ export default function EpisodePage({ id }: { id: number }) {
       {/* The still as the hero, or the show's backdrop when there's none. */}
       <section className="relative h-[40vh] min-h-64 max-h-[460px] overflow-hidden">
         {e.hasStill ? (
-          <img src={stillUrl(e.fileId)} alt="" className="hero-art" />
+          <FadeImg src={stillUrl(e.fileId)} alt="" className="hero-art" />
         ) : series.hasBackdrop ? (
-          <img src={backdropUrl(series)} alt="" className="hero-art" />
+          <FadeImg src={backdropUrl(series)} alt="" className="hero-art" />
         ) : (
           <div className="poster-placeholder absolute inset-0" />
         )}
