@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Tv } from "lucide-react";
-import { ErrorNote, PageHeader } from "../components/ui";
+import { ErrorNote, PageHeader, GoodNote } from "../components/ui";
 import { api } from "../lib/api";
 import { errText } from "../lib/errors";
 import { useProfile } from "../stores/profile";
@@ -62,10 +62,10 @@ export default function LinkPage() {
           </label>
           {err && <ErrorNote>{err}</ErrorNote>}
           {done && (
-            <div className="tint-good rounded-md px-3 py-2 text-sm">
+            <GoodNote>
               <Tv size={15} className="mr-1.5 inline" />
               {done} is signed in. It may take a few seconds to catch up.
-            </div>
+            </GoodNote>
           )}
           <button type="submit" className="btn-primary justify-center" disabled={busy || code.replace(/[^a-z0-9]/gi, "").length !== 8}>
             Sign in the TV

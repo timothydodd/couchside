@@ -84,12 +84,23 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
   );
 }
 
-export function EmptyState({ icon, title, children }: { icon?: ReactNode; title: string; children?: ReactNode }) {
+/** Nothing to show: an icon (size 36, strokeWidth 1.5), a title, a line of why, and optionally a button. */
+export function EmptyState({ icon, title, action, children }: { icon?: ReactNode; title: string; action?: ReactNode; children?: ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 gutter py-16 text-center">
       {icon && <div className="text-content-muted">{icon}</div>}
       <div className="text-sm font-medium text-content">{title}</div>
       {children && <div className="max-w-md text-xs text-content-muted">{children}</div>}
+      {action && <div className="mt-2">{action}</div>}
+    </div>
+  );
+}
+
+/** A centred spinner while a page or card loads; `fill` takes the whole of a flex or full-height parent. */
+export function Loading({ fill = false }: { fill?: boolean }) {
+  return (
+    <div className={`flex items-center justify-center ${fill ? "h-full flex-1" : "py-16"}`}>
+      <Spinner size={22} />
     </div>
   );
 }
@@ -134,6 +145,11 @@ export function ErrorNote({ children }: { children: ReactNode }) {
 
 export function WarningNote({ children }: { children: ReactNode }) {
   return <div className="tint-warning rounded-md px-3 py-2 text-xs">{children}</div>;
+}
+
+/** Something that worked, inline (a notice is for actions elsewhere on the page). */
+export function GoodNote({ children }: { children: ReactNode }) {
+  return <div className="tint-good rounded-md px-3 py-2 text-xs">{children}</div>;
 }
 
 export function SearchInput({

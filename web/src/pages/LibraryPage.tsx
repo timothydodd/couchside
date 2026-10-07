@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { Bookmark, BookmarkX, ChevronDown, Clapperboard, Combine, Eye, EyeOff, Play, RefreshCw, Scissors, Settings2, Trash2, Tv, X } from "lucide-react";
+import { Bookmark, BookmarkX, ChevronDown, Clapperboard, Combine, Eye, EyeOff, Play, RefreshCw, Scissors, SearchX, Settings2, Trash2, Tv, X } from "lucide-react";
 import Link from "../components/Link";
 import PosterGrid from "../components/PosterGrid";
 import DeleteSelected from "../components/manage/DeleteSelected";
 import MergeTitles from "../components/manage/MergeTitles";
 import FilterMenu, { Choices } from "../components/FilterMenu";
-import { EmptyState, ErrorNote, MenuButton, SearchInput, Spinner } from "../components/ui";
+import { EmptyState, ErrorNote, MenuButton, SearchInput, Loading } from "../components/ui";
 import { api, useApi } from "../lib/api";
 import { attempt, notify } from "../lib/notices";
 import { useIsAdmin } from "../stores/auth";
@@ -147,6 +147,11 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
     })();
 
 
+  const resetFilters = () => {
+    setFilter("all");
+    setGenre("");
+    setSort("title");
+  };
   const title = kind === "movie" ? "Movies" : "TV Shows";
   const noun = kind === "movie" ? "movie" : "show";
   const total = data?.length ?? 0;
@@ -168,11 +173,7 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
           <SearchInput large value={q} onChange={setQ} placeholder={`Search ${noun}s`} aria-label={`Search ${noun}s`} className="min-w-0 flex-1 md:max-w-xl" />
           <FilterMenu
             active={(filter !== "all" ? 1 : 0) + (genre ? 1 : 0) + (sort !== "title" ? 1 : 0)}
-            onReset={() => {
-              setFilter("all");
-              setGenre("");
-              setSort("title");
-            }}
+            onReset={resetFilters}
           >
             <Choices<Sort>
               label="Sort by"
@@ -262,16 +263,22 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
         </div>
       )}
       {loading && !data ? (
-        <div className="flex flex-1 items-center justify-center">
-          <Spinner size={22} />
-        </div>
+        <Loading fill />
       ) : total === 0 ? (
         <EmptyState icon={kind === "movie" ? <Clapperboard size={36} strokeWidth={1.5} /> : <Tv size={36} strokeWidth={1.5} />} title={`No ${noun}s yet`}>
           Add a {kind === "movie" ? "Movies" : "TV"} library on the <Link to="/libraries" className="text-accent hover:underline">Libraries</Link> page, or
           wait for the current scan to finish.
         </EmptyState>
       ) : items.length === 0 ? (
-        <EmptyState title="Nothing matches those filters" />
+        <EmptyState
+          icon={<SearchX size={36} strokeWidth={1.5} />}
+          title="Nothing matches those filters"
+          action={
+            <button className="btn-ghost" onClick={resetFilters}>
+              Reset filters
+            </button>
+          }
+        />
       ) : (
         <PosterGrid items={items} memoryKey={kind} selection={admin ? { ids: picked, onClick: pick } : undefined} />
       )}

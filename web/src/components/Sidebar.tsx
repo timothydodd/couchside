@@ -40,7 +40,7 @@ export default function Sidebar() {
     if (name === "tv" && counts?.series) return <Count n={counts.series} />;
     if (name === "livetv" && liveTv?.recording)
       return (
-        <span className="tint-critical inline-flex items-center gap-1 rounded px-1.5 text-[11px] font-semibold" title={`${liveTv.recording} recording now`}>
+        <span className="tint-critical badge" title={`${liveTv.recording} recording now`}>
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-critical" />
           REC
         </span>
@@ -196,7 +196,7 @@ export function SearchBox({ hotkey = true, autoFocus = false, className = "mb-4"
 
 function Count({ n, tint = "tint-muted", title }: { n: number; tint?: string; title?: string }) {
   return (
-    <span className={`rounded px-1.5 text-[11px] font-semibold tabular-nums ${tint}`} title={title}>
+    <span className={`badge tabular-nums ${tint}`} title={title}>
       {n.toLocaleString()}
     </span>
   );

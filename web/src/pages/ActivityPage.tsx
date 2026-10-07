@@ -1,6 +1,6 @@
 import { Cpu, Image, MonitorPlay, Pause, RotateCcw, ScanSearch, Scissors, Search, Square, Trash2, Wand2, X, type LucideIcon } from "lucide-react";
 import Link from "../components/Link";
-import { EmptyState, ErrorNote, Meter, PageHeader, StatTile, StatusPill, type Tone } from "../components/ui";
+import { EmptyState, ErrorNote, Meter, PageHeader, StatTile, StatusPill, type Tone, Loading } from "../components/ui";
 import { api, useApi } from "../lib/api";
 import { fmtAgo, fmtClock } from "../lib/format";
 import type { Job, JobCounts, TranscodeSession } from "../lib/types";
@@ -65,14 +65,16 @@ export default function ActivityPage() {
         <StatTile label="Failed" value={c?.failed ?? "–"} tone={c?.failed ? "critical" : undefined} />
       </div>
       {error && (
-        <div className="gutter pb-4">
+        <div className="gutter pt-4">
           <ErrorNote>{error}</ErrorNote>
         </div>
       )}
       <Streams />
       <div className="gutter">
         <h2 className="row-title mb-3">Background jobs</h2>
-        {data && data.jobs.length === 0 ? (
+        {!data ? (
+          !error && <Loading />
+        ) : data.jobs.length === 0 ? (
           <div className="card">
             <EmptyState title="Nothing going on">Scans run automatically on a schedule and whenever you add a library.</EmptyState>
           </div>

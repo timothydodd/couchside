@@ -27,7 +27,7 @@ export function MobileTopBar() {
         <span className="text-base font-semibold text-content">Couchside</span>
       </Link>
       {!!recording && (
-        <Link to="/livetv/recordings" className="tint-critical ml-1 inline-flex items-center gap-1 rounded px-1.5 text-[11px] font-semibold">
+        <Link to="/livetv/recordings" className="tint-critical ml-1 badge">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-critical" />
           REC
         </Link>
@@ -124,9 +124,9 @@ function MoreSheet({ onClose }: { onClose: () => void }) {
               "Activity",
               Activity,
               active > 0 ? (
-                <span className="tint-info rounded px-1.5 text-[11px] font-semibold">{active}</span>
+                <span className="tint-info badge">{active}</span>
               ) : jobs?.failed ? (
-                <span className="tint-critical rounded px-1.5 text-[11px] font-semibold">{jobs.failed} failed</span>
+                <span className="tint-critical badge">{jobs.failed} failed</span>
               ) : null,
             )}
           {admin && row("/libraries", "Libraries", FolderOpen)}

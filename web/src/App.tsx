@@ -2,7 +2,7 @@ import { Suspense, useEffect, useLayoutEffect, useRef } from "react";
 import { MobileTabBar, MobileTopBar } from "./components/MobileNav";
 import Sidebar from "./components/Sidebar";
 import StatusBar from "./components/StatusBar";
-import { EmptyState, Spinner } from "./components/ui";
+import { EmptyState, Loading } from "./components/ui";
 import { lazyPage } from "./lib/lazyPage";
 import HomePage from "./pages/HomePage";
 import ItemPage from "./pages/ItemPage";
@@ -122,9 +122,7 @@ function Signed() {
         >
           <Suspense
             fallback={
-              <div className="flex h-full items-center justify-center">
-                <Spinner size={22} />
-              </div>
+              <Loading fill />
             }
           >
           {route.name === "home" && <HomePage />}

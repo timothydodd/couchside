@@ -5,7 +5,7 @@ import { PinButton, SignalBars } from "./ChannelBits";
 import FilterBar from "./FilterBar";
 import { channelNameMatches, channelPasses, genresOf, programFilterActive, programMatches, type TvFilters } from "./filters";
 import ProgramDialog from "./ProgramDialog";
-import { EmptyState, ErrorNote, Meter, Spinner } from "../ui";
+import { EmptyState, ErrorNote, Meter, Loading } from "../ui";
 import { useApi } from "../../lib/api";
 import { fmtTime } from "../../lib/format";
 import type { ChannelNow, Program, TvChannel } from "../../lib/types";
@@ -26,9 +26,7 @@ export default function Channels({ filters, setFilters }: { filters: TvFilters; 
 
   if (loading && !data)
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <Spinner size={22} />
-      </div>
+      <Loading fill />
     );
 
   return (

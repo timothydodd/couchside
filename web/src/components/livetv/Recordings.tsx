@@ -1,6 +1,6 @@
 import { CalendarClock, Film, Pause, Play, RadioTower, Repeat, RotateCcw, Square, Trash2, X } from "lucide-react";
 import Link from "../Link";
-import { EmptyState, ErrorNote, Spinner } from "../ui";
+import { EmptyState, ErrorNote, Loading } from "../ui";
 import { api, useApi } from "../../lib/api";
 import { fmtBytes, fmtDay, fmtSlot, fmtTime } from "../../lib/format";
 import type { Recording, RuleMode, SeriesRule } from "../../lib/types";
@@ -24,9 +24,7 @@ export default function Recordings() {
 
   if (loading && !data)
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <Spinner size={22} />
-      </div>
+      <Loading fill />
     );
 
   const recs = data ?? [];
@@ -79,7 +77,7 @@ export default function Recordings() {
                     <div className="flex items-center gap-1.5">
                       <Repeat size={13} className="shrink-0 text-accent" />
                       <span className="truncate text-sm font-semibold text-content">{r.title}</span>
-                      {!r.enabled && <span className="tint-muted rounded px-1.5 text-[11px] font-semibold">Paused</span>}
+                      {!r.enabled && <span className="tint-muted badge">Paused</span>}
                     </div>
                     <div className="mt-0.5 truncate text-xs text-content-muted">
                       {r.channel ? `Only ${r.channel}` : "Any channel"}
@@ -120,7 +118,7 @@ export default function Recordings() {
       )}
 
       {recs.length === 0 && !rules?.length && (
-        <EmptyState icon={<CalendarClock size={34} strokeWidth={1.5} />} title="Nothing recorded or scheduled">
+        <EmptyState icon={<CalendarClock size={36} strokeWidth={1.5} />} title="Nothing recorded or scheduled">
           Open the guide, pick a show and choose Record.
         </EmptyState>
       )}
@@ -263,6 +261,13 @@ export default function Recordings() {
           <h2 className="row-title mb-3">Didn't record</h2>
           <div className="card overflow-x-auto">
             <table className="table">
+              <thead>
+                <tr>
+                  <th>Recording</th>
+                  <th>When</th>
+                  <th />
+                </tr>
+              </thead>
               <tbody>
                 {failed.map((r) => (
                   <tr key={r.id}>

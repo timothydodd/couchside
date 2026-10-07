@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import Link from "../Link";
 import { PosterArt } from "../PosterCard";
-import { ErrorNote, JobNote, Spinner } from "../ui";
+import { ErrorNote, GoodNote, JobNote, Spinner } from "../ui";
 import ArtworkEditor from "./ArtworkEditor";
 import FileList from "./FileList";
 import MetadataSearch from "./MetadataSearch";
@@ -106,9 +106,9 @@ export default function ItemPanel({
               {note.error ? (
                 <ErrorNote>{note.text}</ErrorNote>
               ) : (
-                <div className="tint-good rounded-md px-3 py-2 text-xs">
+                <GoodNote>
                   <JobNote msg={note.text} className="" />
-                </div>
+                </GoodNote>
               )}
             </div>
           )}

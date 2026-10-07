@@ -124,21 +124,21 @@ function AccountBadges({ p }: { p: Profile }) {
   const passwordless = useAuth((s) => s.passwordless);
   return (
     <span className="flex shrink-0 items-center gap-1.5">
-      {p.role === "admin" && <span className="tint-info rounded px-1.5 text-[11px] font-semibold">Admin</span>}
+      {p.role === "admin" && <span className="tint-info badge">Admin</span>}
       {p.role !== "admin" && (!!p.libraries?.length || !!p.maxRating) && (
-        <span className="tint-muted rounded px-1.5 text-[11px] font-semibold">
+        <span className="tint-muted badge">
           {[p.libraries?.length ? `${p.libraries.length} ${p.libraries.length === 1 ? "library" : "libraries"}` : "", p.maxRating ? `Up to ${p.maxRating}` : ""].filter(Boolean).join(" · ")}
         </span>
       )}
       {p.role !== "admin" && p.canRecord && (
-        <span className="tint-muted inline-flex items-center gap-1 rounded px-1.5 text-[11px] font-semibold">
+        <span className="tint-muted badge">
           <CircleDot size={10} /> Records
         </span>
       )}
-      {p.twoStep && <span className="tint-muted rounded px-1.5 text-[11px] font-semibold">Two-step</span>}
-      {!p.hasPassword && <span className={`${passwordless ? "tint-muted" : "tint-warning"} rounded px-1.5 text-[11px] font-semibold`}>No password</span>}
-      {p.hasPassword && p.mustChangePassword && <span className="tint-muted rounded px-1.5 text-[11px] font-semibold">Temporary password</span>}
-      {p.disabled && <span className="tint-critical rounded px-1.5 text-[11px] font-semibold">Disabled</span>}
+      {p.twoStep && <span className="tint-muted badge">Two-step</span>}
+      {!p.hasPassword && <span className={`${passwordless ? "tint-muted" : "tint-warning"} badge`}>No password</span>}
+      {p.hasPassword && p.mustChangePassword && <span className="tint-muted badge">Temporary password</span>}
+      {p.disabled && <span className="tint-critical badge">Disabled</span>}
     </span>
   );
 }

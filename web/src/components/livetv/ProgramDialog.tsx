@@ -84,20 +84,20 @@ export default function ProgramDialog({
         </button>
         <div className={`p-5 ${program.imageUrl ? "-mt-10 relative" : ""}`}>
           <div className="flex flex-wrap items-center gap-1.5">
-            {airing && <span className="tint-info rounded px-1.5 py-0.5 text-[11px] font-semibold">On now</span>}
-            {program.isNew && <span className="tint-good rounded px-1.5 py-0.5 text-[11px] font-semibold">New</span>}
+            {airing && <span className="tint-info badge">On now</span>}
+            {program.isNew && <span className="tint-good badge">New</span>}
             {program.recordingStatus === "recording" && (
-              <span className="tint-critical inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold">
+              <span className="tint-critical badge">
                 <span className="rec-dot animate-pulse" /> Recording
               </span>
             )}
             {program.recordingStatus === "scheduled" && (
-              <span className="tint-critical inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold">
+              <span className="tint-critical badge">
                 <span className="rec-dot" /> Will record
               </span>
             )}
             {program.ruleId && (
-              <span className="tint-info inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold">
+              <span className="tint-info badge">
                 <Repeat size={11} /> Series
               </span>
             )}

@@ -1,7 +1,7 @@
 import { FolderPlus, Info, Play, Sofa } from "lucide-react";
 import Link from "../components/Link";
 import { ContinueCard, PosterRow, Row } from "../components/Rows";
-import { EmptyState, ErrorNote, Spinner, StatTile } from "../components/ui";
+import { EmptyState, ErrorNote, StatTile, Loading } from "../components/ui";
 import { api, backdropUrl, useApi } from "../lib/api";
 import { attempt } from "../lib/notices";
 import type { Home, ItemSummary } from "../lib/types";
@@ -22,14 +22,12 @@ export default function HomePage() {
 
   if (loading && !data) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <Spinner size={22} />
-      </div>
+      <Loading fill />
     );
   }
   if (counts && counts.libraries === 0) {
     return (
-      <EmptyState icon={<Sofa size={40} strokeWidth={1.5} />} title="The couch is empty">
+      <EmptyState icon={<Sofa size={36} strokeWidth={1.5} />} title="The couch is empty">
         Point Couchside at a folder of movies or TV shows and it will scan them, fetch posters and plots, and fill this page.
         {admin ? (
           <div className="mt-4">

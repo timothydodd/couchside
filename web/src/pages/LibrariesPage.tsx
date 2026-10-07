@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ChevronDown, Clapperboard, Folder, FolderPlus, RefreshCw, ScanSearch, Settings2, Trash2, Tv } from "lucide-react";
 import Link from "../components/Link";
 import LibraryForm from "../components/LibraryForm";
-import { EmptyState, ErrorNote, MenuButton, PageHeader } from "../components/ui";
+import { EmptyState, ErrorNote, Loading, MenuButton, PageHeader } from "../components/ui";
 import { api, useApi } from "../lib/api";
 import { fmtAgo } from "../lib/format";
 import type { Library } from "../lib/types";
@@ -42,6 +42,7 @@ export default function LibrariesPage() {
       </PageHeader>
       <div className="flex flex-col gap-4 gutter py-5">
         {error && <ErrorNote>{error}</ErrorNote>}
+        {!data && !error && <Loading />}
         {adding && (
           <LibraryForm
             onDone={() => {
@@ -54,7 +55,7 @@ export default function LibrariesPage() {
         )}
         {data?.length === 0 && !adding && (
           <div className="card">
-            <EmptyState icon={<Folder size={32} strokeWidth={1.5} />} title="No libraries yet">
+            <EmptyState icon={<Folder size={36} strokeWidth={1.5} />} title="No libraries yet">
               Add a folder of movies or TV shows to get started.
             </EmptyState>
           </div>
@@ -67,7 +68,7 @@ export default function LibrariesPage() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-content">{l.name}</span>
-                  <span className="tint-muted rounded px-1.5 py-0.5 text-[11px] font-semibold">{l.kind === "movies" ? "Movies" : "TV"}</span>
+                  <span className="tint-muted badge">{l.kind === "movies" ? "Movies" : "TV shows"}</span>
                 </div>
                 <div className="mono mt-0.5 truncate text-content-muted">{l.path}</div>
               </div>

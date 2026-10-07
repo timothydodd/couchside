@@ -1,9 +1,9 @@
 import { useRef, useState, type ReactNode } from "react";
-import { Lock, Play, Search } from "lucide-react";
+import { Lock, Play, Search, SearchX } from "lucide-react";
 import Link from "../components/Link";
 import { ContinueCard, PosterRow, Row } from "../components/Rows";
 import ProgramDialog from "../components/livetv/ProgramDialog";
-import { EmptyState, ErrorNote, PageHeader, Spinner } from "../components/ui";
+import { EmptyState, ErrorNote, PageHeader, Spinner, Loading } from "../components/ui";
 import { SearchBox } from "../components/Sidebar";
 import { useApi } from "../lib/api";
 import { fmtSlot } from "../lib/format";
@@ -50,11 +50,9 @@ export default function SearchPage({ q }: { q: string }) {
         </div>
       )}
       {!res && loading && (
-        <div className="flex justify-center py-16">
-          <Spinner size={22} />
-        </div>
+        <Loading />
       )}
-      {res && total === 0 && !loading && <EmptyState title={`Nothing matches “${term}”`}>Try fewer letters, or another spelling.</EmptyState>}
+      {res && total === 0 && !loading && <EmptyState icon={<SearchX size={36} strokeWidth={1.5} />} title={`Nothing matches “${term}”`}>Try fewer letters, or another spelling.</EmptyState>}
       {res && (
         <>
           <PosterRow title="Movies" items={res.movies} />

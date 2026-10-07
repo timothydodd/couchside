@@ -2,7 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import { PersonPhoto } from "../components/Credits";
 import EpisodeCard from "../components/EpisodeCard";
 import PosterCard from "../components/PosterCard";
-import { EmptyState, ErrorNote, Spinner } from "../components/ui";
+import { EmptyState, ErrorNote, Loading } from "../components/ui";
 import { useApi } from "../lib/api";
 import { usePhone } from "../lib/media";
 import type { PersonDetail } from "../lib/types";
@@ -16,9 +16,7 @@ export default function PersonPage({ id }: { id: number }) {
 
   if (loading && !data)
     return (
-      <div className="flex h-full items-center justify-center">
-        <Spinner size={22} />
-      </div>
+      <Loading fill />
     );
   if (!data) {
     // Only a 404 means it isn't there; anything else is a failed request.

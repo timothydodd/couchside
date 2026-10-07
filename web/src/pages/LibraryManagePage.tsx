@@ -3,7 +3,7 @@ import { ArrowDown, ArrowLeft, ArrowUp, Clapperboard, Copy, Cpu, ImageUp, Pencil
 import Link from "../components/Link";
 import LibraryForm from "../components/LibraryForm";
 import { PosterArt } from "../components/PosterCard";
-import { EmptyState, ErrorNote, PageHeader, SearchInput, Spinner } from "../components/ui";
+import { EmptyState, ErrorNote, PageHeader, SearchInput, Loading } from "../components/ui";
 import { api, useApi } from "../lib/api";
 import { fmtAgo, fmtBytes } from "../lib/format";
 import { codecLabel, extraFiles, qualityLabel, qualityTier, qualityTone } from "../lib/quality";
@@ -196,9 +196,7 @@ export default function LibraryManagePage({ id }: { id: number }) {
         </div>
 
         {!data ? (
-          <div className="flex justify-center py-16">
-            <Spinner size={22} />
-          </div>
+          <Loading />
         ) : rows.length === 0 ? (
           <div className="card">
             <EmptyState title={filter === "duplicates" ? "No duplicates" : filter === "unmatched" ? "Everything is matched" : "Nothing here"}>

@@ -6,7 +6,7 @@ import ItemPanel, { type PanelSection } from "../components/manage/ItemPanel";
 import { CastRow, CrewLine } from "../components/Credits";
 import Link from "../components/Link";
 import { PosterArt } from "../components/PosterCard";
-import { EmptyState, ErrorNote, Spinner } from "../components/ui";
+import { EmptyState, ErrorNote, Loading } from "../components/ui";
 import { api, backdropUrl, posterUrl, useApi } from "../lib/api";
 import { usePhone } from "../lib/media";
 import { useScrollEdges } from "../lib/scroll";
@@ -27,9 +27,7 @@ export default function ItemPage({ id, season, edit }: { id: number; season?: nu
 
   if (loading && !data) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <Spinner size={22} />
-      </div>
+      <Loading fill />
     );
   }
   if (!data) {

@@ -5,7 +5,7 @@ import FilesCard from "../components/item/FilesCard";
 import { EpisodeActions } from "../components/item/AdminMenus";
 import ItemPanel from "../components/manage/ItemPanel";
 import Link from "../components/Link";
-import { EmptyState, ErrorNote, Spinner } from "../components/ui";
+import { EmptyState, ErrorNote, Loading } from "../components/ui";
 import { api, backdropUrl, stillUrl, useApi } from "../lib/api";
 import { fmtAirDate, fmtClock, fmtResolution, fmtRuntime } from "../lib/format";
 import { attempt } from "../lib/notices";
@@ -22,9 +22,7 @@ export default function EpisodePage({ id }: { id: number }) {
 
   if (loading && !data) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <Spinner size={22} />
-      </div>
+      <Loading fill />
     );
   }
   if (!data) {

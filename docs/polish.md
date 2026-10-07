@@ -22,7 +22,7 @@ Suggested order: **P6** first (the dialogs everything else confirms with),
 | P4  | Rows that scroll: cast, Home, search                    | Fix      | S    | Done |
 | P5  | Edit a title from its page; Manage is library settings  | Feature  | M    | Done |
 | P6  | Couchside's own confirm and prompt dialogs              | Fix      | S    | Done |
-| P7  | Shared badge, empty, loading and error blocks           | Cleanup  | S    |      |
+| P7  | Shared badge, empty, loading and error blocks           | Cleanup  | S    | Done |
 | P8  | Back buttons and page headers behave alike              | Fix      | S    |      |
 | P9  | Phone layout: rows that crowd or run off                | Fix      | S    |      |
 | P10 | Home: the hero plays, and says why it's empty           | Fix      | S    |      |
@@ -164,45 +164,22 @@ overlay. `useDialog` keeps a stack, so a confirm opened over a panel or
 dialog takes Escape and Tab until it closes. `ItemPanel`'s own `Note`
 block stays until P5 removes the panel's job menu.
 
-## P7 · Shared badge, empty, loading and error blocks
+## P7 · Shared badge, empty, loading and error blocks · Done
 
-**Scope**
-- `.badge` exists (`index.css:538`) but only `components/manage` uses it.
-  Hand-rolled copies with differing padding: `LibrariesPage.tsx:82`,
-  `ProgramDialog.tsx:86-99`, `Recordings.tsx:81`, `Sidebar.tsx:43,199`,
-  `MobileNav.tsx:30,127,129`, `Guide.tsx:130,164` (9px and 10px bold),
-  `AccountManager.tsx:127-141`, `SessionList.tsx:67`,
-  `LiveTvSettings.tsx:126`, and the `tint-* rounded px-1.5 py-0.5
-  text-[11px] font-semibold` spans in `ItemPage.tsx` (`StillRow`,
-  `PlaybackChip`, `MatchPanel`'s Unmatched). Use `.badge`. (`HomePage.tsx:106`
-  "Just added" and `FilterMenu.tsx:26`'s count match the grep but aren't
-  badges; leave them.)
-- `EmptyState` is sometimes in a `.card` (`LibrariesPage.tsx:56`,
-  `ActivityPage.tsx:72`) and sometimes bare; icon sizes are 40, 36, 34 and
-  32. Give `EmptyState` the card and one icon size, and an optional
-  `action`. `LibraryPage.tsx:279` ("Nothing matches those filters") gets a
-  Reset action; `SearchPage.tsx:57`, `Guide.tsx:92,94` get an icon.
-- A `Loading` component (`ui.tsx`) for the three spinner wrappers
-  (`h-full`, `flex-1`, `py-16`: `HomePage.tsx:24`, `PersonPage.tsx:16`,
-  `ItemPage.tsx:24`, `LibraryPage.tsx:270`, `Recordings.tsx:26`,
-  `Guide.tsx:51`, `Channels.tsx`, `SearchPage.tsx:53`,
-  `LibraryManagePage.tsx`). No loading state at all: `LibrariesPage.tsx:14`,
-  `Backups.tsx`, `SingleSignOn.tsx`; `TwoStep.tsx:68` returns null on a
-  load error too, so the section silently disappears. `ActivityPage.tsx:74`
-  draws an empty table before data.
-- Inline result blocks that should be `ErrorNote`/`WarningNote` (or a
-  `GoodNote` to add): `SingleSignOn.tsx:256` (a `text-good`/`text-critical`
-  span), `TwoStep.tsx:140` (hand-rolled `tint-warning`),
-  `LinkPage.tsx:63` (hand-rolled `tint-good`), `ItemPanel.tsx:83`.
-- `ErrorNote` placement: `gutter pt-4` everywhere (`ActivityPage.tsx:67`,
-  `Recordings.tsx:57`, `Guide.tsx:87`, `LibrariesPage.tsx:45`,
-  `LibraryManagePage.tsx:108` differ).
-- `Backups.tsx:99` and `Recordings.tsx:264` tables have no `thead`;
-  `Backups`' Delete chip lacks the critical hover the other delete chips
-  have.
-
-**Done when** `grep -rn "text-\[1[01]px\] font-\(semi\)\?bold" web/src` finds
-only `index.css`, the Home eyebrow and the filter count.
+**Done.** Every hand-rolled `tint-* rounded px-1.5 text-[11px]
+font-semibold` label is `.badge` (Sidebar, MobileNav, AccountManager,
+SessionList, LibrariesPage, ProgramDialog, Recordings, LiveTvSettings);
+the guide's 9px HD and NEW marks and the player's REC are sized for their
+own chrome and stay. `EmptyState` takes an `action`, icons are 36 across
+pages, "Nothing matches those filters" has Reset filters, and the Search
+and Guide empties have icons. `Loading` (`ui.tsx`) replaces the three
+spinner wrappers; Libraries, Activity and Backups now show it instead of
+nothing or an empty table, and Two-step sign-in shows its load error.
+`GoodNote` joins `ErrorNote`/`WarningNote` and is used by the Edit panel,
+Link a TV, Single sign-on (with `ErrorNote` for failures) and the
+recovery codes. Backups and "Didn't record" tables have headers; the
+Backups delete chip has the critical hover; Two-step's Cancel reports a
+failure.
 
 ## P8 · Back buttons and page headers behave alike
 

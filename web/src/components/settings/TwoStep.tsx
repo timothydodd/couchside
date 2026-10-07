@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import qrcode from "qrcode-generator";
 import { ShieldCheck } from "lucide-react";
-import { ErrorNote } from "../ui";
+import { ErrorNote, WarningNote } from "../ui";
 import { api, useApi } from "../../lib/api";
+import { attempt } from "../../lib/notices";
 import { errText } from "../../lib/errors";
 
 interface Status {
@@ -16,7 +17,7 @@ interface Status {
  * code from it, then shows recovery codes once.
  */
 export default function TwoStep({ hasPassword }: { hasPassword: boolean }) {
-  const { data, reload } = useApi<Status>("/api/auth/totp", { fresh: true });
+  const { data, error, reload } = useApi<Status>("/api/auth/totp", { fresh: true });
   const [setup, setSetup] = useState<{ secret: string; uri: string } | null>(null);
   const [code, setCode] = useState("");
   const [recovery, setRecovery] = useState<string[] | null>(null);
@@ -65,7 +66,13 @@ export default function TwoStep({ hasPassword }: { hasPassword: boolean }) {
     return { n, d };
   }, [setup]);
 
-  if (!data) return null;
+  if (!data) {
+    return error ? (
+      <div className="mt-6">
+        <ErrorNote>Couldn't load two-step sign-in: {error}</ErrorNote>
+      </div>
+    ) : null;
+  }
   return (
     <div className="mt-6">
       <div className="mb-2 flex items-center justify-between gap-3">
@@ -126,7 +133,7 @@ export default function TwoStep({ hasPassword }: { hasPassword: boolean }) {
                 onClick={() => {
                   setSetup(null);
                   setCode("");
-                  void api("/api/auth/totp/disable", { method: "POST", json: { code: "" } }).catch(() => {});
+                  void attempt("Couldn't cancel", () => api("/api/auth/totp/disable", { method: "POST", json: { code: "" } }))();
                 }}
               >
                 Cancel
@@ -137,8 +144,8 @@ export default function TwoStep({ hasPassword }: { hasPassword: boolean }) {
       )}
 
       {recovery && (
-        <div className="tint-warning rounded-md px-3 py-3 text-sm">
-          <div className="font-medium">Save these recovery codes now. They aren't shown again.</div>
+        <WarningNote>
+          <div className="text-sm font-medium">Save these recovery codes now. They aren't shown again.</div>
           <p className="mt-1 text-xs">Each works once in place of a code from the app, if you lose your phone.</p>
           <div className="mono mt-2 grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4">
             {recovery.map((c) => (
@@ -148,7 +155,7 @@ export default function TwoStep({ hasPassword }: { hasPassword: boolean }) {
           <button className="btn-quiet mt-2 !text-xs" onClick={() => setRecovery(null)}>
             I've saved them
           </button>
-        </div>
+        </WarningNote>
       )}
 
       {turningOff && (

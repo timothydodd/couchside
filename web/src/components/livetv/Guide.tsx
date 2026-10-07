@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Lock, Repeat } from "lucide-react";
+import { CalendarX, ChevronLeft, ChevronRight, Lock, Repeat, SearchX } from "lucide-react";
 import { PinButton, SignalBars } from "./ChannelBits";
 import FilterBar from "./FilterBar";
 import { channelNameMatches, channelPasses, genresOf, programFilterActive, programMatches, type TvFilters } from "./filters";
 import ProgramDialog from "./ProgramDialog";
 import { usePhone } from "../../lib/media";
 import { useRouter } from "../../stores/router";
-import { EmptyState, ErrorNote, Spinner } from "../ui";
+import { EmptyState, ErrorNote, Loading } from "../ui";
 import { useApi } from "../../lib/api";
 import { fmtDay, fmtTime } from "../../lib/format";
 import type { GuideResponse, Program, TvChannel } from "../../lib/types";
@@ -48,9 +48,7 @@ export default function Guide({ filters, setFilters }: { filters: TvFilters; set
 
   if (loading && !data)
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <Spinner size={22} />
-      </div>
+      <Loading fill />
     );
 
   const empty = data && data.channels.every((c) => c.programs.length === 0);
@@ -89,9 +87,9 @@ export default function Guide({ filters, setFilters }: { filters: TvFilters; set
         </div>
       )}
       {empty ? (
-        <EmptyState title="No guide data for this time">The guide covers about a day ahead and refreshes every few hours.</EmptyState>
+        <EmptyState icon={<CalendarX size={36} strokeWidth={1.5} />} title="No guide data for this time">The guide covers about a day ahead and refreshes every few hours.</EmptyState>
       ) : rows.length === 0 ? (
-        <EmptyState title="No channels match">Try another search or genre, or look at a different time.</EmptyState>
+        <EmptyState icon={<SearchX size={36} strokeWidth={1.5} />} title="No channels match">Try another search or genre, or look at a different time.</EmptyState>
       ) : (
         <div ref={scroller} className="min-h-0 flex-1 overflow-auto border-t border-border-light">
           <div className="relative" style={{ width: CHANNEL_COL + width }}>

@@ -123,7 +123,7 @@ function RecordingsFolder({ onSaved }: { onSaved: () => void }) {
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2 text-sm text-content">
                 {o.label}
-                {o.path === data.recordingsDir && <span className="tint-info rounded px-1.5 text-[10px] font-semibold">Current</span>}
+                {o.path === data.recordingsDir && <span className="tint-info badge">Current</span>}
               </span>
               <span className="mono block truncate text-content-muted">{o.path}</span>
               <span className="block text-xs text-content-muted">{o.detail}</span>
