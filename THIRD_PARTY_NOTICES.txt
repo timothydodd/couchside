@@ -2633,7 +2633,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ==============================================================================
-lucide-react 1.49.0  (ISC)
+lucide-react 1.52.0  (ISC)
 ==============================================================================
 
 ISC License
