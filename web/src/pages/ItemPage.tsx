@@ -15,6 +15,7 @@ import { EpisodeActions, ExtraActions, TitleActions } from "../components/item/A
 import type { EpisodeRow, ItemDetail, MediaFile } from "../lib/types";
 import { useIsAdmin } from "../stores/auth";
 import { useStatus } from "../stores/status";
+import { featureFiles, nextEpisode } from "../lib/items";
 import { attempt } from "../lib/notices";
 
 export default function ItemPage({ id, season, edit }: { id: number; season?: number; edit?: boolean }) {
@@ -202,23 +203,9 @@ export default function ItemPage({ id, season, edit }: { id: number; season?: nu
   );
 }
 
-/** The files that make up a movie: its parts in order (the best copy of each), or its best copy. */
-function featureFiles(files: MediaFile[], chosen?: MediaFile): MediaFile[] {
-  const parts = files.filter((f) => f.role === "part" && !f.problem); // server order: part number, then biggest
-  if (parts.length) return parts.filter((f, i) => i === 0 || parts[i - 1].partNo !== f.partNo);
-  const copy = chosen ?? files.find((f) => f.role === "copy");
-  return copy ? [copy] : [];
-}
-
 /** A copy of a movie, as the version chooser names it: "4K · HEVC · Extended · 54 GB". */
 function versionLabel(f: MediaFile): string {
   return [fmtResolution(f.width, f.height), f.videoCodec.toUpperCase(), f.edition, fmtBytes(f.size)].filter(Boolean).join(" · ");
-}
-
-/** First episode that isn't finished: resume it, or start the next one. */
-function nextEpisode(seasons: NonNullable<ItemDetail["seasons"]>): EpisodeRow | undefined {
-  const all = seasons.flatMap((s) => s.episodes).filter((e) => !e.problem);
-  return all.find((e) => !e.watched) ?? all[0];
 }
 
 /** For admins: where the match stands, with "Fix match" opening the Edit panel on it. Polls while a match is pending. */

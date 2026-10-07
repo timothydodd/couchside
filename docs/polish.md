@@ -25,7 +25,7 @@ Suggested order: **P6** first (the dialogs everything else confirms with),
 | P7  | Shared badge, empty, loading and error blocks           | Cleanup  | S    | Done |
 | P8  | Back buttons and page headers behave alike              | Fix      | S    | Done |
 | P9  | Phone layout: rows that crowd or run off                | Fix      | S    | Done |
-| P10 | Home: the hero plays, and says why it's empty           | Fix      | S    |      |
+| P10 | Home: the hero plays, and says why it's empty           | Fix      | S    | Done |
 | P11 | Guide: time shifts show a loading state                 | Fix      | S    |      |
 | P12 | Copy: one name for things, admin-only advice to admins  | Fix      | S    |      |
 | P13 | Status is summarised once                               | Cleanup  | S    |      |
@@ -202,24 +202,16 @@ restores the single line). `StatTile` truncates its sub-line, so the
 running job's label can't widen the Activity tiles. The Settings phone
 tab bar's fade came with P4.
 
-## P10 · Home: the hero plays, and says why it's empty
+## P10 · Home: the hero plays, and says why it's empty · Done
 
-**Scope**
-- `HomePage.tsx:117`: the hero's "Watch" button links to `/item/{id}`,
-  the same as "Details". Make it play (`/play/{fileId}`: `Home` needs the
-  item's `playFileId`, or fetch `/api/items/{id}` as `:99` already does
-  for the plot and take the first feature file / next episode as
-  `ItemPage` does). Label it "Play" or "Resume 12:30".
-- `:99` fetches the whole item for the plot, and `pickFeatured` (`:47`)
-  runs on every 15s poll, so the hero swaps (and fetches again) whenever
-  something new arrives. Pick the hero once per mount (seeded by the day), and have `/api/home` return the plot and play
-  file for the hero so the extra fetch goes.
-- `:51-58`: with libraries but nothing scanned yet, Home is stat tiles
-  only (on phones, a 16px gap). Show an `EmptyState`: "Scanning…" with
-  the job count when a scan is queued or running, otherwise "No titles
-  yet" with Scan (admin) or "ask your admin".
-- `:65`: the Unmatched tile's "Set TMDB_API_KEY to match" (admins only
-  now) is env-var advice on the home page. Link to Settings → Metadata.
+**Done.** The hero's button is Play (or "Resume 12:30"), going straight to
+the file `playTarget` (`lib/items.ts`, the title page's rule, shared) picks
+from the item the hero already fetched for its plot. The hero is picked
+once per visit and only re-picked if it leaves the recent rows, so the
+15s poll can't swap it mid-read. With libraries but no titles, Home says
+"Scanning your libraries…" while jobs run, or "No titles yet" with a Scan
+now button for admins. The Unmatched tile links admins to Settings →
+Metadata instead of naming an environment variable.
 
 ## P11 · Guide: time shifts show a loading state
 
