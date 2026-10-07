@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, Clapperboard, Copy, Cpu, ImageUp, Pencil, RefreshCw
 import Link from "../components/Link";
 import LibraryForm from "../components/LibraryForm";
 import { PosterArt } from "../components/PosterCard";
-import { BackButton, EmptyState, ErrorNote, Loading, PageHeader, SearchInput } from "../components/ui";
+import { BackButton, EmptyState, ErrorNote, Loading, PageHeader, SearchInput, Segmented } from "../components/ui";
 import { api, useApi } from "../lib/api";
 import { fmtAgo, fmtBytes } from "../lib/format";
 import { codecLabel, extraFiles, qualityLabel, qualityTier, qualityTone } from "../lib/quality";
@@ -171,26 +171,26 @@ export default function LibraryManagePage({ id }: { id: number }) {
         <h2 className="row-title mt-3">Titles</h2>
         <div className="flex flex-wrap items-center gap-2">
           <SearchInput value={q} onChange={setQ} placeholder={movies ? "Find a movie…" : "Find a show…"} className="w-full sm:w-64" />
-          <div className="inline-flex rounded-md border border-border p-0.5" role="radiogroup" aria-label="Show">
-            {(
+          <Segmented<Filter>
+            label="Show"
+            value={filter}
+            onChange={setFilter}
+            options={(
               [
                 ["all", "All"],
                 ["duplicates", "Duplicates"],
                 ["unmatched", "Unmatched"],
                 ["low", "SD / unknown"],
               ] as [Filter, string][]
-            ).map(([f, label]) => (
-              <button
-                key={f}
-                role="radio"
-                aria-checked={filter === f}
-                onClick={() => setFilter(f)}
-                className={`rounded px-3 py-1 text-sm transition-colors ${filter === f ? "bg-accent text-on-accent" : "text-content-secondary hover:text-content"}`}
-              >
-                {label} <span className="tabular-nums opacity-70">{counts[f]}</span>
-              </button>
-            ))}
-          </div>
+            ).map(([id, label]) => ({
+              id,
+              label: (
+                <>
+                  {label} <span className="tabular-nums opacity-70">{counts[id]}</span>
+                </>
+              ),
+            }))}
+          />
         </div>
 
         {!data ? (

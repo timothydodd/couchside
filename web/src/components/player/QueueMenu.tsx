@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useDialog } from "../../lib/dialog";
 import { Play, X } from "lucide-react";
 import type { QueueEntry } from "../../stores/queue";
 
@@ -21,6 +22,8 @@ export default function QueueMenu({
   onClose: () => void;
 }) {
   const list = useRef<HTMLDivElement>(null);
+  const dialog = useRef<HTMLDivElement>(null);
+  useDialog(dialog, onClose); // focus in, Tab stays, Escape closes (the player's own Escape does the same)
   // Start at the entry playing, with a little of what came before in view.
   useEffect(() => {
     list.current?.querySelector<HTMLElement>("[data-current]")?.scrollIntoView({ block: "center" });
@@ -32,14 +35,16 @@ export default function QueueMenu({
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
       role="dialog"
+      aria-modal="true"
       aria-label="Play queue"
+      ref={dialog}
     >
       <div className="flex items-center gap-2 px-3 py-2">
         <span className="card-title flex-1 !text-content-secondary">Queue</span>
         <span className="text-xs text-content-muted">
           {at >= 0 ? `${at + 1} of ${entries.length}` : `${entries.length}`}
         </span>
-        <button className="btn-quiet !p-1" onClick={onClose} aria-label="Close">
+        <button type="button" className="btn-quiet !p-1" onClick={onClose} aria-label="Close">
           <X size={14} />
         </button>
       </div>
@@ -49,7 +54,7 @@ export default function QueueMenu({
           const playing = e.fileId === current;
           return (
             <div key={e.fileId} className={`group flex items-center gap-1 rounded ${playing ? "bg-accent/15" : "hover:bg-muted"}`} data-current={playing || undefined}>
-              <button className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left" onClick={() => !playing && onPlay(e.fileId)} aria-current={playing || undefined}>
+              <button type="button" className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left" onClick={() => !playing && onPlay(e.fileId)} aria-current={playing || undefined}>
                 <span className={`w-5 shrink-0 text-right text-xs tabular-nums ${playing ? "text-accent" : "text-content-muted"}`}>{playing ? <Play size={12} className="ml-auto fill-current" /> : i + 1}</span>
                 <span className="min-w-0 flex-1">
                   <span className={`block truncate ${playing ? "text-accent" : "text-content"}`}>{e.title}</span>
@@ -57,7 +62,7 @@ export default function QueueMenu({
                 </span>
               </button>
               {!playing && (
-                <button className="btn-quiet mr-1 !p-1 opacity-0 group-hover:opacity-100 focus:opacity-100 pointer-coarse:opacity-100" onClick={() => onRemove(e.fileId)} aria-label={`Remove ${e.title} from the queue`}>
+                <button type="button" className="btn-quiet mr-1 !p-1 opacity-0 group-hover:opacity-100 focus:opacity-100 pointer-coarse:opacity-100" onClick={() => onRemove(e.fileId)} aria-label={`Remove ${e.title} from the queue`}>
                   <X size={14} />
                 </button>
               )}

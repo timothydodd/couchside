@@ -111,9 +111,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+/* In the base layer, so a component's own focus style (.poster-link,
+   .still-link, .title-link) wins over it; unlayered it would beat them. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
 }
 
 /* Themed, unobtrusive scrollbars. */
@@ -505,9 +509,9 @@ body {
   .guide-cell-past {
     @apply opacity-50;
   }
-  /* Doesn't match the current search/genre filter. */
+  /* Doesn't match the current search/genre filter: pushed back, still readable. */
   .guide-cell-dim {
-    @apply opacity-25;
+    @apply opacity-45;
   }
   .rec-dot {
     @apply inline-block h-2 w-2 shrink-0 rounded-full bg-critical;

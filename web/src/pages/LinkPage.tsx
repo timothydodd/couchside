@@ -42,7 +42,7 @@ export default function LinkPage() {
           }}
         >
           <p className="text-sm text-content-secondary">
-            The TV will be signed in as <span className="font-medium text-content">{profile?.name}</span>. Switch profile first to sign it in as someone else.
+            The TV will be signed in as <span className="font-medium text-content">{profile?.name ?? "you"}</span>. Switch profile first to sign it in as someone else.
           </p>
           <label className="block">
             <span className="field-label">Code</span>

@@ -74,3 +74,20 @@ export function menuKeys(e: ReactKeyboardEvent<HTMLElement>) {
   const next = e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : at < 0 ? (down ? 0 : items.length - 1) : (at + (down ? 1 : -1) + items.length) % items.length;
   items[next].focus();
 }
+
+/**
+ * onKeyDown for a role="radiogroup": the arrow keys move between its
+ * role="radio" buttons and pick the one landed on, as native radios do.
+ * Pair with tabIndex 0 on the checked button and -1 on the rest.
+ */
+export function radioKeys(e: ReactKeyboardEvent<HTMLElement>) {
+  if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(e.key)) return;
+  const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]:not([disabled])'));
+  if (!items.length) return;
+  e.preventDefault();
+  const at = items.indexOf(document.activeElement as HTMLElement);
+  const forward = e.key === "ArrowDown" || e.key === "ArrowRight";
+  const next = at < 0 ? 0 : (at + (forward ? 1 : -1) + items.length) % items.length;
+  items[next].focus();
+  items[next].click();
+}

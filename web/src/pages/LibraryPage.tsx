@@ -24,6 +24,7 @@ const SORTS: Record<Sort, (a: ItemSummary, b: ItemSummary) => number> = {
   rating: (a, b) => (b.rating ?? -1) - (a.rating ?? -1) || a.sortTitle.localeCompare(b.sortTitle),
 };
 
+const SORT_LABELS: Record<Sort, string> = { title: "Title", added: "Recently added", year: "Year", rating: "Rating" };
 const FILTER_LABELS: Record<Filter, string> = { all: "All", unwatched: "Unwatched", watched: "Watched", list: "My list", unmatched: "Unmatched" };
 
 // Keep filter choices per library view across navigation.
@@ -36,7 +37,6 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
   const [sort, setSort] = useState<Sort>(init.sort);
   const [filter, setFilter] = useState<Filter>(init.filter);
   const [genre, setGenre] = useState(init.genre);
-  saved[kind] = { q, sort, filter, genre };
 
   const genres = useMemo(() => [...new Set((data ?? []).flatMap((i) => i.genres))].sort(), [data]);
 
@@ -136,6 +136,11 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
       await reload();
     })();
 
+
+  // Remember the choices for this view, for when it's opened again.
+  useEffect(() => {
+    saved[kind] = { q, sort, filter, genre };
+  }, [kind, q, sort, filter, genre]);
 
   const resetFilters = () => {
     setFilter("all");
@@ -244,6 +249,7 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
           <div className="mt-2 flex flex-wrap gap-1.5">
             {filter !== "all" && <ActiveChip label={FILTER_LABELS[filter]} onClear={() => setFilter("all")} />}
             {genre && <ActiveChip label={genre} onClear={() => setGenre("")} />}
+            {sort !== "title" && <ActiveChip label={`Sorted by ${SORT_LABELS[sort].toLowerCase()}`} onClear={() => setSort("title")} />}
           </div>
         )}
       </header>

@@ -1,6 +1,6 @@
 import { CalendarClock, Film, Pause, Play, RadioTower, Repeat, RotateCcw, Square, Trash2, X } from "lucide-react";
 import Link from "../Link";
-import { EmptyState, ErrorNote, Loading } from "../ui";
+import { EmptyState, ErrorNote, Loading, Meter } from "../ui";
 import { api, useApi } from "../../lib/api";
 import { fmtBytes, fmtDay, fmtSlot, fmtTime } from "../../lib/format";
 import type { Recording, RuleMode, SeriesRule } from "../../lib/types";
@@ -138,9 +138,7 @@ export default function Recordings() {
                       {r.channel} {r.channelName} · until {fmtTime(r.endAt + r.padAfter)}
                       {label(r) && ` · ${label(r)}`}
                     </div>
-                    <div className="mt-1.5 h-1 overflow-hidden rounded-full" style={{ backgroundColor: "color-mix(in srgb, var(--critical) 18%, transparent)" }}>
-                      <div className="h-full rounded-full bg-critical" style={{ width: `${Math.max(0, pct)}%` }} />
-                    </div>
+                    <Meter value={pct} tone="critical" className="mt-1.5 !h-1" />
                     {r.error && <div className="mt-1 truncate text-xs text-warning">{r.error}</div>}
                   </div>
                   {/* On phones the buttons take a row of their own under the text. */}

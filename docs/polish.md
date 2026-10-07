@@ -30,8 +30,8 @@ Suggested order: **P6** first (the dialogs everything else confirms with),
 | P12 | Copy: one name for things, admin-only advice to admins  | Fix      | S    | Done |
 | P13 | Status is summarised once                               | Cleanup  | S    | Done |
 | P14 | Keyboard: tabs, radios, menus                           | A11y     | S    |      |
-| P15 | Search: see more, locked channels explained             | Fix      | S    |      |
-| P16 | Small smells                                            | Cleanup  | S    |      |
+| P15 | Search: see more, locked channels explained             | Fix      | S    | Done |
+| P16 | Small smells                                            | Cleanup  | S    | Done |
 
 **Rules for every story**
 - One story per commit on `ui-polish`. Don't fold neighbouring cleanups in.
@@ -246,55 +246,39 @@ dot in the guide, the channels list and search; `ActiveChip` lives in
 The search page's channel hit keeps its own card layout; it isn't the
 guide's cell.
 
-## P14 · Keyboard: tabs, radios, menus
+## P14 · Keyboard: tabs, radios, menus · Done
 
-- `Segmented` (`ui.tsx:98`), `Choices` (`FilterMenu.tsx:65`), the
-  hand-rolled group in `LibraryManagePage.tsx:111` and `MergeTitles`'
-  native radios are four `role="radio"` styles; none handles arrow keys.
-  One component, roving tabindex, Left/Right moves.
-- `MenuButton` (`ui.tsx:224,230`): buttons need `type="button"`; picking
-  an item or clicking outside should return focus to the trigger (Escape
-  already does). `QueueMenu.tsx` is a `role="dialog"` without `useDialog`.
-- `ActivityPage.tsx:189`: the running indicator is a `StatusPill` with
-  `label=""` and a `title` on a wrapper; Pause and Square are icon-only
-  with `title` alone. Give them `aria-label`s and the pill `sr-only` text.
-- `Sidebar.tsx:99` has `aria-label` on a plain `div`; `SearchPage.tsx:138`
-  on a lucide icon. Move them to elements with a role, or drop them.
-- `index.css:114`: the global `:focus-visible` outline is unlayered, and
-  the `outline: none` in `.poster-link`/`.still-link`/`.title-link`
-  (`:333,345,366`) sits inside `@layer components`. Unlayered rules win, so
-  posters get both the outline and the accent border. Lift those rules out
-  of the layer (confirm in a browser first).
-- `.guide-cell-dim` at `opacity-25` (`index.css:484`) is far under AA;
-  decide whether it's decorative (then `aria-hidden` the text) or raise it.
+**Done.** `radioKeys` (`lib/dialog.ts`) gives every `role="radiogroup"`
+arrow keys with a roving tabindex: `Segmented`, `Choices`, and the library
+settings page's filter, which is now `Segmented` with counts in its labels
+(`label` takes a node). `MergeTitles` keeps native radios, which already
+do this. `MenuButton`'s buttons are `type="button"`, and picking an item or
+clicking away returns focus to the trigger. The queue overlay is a real
+dialog (`useDialog`: focus in, Tab stays, Escape). Activity's encoder
+state is announced ("Encoding", "Paused", "Idle"), the Settings sub-nav
+is a labelled `role="group"`, and the global `:focus-visible` outline
+moved into `@layer base`, so the poster, still and title links' own focus
+styles win and a focused poster no longer shows both an outline and the
+accent border. Guide cells outside the filter are `opacity-45`, pushed
+back but readable.
 
-## P15 · Search: see more, locked channels explained
+## P15 · Search: see more, locked channels explained · Done
 
-**Scope** (`pages/SearchPage.tsx`)
-- `:15` caps each group at 20 and `:44`'s "N found" counts the capped
-  total. Ask for the real total (`/api/search` returns `total` per kind)
-  and add "Show all N" per row, which switches that row to a `PosterGrid`.
-- `:141`: a copy-protected channel hit isn't focusable and only an icon's
-  `aria-label` explains it ("Encrypted", while the guide says
-  "Copy-protected"). Render it as a disabled row with "Copy-protected"
-  text, as the Channels tab does.
+**Done.** Search asks for 50 per group (the server's cap) instead of 20,
+and the count says "50+ found" when a group is full; the rows page with
+P4's arrows. A copy-protected channel hit is a focusable card with a
+"Copy-protected" badge and a plain-words label, matching the guide.
 
-## P16 · Small smells
+## P16 · Small smells · Done
 
-- `AdminMenus.tsx:89-90`: a stale "beside Mark watched" JSDoc stacked on
-  `ExtraActions`, and `TitleActions` has none.
-- `LibraryPage.tsx:49` writes the module-level `saved` map during render;
-  do it in an effect.
-- `LibraryPage.tsx:175` counts sort in the filter badge but shows no chip
-  for it (`:257`).
-- `ActivityPage.tsx:103` strips the first word of a job label with a
-  regex; have the server send `kind` and `target` apart.
-- `Recordings.tsx:142` re-implements `Meter` with a critical tint; give
-  `Meter` a `tone`.
-- `TwoStep.tsx:129`: Cancel fires a disable request and swallows its error.
-  `LinkPage.tsx:45` renders a blank name when there's no profile.
-- `ItemPage.tsx` is 516 lines: P1, P3 and P5 take `Seasons`, `Extras`,
-  `MatchPanel` and `FilesCard` out, which does the split.
+**Done.** `LibraryPage` writes its remembered filters in an effect, and
+shows a "Sorted by …" chip when the sort counts toward the filter badge.
+`Meter` takes `tone="critical"` and the recording card uses it. "Link a
+TV" says "you" when there's no profile name. `AdminMenus`' stale doc came
+with P1, Two-step's Cancel with P7, and `ItemPage` is down to 290 lines
+after P1, P2 and P5. Left as is: `ActivityPage` still trims the job kind
+off the label with a regex; the server would have to send the target
+apart, which isn't worth a wire change on its own.
 
 **What's already right, and the plan leans on**: `attempt()`/`notify()`,
 `useDialog`, `PageHeader`/`EmptyState`, `router.back(fallback)`,

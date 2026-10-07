@@ -71,7 +71,7 @@ export default function Sidebar() {
       <div className="flex flex-col gap-0.5">
         {NAV_MANAGE.filter((m) => admin || !m.admin).map(item)}
         {settingsOpen && (
-          <div className="subnav" aria-label="Settings sections">
+          <div className="subnav" role="group" aria-label="Settings sections">
             {SECTIONS.filter((s) => s.id !== "you").map(({ id, to, label, Icon }) => (
               <Link key={id} to={to} aria-current={section === id ? "page" : undefined} className="subnav-item">
                 <Icon size={14} className={section === id ? "text-accent" : ""} />

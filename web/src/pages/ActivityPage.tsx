@@ -189,7 +189,7 @@ function Streams() {
                   <span>{Math.round(s.aheadSec)}s buffered ahead</span>
                 </div>
               </div>
-              <span title={s.paused ? "Far enough ahead of the player; paused to save CPU" : s.running ? "Encoding" : "Idle"}>
+              <span role="img" aria-label={s.paused ? "Paused" : s.running ? "Encoding" : "Idle"} title={s.paused ? "Far enough ahead of the player; paused to save CPU" : s.running ? "Encoding" : "Idle"}>
                 {s.paused ? <Pause size={15} className="text-content-muted" /> : s.running ? <StatusPill label="" tone="info" pulse /> : <Square size={13} className="text-content-muted" />}
               </span>
             </div>
