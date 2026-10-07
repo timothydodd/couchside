@@ -84,11 +84,10 @@ export function EpisodeActions({ item, e, onChange }: { item: Item; e: EpisodeRo
     }),
   });
 
-  return <MenuButton label="Episode actions" icon={<MoreHorizontal size={16} />} items={items} align="end" className="btn-quiet !p-2" />;
+  return <MenuButton label="Episode actions" icon={<MoreHorizontal size={16} />} items={items} align="start" className="tile-action" />;
 }
 
-/** The "⋯" beside Mark watched, for admins: the whole movie or show. */
-/** The "⋯" beside one of a movie's extras: rename it, make it a copy of the film instead, and the file actions. */
+/** The "⋯" on one of a movie's extras: rename it, make it a copy of the film instead, and the file actions. */
 export function ExtraActions({ item, f, onChange }: { item: Item; f: MediaFile; onChange: () => void }) {
   const go = useRouter((s) => s.go);
   const file = `/api/files/${f.id}`;
@@ -162,9 +161,10 @@ export function ExtraActions({ item, f, onChange }: { item: Item; f: MediaFile; 
       else onChange();
     }),
   });
-  return <MenuButton label={`Actions for ${name}`} icon={<MoreHorizontal size={16} />} items={items} align="end" className="btn-quiet !p-2" />;
+  return <MenuButton label={`Actions for ${name}`} icon={<MoreHorizontal size={16} />} items={items} align="start" className="tile-action" />;
 }
 
+/** The "⋯" beside Mark watched, for admins: edit, jobs and delete for the whole movie or show. */
 export function TitleActions({ item, onChange }: { item: Item; onChange: () => void }) {
   const comskip = useStatus((s) => s.status?.comskip);
   const go = useRouter((s) => s.go);

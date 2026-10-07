@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Bookmark, BookmarkCheck, Check, Eye, EyeOff, Play, RotateCcw, Star, Trash2, Wand2 } from "lucide-react";
+import EpisodeCard from "../components/EpisodeCard";
 import { CastRow, CrewLine } from "../components/Credits";
 import Link from "../components/Link";
 import { PosterArt } from "../components/PosterCard";
 import { EmptyState, ErrorNote, Meter, Spinner } from "../components/ui";
-import { api, backdropUrl, posterUrl, stillUrl, useApi } from "../lib/api";
+import { api, backdropUrl, posterUrl, useApi } from "../lib/api";
+import { usePhone } from "../lib/media";
+import { useScrollEdges } from "../lib/scroll";
 import { fmtAirDate, fmtBytes, fmtClock, fmtResolution, fmtRuntime, titleLink } from "../lib/format";
 import { canDirectPlay } from "../lib/playback";
 import { EpisodeActions, ExtraActions, TitleActions } from "../components/item/AdminMenus";
@@ -316,117 +319,89 @@ function Seasons({
   const firstUnwatched = seasons.find((s) => s.episodes.some((e) => !e.watched))?.season ?? seasons[0]?.season;
   const [season, setSeason] = useState(firstUnwatched);
   const current = seasons.find((s) => s.season === season) ?? seasons[0];
+  const tabs = useRef<HTMLDivElement>(null);
+  useScrollEdges(tabs);
+  // A show opened on a later season: bring its tab into view.
+  useEffect(() => {
+    tabs.current?.querySelector<HTMLElement>(".navtab-active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [season]);
   if (!current) return null;
   return (
     <section className="mt-10 gutter">
-      <div className="flex gap-1 overflow-x-auto border-b border-border-light">
+      <div ref={tabs} className="row-scroll flex gap-1 overflow-x-auto border-b border-border-light">
         {seasons.map((s) => (
-          <button key={s.season} onClick={() => setSeason(s.season)} className={`navtab !text-sm ${s.season === current.season ? "navtab-active" : ""}`}>
+          <button key={s.season} type="button" onClick={() => setSeason(s.season)} className={`navtab shrink-0 !text-sm ${s.season === current.season ? "navtab-active" : ""}`}>
             {s.season === 0 ? "Specials" : `Season ${s.season}`}
           </button>
         ))}
       </div>
-      <ol className="mt-2 flex flex-col">
+      <TileList>
         {current.episodes.map((e) => (
-          <EpisodeItem key={e.id} e={e} actions={admin ? <EpisodeActions item={item} e={e} onChange={onChange} /> : undefined} />
+          <li key={e.id}>
+            <EpisodeTile e={e} actions={admin ? <EpisodeActions item={item} e={e} onChange={onChange} /> : undefined} />
+          </li>
         ))}
-      </ol>
+      </TileList>
     </section>
   );
 }
 
-function EpisodeItem({ e, actions }: { e: EpisodeRow; actions?: React.ReactNode }) {
+/** Episode and extra tiles: a grid from tablet width up, a list on phones. */
+function TileList({ children }: { children: React.ReactNode }) {
+  const phone = usePhone();
+  return <ol className={phone ? "mt-2 flex flex-col" : "mt-4 grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-5"}>{children}</ol>;
+}
+
+function EpisodeTile({ e, actions }: { e: EpisodeRow; actions?: React.ReactNode }) {
+  const phone = usePhone();
+  const name = e.airDate ? fmtAirDate(e.airDate) : `S${e.season} E${e.episode}`;
   return (
-    <StillRow file={e} actions={actions}>
-      <div className="flex items-baseline gap-2">
-        {e.airDate ? (
-          <span className="shrink-0 text-xs font-semibold tabular-nums text-content-muted">{fmtAirDate(e.airDate)}</span>
-        ) : (
-          <span className="text-xs font-semibold tabular-nums text-content-muted">E{e.episode}</span>
-        )}
-        <span className="truncate text-sm font-medium text-content">{e.title || (e.airDate ? "" : `Episode ${e.episode}`)}</span>
-      </div>
-      <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-content-muted">
-        {e.released && <span>{e.released}</span>}
-        {e.durationSec && <span>{fmtRuntime(e.durationSec)}</span>}
-        {e.rating != null && (
-          <span className="inline-flex items-center gap-1">
-            <Star size={11} className="fill-warning text-warning" />
-            {e.rating.toFixed(1)}
-          </span>
-        )}
-      </div>
-    </StillRow>
+    <EpisodeCard
+      file={e}
+      layout={phone ? "row" : "grid"}
+      eyebrow={e.airDate ? fmtAirDate(e.airDate) : `E${e.episode}`}
+      title={e.title || (e.airDate ? "" : `Episode ${e.episode}`)}
+      playLabel={`Play ${name}${e.title ? ` ${e.title}` : ""}`}
+      actions={actions}
+      meta={
+        (e.released || e.durationSec || e.rating != null) && (
+          <>
+            {e.released && <span>{e.released}</span>}
+            {e.durationSec && <span>{fmtRuntime(e.durationSec)}</span>}
+            {e.rating != null && (
+              <span className="inline-flex items-center gap-1">
+                <Star size={11} className="fill-warning text-warning" />
+                {e.rating.toFixed(1)}
+              </span>
+            )}
+          </>
+        )
+      }
+    />
   );
 }
 
-/** A movie's bonus material, listed like episodes and titled "Movie - Extra". */
+/** A movie's bonus material, tiled like episodes. */
 function Extras({ item, files, admin, onChange }: { item: ItemDetail["item"]; files: MediaFile[]; admin: boolean; onChange: () => void }) {
-  const title = item.title;
+  const phone = usePhone();
   return (
     <section className="mt-10 gutter">
-      <h2 className="row-title mb-1">Extras</h2>
-      <ol className="flex flex-col">
+      <h2 className="row-title">Extras</h2>
+      <TileList>
         {files.map((f) => (
-          <StillRow key={f.id} file={{ ...f, fileId: f.id }} actions={admin && <ExtraActions item={item} f={f} onChange={onChange} />}>
-            <div className="truncate text-sm font-medium text-content">
-              <span className="text-content-muted">{title} - </span>
-              {f.extraTitle}
-            </div>
-            {f.durationSec && <div className="mt-0.5 text-xs text-content-muted">{fmtRuntime(f.durationSec)}</div>}
-          </StillRow>
+          <li key={f.id}>
+            <EpisodeCard
+              file={{ ...f, fileId: f.id }}
+              layout={phone ? "row" : "grid"}
+              title={f.extraTitle || "Extra"}
+              playLabel={`Play ${f.extraTitle || "extra"}`}
+              meta={f.durationSec ? <span>{fmtRuntime(f.durationSec)}</span> : undefined}
+              actions={admin ? <ExtraActions item={item} f={f} onChange={onChange} /> : undefined}
+            />
+          </li>
         ))}
-      </ol>
+      </TileList>
     </section>
-  );
-}
-
-/** A playable row with the file's frame on the left: episodes and extras. */
-function StillRow({
-  file: e,
-  children,
-  actions,
-}: {
-  file: Pick<EpisodeRow, "fileId" | "hasStill" | "durationSec" | "positionSec" | "watched" | "problem">;
-  children: React.ReactNode;
-  /** Beside the row, outside its link (the admin's "⋯"). */
-  actions?: React.ReactNode;
-}) {
-  const progress = e.durationSec && !e.watched ? (e.positionSec / e.durationSec) * 100 : 0;
-  return (
-    <li className="flex items-center gap-1">
-      <Link to={`/play/${e.fileId}`} className="still-link group flex min-w-0 flex-1 items-center gap-4 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted">
-        <div className="still w-44 shrink-0">
-          {e.hasStill ? (
-            <img src={stillUrl(e.fileId)} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
-          ) : (
-            <div className="poster-placeholder absolute inset-0" />
-          )}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-on-accent">
-              <Play size={16} className="translate-x-px fill-current" />
-            </span>
-          </div>
-          {progress > 0 && (
-            <div className="art-progress">
-              <span style={{ width: `${progress}%` }} />
-            </div>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">{children}</div>
-        {e.problem && (
-          <span className="tint-warning shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold" title={PROBLEM_TEXT[e.problem].detail}>
-            {PROBLEM_TEXT[e.problem].label}
-          </span>
-        )}
-        {e.watched && (
-          <span className="tint-good inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold">
-            <Check size={12} /> Watched
-          </span>
-        )}
-      </Link>
-      {actions}
-    </li>
   );
 }
 

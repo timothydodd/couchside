@@ -16,7 +16,7 @@ Suggested order: **P6** first (the dialogs everything else confirms with),
 
 | ID  | Story                                                   | Kind     | Size | Done |
 | --- | ------------------------------------------------------- | -------- | ---- | ---- |
-| P1  | Episodes as a grid, list on phones                      | Feature  | S    |      |
+| P1  | Episodes as a grid, list on phones                      | Feature  | S    | Done |
 | P2  | Episode page: plot, still, guest stars, crew            | Feature  | M    |      |
 | P3  | Picture plays, everything else opens the page           | Feature  | S    |      |
 | P4  | Rows that scroll: cast, Home, search                    | Fix      | S    | Done |
@@ -46,35 +46,22 @@ Suggested order: **P6** first (the dialogs everything else confirms with),
 
 # The title page
 
-## P1 · Episodes as a grid, list on phones
+## P1 · Episodes as a grid, list on phones · Done
 
-**Why.** `Seasons` (`pages/ItemPage.tsx:304`) lists episodes as rows with a
-176px still and one line of text, so a 22-episode season is a long scroll
-and most of the width is empty on a desktop. A grid of 16:9 cards shows a
-whole season at once, which is also how the player's Continue Watching tile
-already looks (`ContinueCard`, `components/Rows.tsx:36`).
+**Why.** `Seasons` listed episodes as rows with a 176px still and one line
+of text, so a 22-episode season was a long scroll and most of the width
+was empty on a desktop.
 
-**Scope**
-- A `EpisodeCard` component (`components/EpisodeCard.tsx`): the still (or
-  `.poster-placeholder`) in a `.still`, the progress strip, the watched tick
-  and problem badge as `.art-badge` overlays (top right, like `PosterCard`),
-  and under it `E4 · Title` in `.poster-title` and date, runtime and rating
-  in `.poster-meta`. Date-named recordings show the air date in place of
-  the number, as `EpisodeItem` does now.
-- `Seasons` renders a CSS grid of cards from `md` up:
-  `grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4`. No virtualiser:
-  a season is at most a few hundred cards, and the page scrolls as a whole.
-- Below `md` (`usePhone()` in `lib/media.ts`), keep the list, but build it
-  from the same card in a horizontal layout (`EpisodeCard` takes
-  `layout="row"`), so the two share one set of badges and text.
-- `Extras` (`:363`) uses the same component. Its caption is "Extra title"
-  with the movie's name dropped (the page heading already says it).
-- Delete `StillRow` and `EpisodeItem` once nothing uses them.
-- The season tabs (`navtab`) stay. Scroll the active tab into view when the
-  page opens on a later season (`firstUnwatched`).
-
-**Done when** a 24-episode season fits on a 1440px screen in two or three
-rows, and the phone list looks the same as today.
+**Done.** `components/EpisodeCard.tsx` is the one tile for episodes and
+extras: the still (or placeholder) with the play button on hover, the
+progress strip, watched and problem as `.art-badge` overlays, the admin
+"⋯" top-left on hover, and the caption under it (`E4 · Title`, then date,
+runtime and rating). `Seasons` and `Extras` lay the cards out in an
+auto-fill grid (220px minimum) from `md` up and as the old list
+(`layout="row"`) on phones, through `TileList`. The season tabs fade at
+the end that scrolls and bring the open season's tab into view. The old
+`StillRow` and `EpisodeItem` are gone. The caption becomes a link in P3,
+once P2 gives it a page.
 
 ## P2 · Episode page: plot, still, guest stars, crew
 

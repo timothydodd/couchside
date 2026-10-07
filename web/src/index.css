@@ -384,6 +384,11 @@ body {
     @apply hover:text-content md:opacity-0 md:focus-visible:opacity-100 md:group-hover/card:opacity-100;
   }
 
+  /* A menu button sitting on artwork (the admin's "⋯" on an episode tile). */
+  .tile-action {
+    @apply flex h-7 w-7 items-center justify-center rounded-full bg-surface/85 text-content-secondary backdrop-blur-sm hover:text-content;
+  }
+
   /* Metadata chip on detail pages (genre, codec, resolution). */
   .chip {
     @apply inline-flex items-center gap-1 rounded border border-border-light px-2 py-0.5 text-xs text-content-secondary;
