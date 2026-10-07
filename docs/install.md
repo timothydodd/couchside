@@ -1,11 +1,41 @@
 # Installing Couchside
 
 Every release on the [Releases page](https://github.com/timothydodd/couchside/releases)
-has zips for Linux, macOS and Windows, plus a multi-arch container image
-(amd64 and arm64) at `ghcr.io/timothydodd/couchside`.
+has a Windows installer, zips for Linux, macOS and Windows, and a multi-arch
+container image (amd64 and arm64) at `ghcr.io/timothydodd/couchside`.
 
 Once it's running, open http://localhost:8080 (or your host) and add a library
 on the Libraries page. Settings are covered in [configuration.md](configuration.md).
+
+## Windows installer
+
+Run `couchside-<version>-windows-amd64-setup.exe`. It asks for your media folder
+and a port, then:
+
+- installs Couchside with ffmpeg beside it (jellyfin-ffmpeg, whose NVENC runs on
+  older NVIDIA drivers than upstream builds), so there's nothing else to install;
+- runs it as the **Couchside** Windows service, which starts with Windows and
+  restarts if it stops unexpectedly;
+- lists your graphics cards. Couchside picks the encoder at start-up: NVIDIA
+  NVENC first, then Intel Quick Sync, else the CPU. Settings → System shows the
+  one in use, or why a GPU couldn't be used (for example a driver too old);
+- adds a Windows Firewall rule (private and domain networks) so TVs and phones
+  can connect and find the server.
+
+Settings are in `%ProgramData%\Couchside\couchside.env` (see
+[configuration.md](configuration.md)); restart the service after editing it.
+The database, artwork and logs (`data\logs\couchside.log`) are in
+`%ProgramData%\Couchside\data` and are kept when you uninstall. Running the
+installer again upgrades in place and keeps your settings.
+
+**Media on a NAS.** Use the share's network path (`\\nas\media`), not a mapped
+drive letter: services can't see mapped drives. The service runs as Local
+System, which usually can't read network shares, so in Services
+(`services.msc`) open Couchside → Log On, choose an account that can read the
+share, and restart the service.
+
+Test builds of the installer come from `pre-*` tags: the installer is attached to
+that workflow run (Actions → prerelease → windows-installer), not published.
 
 ## Container
 
@@ -35,7 +65,9 @@ Each zip holds a single `couchside` binary with the web UI built in. Install
 COUCHSIDE_MEDIA_ROOT=/path/to/media ./couchside
 ```
 
-On Windows, set the variable first and run `couchside.exe`. (On Windows a conversion isn't paused when it gets ahead of the player, so a stream converts its whole file while it's open.) For commercial
+On Windows, set the variable first and run `couchside.exe` (or use the
+installer above). An `ffmpeg.exe` next to `couchside.exe` is used before the
+one on the PATH. (On Windows a conversion isn't paused when it gets ahead of the player, so a stream converts its whole file while it's open.) For commercial
 detection, put [Comskip](https://github.com/erikkaashoek/Comskip) on the PATH
 or set `COUCHSIDE_COMSKIP` (the container image has it built in).
 

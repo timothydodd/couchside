@@ -401,7 +401,8 @@ export interface Status {
   comskip?: boolean; // commercial detection is available
   transcode?: {
     hwaccel: string;
-    requested: string;
+    requested: string; // COUCHSIDE_HWACCEL: auto, none, vaapi, qsv or nvenc
+    note?: string; // why no GPU is used: each encoder tried and ffmpeg's reason
     tonemap: boolean;
     gpuDecode?: boolean;
     gpuTonemap?: boolean;

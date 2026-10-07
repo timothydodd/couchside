@@ -61,16 +61,24 @@ progress on the Activity page, and can be cancelled.
 
 ## Hardware
 
+- **Picking the encoder.** `COUCHSIDE_HWACCEL=auto` (the default outside the
+  container) tries the encoders this machine might have and keeps the first
+  that passes a one-frame test encode: NVENC then Quick Sync on Windows; VAAPI
+  (when `/dev/dri` exists), NVENC then Quick Sync on Linux. The container and
+  Helm chart set `none`; set it to `vaapi` there.
 - **VAAPI (Intel/AMD iGPUs).** Set `COUCHSIDE_HWACCEL=vaapi` and pass
   `/dev/dri` into the container (with a privileged container or a GPU device
   plugin, and the host's render group as a supplemental group). Decoding,
   scaling, HDR tone mapping and encoding all run on the GPU, so a 4K HEVC HDR
   film converts with little CPU. The Intel drivers are in the image.
-- **Fallbacks.** An unusable GPU falls back to software with a log warning,
-  and a file the GPU can't decode falls back to CPU decoding.
-  Settings → System shows what passed its start-up test.
-- **QSV and NVENC** need an ffmpeg built with them; Alpine's lacks NVENC and
-  the newer Intel QSV runtime.
+- **NVENC and Quick Sync** encode on the GPU; decoding, scaling and tone
+  mapping still run on the CPU. They need an ffmpeg built with them: the
+  Windows installer includes one, and Alpine's (in the image) lacks NVENC and
+  the newer Intel QSV runtime. NVENC also needs an NVIDIA driver new enough for
+  the ffmpeg build (upstream 8.1+ builds want 610 or later).
+- **Fallbacks.** An unusable GPU falls back to software. Settings → System
+  shows what passed its start-up test, or ffmpeg's reason for each encoder that
+  didn't. A file the GPU can't decode falls back to CPU decoding.
 
 ## Skipping intros and credits
 

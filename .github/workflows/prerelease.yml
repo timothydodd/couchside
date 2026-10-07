@@ -1,0 +1,62 @@
+name: prerelease
+
+# Push a tag like pre-0.17.0-1 for a quick Windows test build: vet/test, the
+# web build and the installer only (no other zips, no container). Nothing is
+# published: download the windows-installer artifact from the workflow run.
+# Full releases are v* tags (release.yml).
+on:
+  push:
+    tags: ["pre-*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (e.g. pre-0.17.0-test)"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.27" # the Dockerfile's
+          cache-dependency-path: server/go.sum
+      - run: go vet ./...
+      - run: GOOS=windows go vet ./...
+      - run: go test ./...
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 26 # the Dockerfile's
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: web-dist
+          path: web/dist
+          retention-days: 1
+
+  installer:
+    needs: web
+    uses: ./.github/workflows/windows-installer.yml
+    with:
+      version: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+    secrets: inherit

@@ -191,7 +191,9 @@ func (s *Server) underRoot(p string) bool {
 	if root == "" {
 		return true
 	}
-	within := func(r string) bool { return p == r || strings.HasPrefix(p, strings.TrimSuffix(r, "/")+"/") }
+	// insideDir compares by path element with the platform's separator, so
+	// D:\Media\Movies is inside D:\Media on Windows.
+	within := func(r string) bool { return filepath.Clean(p) == filepath.Clean(r) || insideDir(p, r) }
 	// The DVR's own folder is allowed too: it lives outside the read-only media mount.
 	return within(root) || (s.tv.HasTuner() && within(s.tv.DefaultRecordingsDir()))
 }

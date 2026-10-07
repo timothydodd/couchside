@@ -74,3 +74,19 @@ func TestUnknownSourceNeverScalesUp(t *testing.T) {
 		t.Errorf("as-broadcast was scaled: %q", chain)
 	}
 }
+
+func TestFFmpegReason(t *testing.T) {
+	out := "[h264_nvenc @ 0000022751d81fc0] Driver does not support the required nvenc API version. Required: 13.1 Found: 13.0\r\n" +
+		"[h264_nvenc @ 0000022751d81fc0] The minimum required Nvidia driver for nvenc is 610.00 or newer\r\n" +
+		"[vost#0:0/h264_nvenc @ 0000022751d81d40] [enc:h264_nvenc @ 0000022751d498c0] Error while opening encoder\r\n"
+	want := "Driver does not support the required nvenc API version. Required: 13.1 Found: 13.0 The minimum required Nvidia driver for nvenc is 610.00 or newer"
+	if got := ffmpegReason(out); got != want {
+		t.Errorf("ffmpegReason = %q, want %q", got, want)
+	}
+	if got := ffmpegReason("[out#0 @ 0x1] Nothing was written\n"); got != "Nothing was written" {
+		t.Errorf("fallback = %q", got)
+	}
+	if got := ffmpegReason(""); got != "" {
+		t.Errorf("empty = %q", got)
+	}
+}

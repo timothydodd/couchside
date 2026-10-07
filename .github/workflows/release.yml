@@ -2,7 +2,8 @@ name: release
 
 # Push a tag like v0.2.0 to publish:
 #  - zips for Linux, macOS and Windows (single binary with the web UI embedded)
-#  - a GitHub Release with those zips and SHA-256 checksums
+#  - the Windows installer (windows-installer.yml: service, ffmpeg included)
+#  - a GitHub Release with those and SHA-256 checksums
 #  - a multi-arch container: ghcr.io/<owner>/couchside:v<version>, :<version>, :<major>.<minor>, :latest
 on:
   push:
@@ -143,6 +144,13 @@ jobs:
           path: couchside-*.zip
           retention-days: 7
 
+  installer:
+    needs: web
+    uses: ./.github/workflows/windows-installer.yml
+    with:
+      version: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+    secrets: inherit
+
   container:
     # The image builds its own web UI, so it waits for that build to pass too.
     needs: [chart-version, verify, web]
@@ -184,7 +192,7 @@ jobs:
 
   release:
     if: github.event_name == 'push'
-    needs: [binaries, container]
+    needs: [binaries, installer, container]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -193,16 +201,22 @@ jobs:
         with:
           pattern: zip-*
           merge-multiple: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: windows-installer
       - name: checksums
-        run: sha256sum couchside-*.zip > SHA256SUMS.txt
+        run: sha256sum couchside-*.zip couchside-*.exe > SHA256SUMS.txt
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: |
             couchside-*.zip
+            couchside-*.exe
             SHA256SUMS.txt
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
             **Container:** `docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}`
+
+            **Windows installer** (`couchside-*-windows-amd64-setup.exe`) installs Couchside as a Windows service with ffmpeg included and picks your GPU encoder (NVIDIA or Intel) by itself.
 
             **Zips** hold a single `couchside` binary with the web UI built in. It needs `ffmpeg` and `ffprobe` installed; see QUICKSTART.txt inside.
