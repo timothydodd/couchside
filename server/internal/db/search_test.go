@@ -64,3 +64,30 @@ func TestSearchRowsAndHydration(t *testing.T) {
 		t.Fatalf("items = %+v, %v", items, err)
 	}
 }
+
+func TestSearchRowsIncludePeople(t *testing.T) {
+	d := openTest(t)
+	bg := context.Background()
+	lib, _ := d.CreateLibrary(bg, "Movies", "/m", "movies")
+	film, _, _ := d.EnsureItem(bg, lib, "movie", "Heat", 1995)
+	if err := d.SetCredits(bg, film, []Credit{{PersonID: 1158, Name: "Al Pacino", ProfilePath: "/a.jpg", Kind: "cast"}, {PersonID: 380, Name: "Robert De Niro", Kind: "cast"}}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := d.SearchRows(bg, false, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var people int
+	for _, r := range rows {
+		if r.Kind == "person" {
+			people++
+		}
+	}
+	if people != 2 {
+		t.Fatalf("people in the index = %d, want 2", people)
+	}
+	got, err := d.PeopleByID(bg, []int64{380, 1158, 999})
+	if err != nil || len(got) != 2 || got[0].Name != "Robert De Niro" || !got[1].HasPhoto {
+		t.Fatalf("people by id = %+v, %v (want the ids' order, unknown ones dropped)", got, err)
+	}
+}

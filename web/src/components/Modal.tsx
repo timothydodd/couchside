@@ -29,8 +29,8 @@ export default function Modal({
   const close = () => !busy && onClose();
   useDialog(ref, close);
   return (
-    <div className={`fixed inset-0 ${zIndex} flex items-center justify-center bg-backdrop/55 p-4`} onClick={close}>
-      <div className={`card w-full shadow-[var(--shadow-md)] ${className}`} onClick={(e) => e.stopPropagation()} role={role} aria-modal="true" aria-label={label} ref={ref}>
+    <div className={`anim-fade fixed inset-0 ${zIndex} flex items-center justify-center bg-backdrop/55 p-4`} onClick={close}>
+      <div className={`anim-pop card w-full shadow-[var(--shadow-md)] ${className}`} onClick={(e) => e.stopPropagation()} role={role} aria-modal="true" aria-label={label} ref={ref}>
         {children}
       </div>
     </div>

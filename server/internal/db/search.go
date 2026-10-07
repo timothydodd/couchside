@@ -55,6 +55,16 @@ func (d *DB) SearchRows(ctx context.Context, withTV bool, now int64) ([]SearchRo
 		}); err != nil {
 		return nil, err
 	}
+	// People are only kept while credited (PrunePeople), so every row is in the library.
+	if err := add(`SELECT id, name FROM people`, nil, func(scan func(...any) error) (SearchRow, error) {
+		r := SearchRow{Kind: "person"}
+		var name string
+		err := scan(&r.ID, &name)
+		r.Names = []string{name}
+		return r, err
+	}); err != nil {
+		return nil, err
+	}
 	if !withTV {
 		return out, nil
 	}
@@ -185,4 +195,29 @@ func inOrder[T any](ids []int64, rows []T, id func(T) int64) []T {
 		}
 	}
 	return out
+}
+
+// PeopleByID returns people in the order of ids (search ranking), skipping any gone.
+func (d *DB) PeopleByID(ctx context.Context, ids []int64) ([]Person, error) {
+	if len(ids) == 0 {
+		return []Person{}, nil
+	}
+	in, args := inList(ids)
+	rows, err := d.sql.QueryContext(ctx, `SELECT id, name, profile_path <> '' FROM people WHERE id IN `+in, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	people := []Person{}
+	for rows.Next() {
+		var p Person
+		if err := rows.Scan(&p.ID, &p.Name, &p.HasPhoto); err != nil {
+			return nil, err
+		}
+		people = append(people, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return inOrder(ids, people, func(p Person) int64 { return p.ID }), nil
 }

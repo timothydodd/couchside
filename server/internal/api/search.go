@@ -57,14 +57,15 @@ type searchResult struct {
 	Movies   []db.ItemSummary `json:"movies"`
 	Series   []db.ItemSummary `json:"series"`
 	Episodes []db.PlayInfo    `json:"episodes"`
+	People   []db.Person      `json:"people"`
 	Channels []db.Channel     `json:"channels"`
 	Programs []programHit     `json:"programs"`
 }
 
-var searchKinds = []string{"movie", "series", "episode", "channel", "program"}
+var searchKinds = []string{"movie", "series", "episode", "person", "channel", "program"}
 
-// search finds movies, shows, episodes and (with live TV) channels and guide
-// programs that haven't ended. ?q= is the text, ?limit= caps each group
+// search finds movies, shows, episodes, people from the credits and (with
+// live TV) channels and guide programs that haven't ended. ?q= is the text, ?limit= caps each group
 // (default 10, at most 50), and ?kinds= (comma separated) narrows the groups.
 // maxSearchQuery is how much of a query is used, in characters.
 const maxSearchQuery = 100
@@ -97,7 +98,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 		query = string(r[:maxSearchQuery])
 	}
 	out := searchResult{Query: query, Movies: []db.ItemSummary{}, Series: []db.ItemSummary{},
-		Episodes: []db.PlayInfo{}, Channels: []db.Channel{}, Programs: []programHit{}}
+		Episodes: []db.PlayInfo{}, People: []db.Person{}, Channels: []db.Channel{}, Programs: []programHit{}}
 	q := search.NewQuery(out.Query)
 	if q.Empty() {
 		writeJSON(w, http.StatusOK, out)
@@ -129,6 +130,10 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if out.Episodes, err = s.db.EpisodePlays(ctx, ids("episode")); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if out.People, err = s.db.PeopleByID(ctx, ids("person")); err != nil {
 		writeErr(w, err)
 		return
 	}

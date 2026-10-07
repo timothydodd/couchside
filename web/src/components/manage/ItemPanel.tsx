@@ -79,8 +79,8 @@ export default function ItemPanel({
 
   return (
     <>
-      <div className="fixed inset-0 z-30 bg-backdrop/30" onClick={onClose} />
-      <aside className="side-panel" role="dialog" aria-modal="true" aria-label={`Edit ${what}`} ref={dialog}>
+      <div className="anim-fade fixed inset-0 z-30 bg-backdrop/30" onClick={onClose} />
+      <aside className="side-panel anim-slide-right" role="dialog" aria-modal="true" aria-label={`Edit ${what}`} ref={dialog}>
         <div className="flex items-start gap-3 px-4 py-4">
           <div className="poster relative w-12 shrink-0">
             <PosterArt item={item} bare />

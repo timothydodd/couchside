@@ -33,7 +33,7 @@ export default function SettingsMenu({ sections, onClose }: { sections: SettingS
 
   return (
     <div
-      className="card absolute bottom-16 right-3 z-30 max-h-[70vh] w-80 overflow-y-auto p-1.5 text-sm shadow-[var(--shadow-md)]"
+      className="anim-pop card absolute bottom-16 right-3 z-30 max-h-[70vh] w-80 origin-bottom-right overflow-y-auto p-1.5 text-sm shadow-[var(--shadow-md)]"
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
       onKeyDown={menuKeys}
