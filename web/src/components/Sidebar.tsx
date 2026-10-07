@@ -1,34 +1,19 @@
-import { Activity, ChevronDown, ChevronRight, Clapperboard, FolderOpen, Home, RadioTower, Settings, Tv, type LucideIcon } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import Link from "./Link";
 import ProfileAvatar from "./ProfileAvatar";
 import { SECTIONS } from "./settings/sections";
 import { SearchInput } from "./ui";
-import { useRouter, type Route } from "../stores/router";
+import { NAV_LIVE, NAV_MAIN, NAV_MANAGE, sectionOf, type NavItem, type NavName } from "./nav";
+import { JobsBadge, RecBadge } from "./StatusBits";
+import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
 import { useIsAdmin } from "../stores/auth";
 import { useProfile } from "../stores/profile";
 
-type NavName = Route["name"];
-
-const ITEMS: { name: NavName; to: string; label: string; Icon: LucideIcon }[] = [
-  { name: "home", to: "/", label: "Home", Icon: Home },
-  { name: "movies", to: "/movies", label: "Movies", Icon: Clapperboard },
-  { name: "tv", to: "/tv", label: "TV Shows", Icon: Tv },
-];
-
-const LIVE = { name: "livetv" as NavName, to: "/livetv", label: "Live TV", Icon: RadioTower };
-
-const MANAGE: { name: NavName; to: string; label: string; Icon: LucideIcon }[] = [
-  { name: "activity", to: "/activity", label: "Activity", Icon: Activity },
-  { name: "libraries", to: "/libraries", label: "Libraries", Icon: FolderOpen },
-  { name: "settings", to: "/settings", label: "Settings", Icon: Settings },
-];
-
 export default function Sidebar() {
   const route = useRouter((s) => s.route);
   const counts = useStatus((s) => s.status?.counts);
-  const jobs = useStatus((s) => s.status?.jobs);
   const profile = useProfile((s) => s.current);
   const admin = useIsAdmin();
 
@@ -38,18 +23,8 @@ export default function Sidebar() {
   const badge = (name: NavName) => {
     if (name === "movies" && counts?.movies) return <Count n={counts.movies} />;
     if (name === "tv" && counts?.series) return <Count n={counts.series} />;
-    if (name === "livetv" && liveTv?.recording)
-      return (
-        <span className="tint-critical inline-flex items-center gap-1 rounded px-1.5 text-[11px] font-semibold" title={`${liveTv.recording} recording now`}>
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-critical" />
-          REC
-        </span>
-      );
-    if (name === "activity" && jobs) {
-      if (jobs.failed) return <Count n={jobs.failed} tint="tint-critical" title={`${jobs.failed} failed`} />;
-      const active = jobs.queued + jobs.running;
-      if (active) return <Count n={active} tint="tint-info" title={`${jobs.running} running, ${jobs.queued} queued`} />;
-    }
+    if (name === "livetv") return <RecBadge />;
+    if (name === "activity") return <JobsBadge />;
     return null;
   };
 
@@ -57,7 +32,7 @@ export default function Sidebar() {
   const settingsOpen = admin && route.name === "settings";
   const section = route.name === "settings" ? route.section : null;
 
-  const item = ({ name, to, label, Icon }: (typeof ITEMS)[number]) => {
+  const item = ({ name, to, label, Icon }: NavItem) => {
     // While Settings is open, the parent is "current" only on your own settings.
     const active = name === "settings" && settingsOpen ? section === "you" : current === name;
     return (
@@ -88,15 +63,15 @@ export default function Sidebar() {
       </Link>
       <SearchBox />
       <div className="flex flex-col gap-0.5">
-        {ITEMS.map(item)}
-        {liveTv?.configured && item(LIVE)}
+        {NAV_MAIN.map(item)}
+        {liveTv?.configured && item(NAV_LIVE)}
       </div>
-      <div className="mb-1 mt-5 px-2.5 text-[10px] font-semibold uppercase tracking-widest text-content-muted">Manage</div>
-      {/* Users only have their own settings to manage. */}
+      {/* Users only have their own settings, which isn't a group worth a heading. */}
+      <div className={`mb-1 mt-5 px-2.5 text-[10px] font-semibold uppercase tracking-widest text-content-muted ${admin ? "" : "sr-only"}`}>{admin ? "Manage" : "Account"}</div>
       <div className="flex flex-col gap-0.5">
-        {MANAGE.filter((m) => admin || m.name === "settings").map(item)}
+        {NAV_MANAGE.filter((m) => admin || !m.admin).map(item)}
         {settingsOpen && (
-          <div className="subnav" aria-label="Settings sections">
+          <div className="subnav" role="group" aria-label="Settings sections">
             {SECTIONS.filter((s) => s.id !== "you").map(({ id, to, label, Icon }) => (
               <Link key={id} to={to} aria-current={section === id ? "page" : undefined} className="subnav-item">
                 <Icon size={14} className={section === id ? "text-accent" : ""} />
@@ -120,14 +95,6 @@ export default function Sidebar() {
       </div>
     </nav>
   );
-}
-
-/** The nav section a page belongs to: detail pages highlight their section. */
-export function sectionOf(route: Route): NavName {
-  if (route.name === "item" || route.name === "play" || route.name === "person") return "home";
-  if (route.name === "watch" || route.name === "recording") return "livetv";
-  if (route.name === "manage") return "libraries";
-  return route.name;
 }
 
 /**
@@ -194,10 +161,6 @@ export function SearchBox({ hotkey = true, autoFocus = false, className = "mb-4"
   );
 }
 
-function Count({ n, tint = "tint-muted", title }: { n: number; tint?: string; title?: string }) {
-  return (
-    <span className={`rounded px-1.5 text-[11px] font-semibold tabular-nums ${tint}`} title={title}>
-      {n.toLocaleString()}
-    </span>
-  );
+function Count({ n }: { n: number }) {
+  return <span className="badge tint-muted tabular-nums">{n.toLocaleString()}</span>;
 }

@@ -199,12 +199,29 @@ func (d tmdbDetails) credits(kind Kind) []Credit {
 
 type tmdbSeason struct {
 	Episodes []struct {
+		ID          int64   `json:"id"`
 		Episode     int     `json:"episode_number"`
 		Season      int     `json:"season_number"`
 		Name        string  `json:"name"`
 		AirDate     string  `json:"air_date"`
+		Overview    string  `json:"overview"`
+		Runtime     int     `json:"runtime"`
+		StillPath   string  `json:"still_path"`
 		VoteAverage float64 `json:"vote_average"`
 		VoteCount   int     `json:"vote_count"`
+		GuestStars  []struct {
+			ID          int64  `json:"id"`
+			Name        string `json:"name"`
+			Character   string `json:"character"`
+			ProfilePath string `json:"profile_path"`
+			Order       int    `json:"order"`
+		} `json:"guest_stars"`
+		Crew []struct {
+			ID          int64  `json:"id"`
+			Name        string `json:"name"`
+			Job         string `json:"job"`
+			ProfilePath string `json:"profile_path"`
+		} `json:"crew"`
 	} `json:"episodes"`
 }
 
@@ -284,8 +301,29 @@ func (t *TMDB) Season(ctx context.Context, seriesID string, season int) ([]Episo
 	}
 	out := make([]Episode, 0, len(s.Episodes))
 	for _, e := range s.Episodes {
-		out = append(out, Episode{Season: e.Season, Episode: e.Episode, Title: e.Name, Released: e.AirDate,
-			Rating: rating(e.VoteAverage, e.VoteCount)})
+		ep := Episode{Season: e.Season, Episode: e.Episode, Title: e.Name, Released: e.AirDate,
+			Rating: rating(e.VoteAverage, e.VoteCount), Plot: e.Overview, StillURL: poster(e.StillPath, "w780"), TMDBID: e.ID}
+		if e.Runtime > 0 {
+			rt := e.Runtime
+			ep.RuntimeMin = &rt
+		}
+		for i, c := range e.GuestStars {
+			if i >= castLimit {
+				break
+			}
+			ep.Credits = append(ep.Credits, Credit{PersonID: c.ID, Name: c.Name, ProfilePath: c.ProfilePath, Kind: "cast", Role: c.Character, Order: i})
+		}
+		seen := map[string]bool{}
+		for _, c := range e.Crew {
+			rank, ok := crewJobs[c.Job]
+			key := fmt.Sprintf("%d|%s", c.ID, c.Job)
+			if !ok || seen[key] {
+				continue
+			}
+			seen[key] = true
+			ep.Credits = append(ep.Credits, Credit{PersonID: c.ID, Name: c.Name, ProfilePath: c.ProfilePath, Kind: "crew", Role: c.Job, Order: 100 + rank})
+		}
+		out = append(out, ep)
 	}
 	return out, nil
 }

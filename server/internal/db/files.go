@@ -108,6 +108,11 @@ func (d *DB) RecordingsNeedingCommercials(ctx context.Context, libraryID int64) 
 }
 
 // ItemFiles returns all of an item's files, in fileRoleOrder.
+// EpisodeCopies lists an episode's files, best (biggest) first.
+func (d *DB) EpisodeCopies(ctx context.Context, episodeID int64) ([]File, error) {
+	return d.queryFiles(ctx, `WHERE f.episode_id = ? ORDER BY f.size DESC`, episodeID)
+}
+
 func (d *DB) ItemFiles(ctx context.Context, itemID int64) ([]File, error) {
 	return d.queryFiles(ctx, `WHERE f.media_item_id = ?`+fileRoleOrder, itemID)
 }

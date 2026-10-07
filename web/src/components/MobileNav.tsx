@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Activity, Clapperboard, FolderOpen, Home, LogOut, Menu, RadioTower, Search, Settings, Tv, Users, X, type LucideIcon } from "lucide-react";
+import { LogOut, Menu, Search, Users, X, type LucideIcon } from "lucide-react";
 import Link from "./Link";
 import ProfileAvatar from "./ProfileAvatar";
-import { sectionOf } from "./Sidebar";
+import { NAV_LIVE, NAV_MAIN, NAV_MANAGE, sectionOf } from "./nav";
+import { JobsBadge, RecBadge, useJobsSummary } from "./StatusBits";
 import { useAuth, useIsAdmin } from "../stores/auth";
 import { useProfile } from "../stores/profile";
-import { useRouter, type Route } from "../stores/router";
+import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
 import { useDialog } from "../lib/dialog";
 import { attempt } from "../lib/notices";
@@ -19,19 +20,13 @@ import { fmtVersion } from "../lib/format";
 
 export function MobileTopBar() {
   const profile = useProfile((s) => s.current);
-  const recording = useStatus((s) => s.status?.livetv?.recording);
   return (
     <header className="mobile-bar flex shrink-0 items-center gap-2 border-b border-border-light bg-surface md:hidden">
       <Link to="/" className="flex items-center gap-2" aria-label="Couchside home">
         <img src="/icons/logo-64.png" alt="" className="h-7 w-7" />
         <span className="text-base font-semibold text-content">Couchside</span>
       </Link>
-      {!!recording && (
-        <Link to="/livetv/recordings" className="tint-critical ml-1 inline-flex items-center gap-1 rounded px-1.5 text-[11px] font-semibold">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-critical" />
-          REC
-        </Link>
-      )}
+      <RecBadge to="/livetv/recordings" className="ml-1" />
       <div className="flex-1" />
       <Link to="/search" className="touch-target text-content-secondary hover:text-content" aria-label="Search">
         <Search size={20} />
@@ -45,19 +40,13 @@ export function MobileTopBar() {
   );
 }
 
-const TABS: { name: Route["name"]; to: string; label: string; Icon: LucideIcon }[] = [
-  { name: "home", to: "/", label: "Home", Icon: Home },
-  { name: "movies", to: "/movies", label: "Movies", Icon: Clapperboard },
-  { name: "tv", to: "/tv", label: "TV", Icon: Tv },
-];
-
 export function MobileTabBar() {
   const route = useRouter((s) => s.route);
   const liveTv = useStatus((s) => s.status?.livetv?.configured);
   const [more, setMore] = useState(false);
   const current = sectionOf(route);
-  const tabs = liveTv ? [...TABS, { name: "livetv" as Route["name"], to: "/livetv", label: "Live TV", Icon: RadioTower }] : TABS;
-  const inMore = ["activity", "libraries", "settings", "search"].includes(current);
+  const tabs = liveTv ? [...NAV_MAIN, NAV_LIVE] : NAV_MAIN;
+  const inMore = NAV_MANAGE.some((m) => m.name === current);
 
   // Any navigation closes the sheet.
   useEffect(() => setMore(false), [route]);
@@ -65,12 +54,12 @@ export function MobileTabBar() {
   return (
     <>
       <nav aria-label="Main" className="mobile-tabs flex shrink-0 border-t border-border-light bg-surface md:hidden">
-        {tabs.map(({ name, to, label, Icon }) => {
+        {tabs.map(({ name, to, label, short, Icon }) => {
           const active = current === name;
           return (
             <Link key={name} to={to} aria-current={active ? "page" : undefined} className={`mobile-tab ${active ? "text-accent" : "text-content-muted"}`}>
               <Icon size={22} />
-              <span>{label}</span>
+              <span>{short ?? label}</span>
             </Link>
           );
         })}
@@ -90,8 +79,7 @@ function MoreSheet({ onClose }: { onClose: () => void }) {
   const logout = useAuth((s) => s.logout);
   const profile = useProfile((s) => s.current);
   const status = useStatus((s) => s.status);
-  const jobs = status?.jobs;
-  const active = jobs ? jobs.queued + jobs.running : 0;
+  const { label } = useJobsSummary();
 
   const sheet = useRef<HTMLDivElement>(null);
   useDialog(sheet, onClose);
@@ -118,19 +106,7 @@ function MoreSheet({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="flex flex-col py-1">
-          {admin &&
-            row(
-              "/activity",
-              "Activity",
-              Activity,
-              active > 0 ? (
-                <span className="tint-info rounded px-1.5 text-[11px] font-semibold">{active}</span>
-              ) : jobs?.failed ? (
-                <span className="tint-critical rounded px-1.5 text-[11px] font-semibold">{jobs.failed} failed</span>
-              ) : null,
-            )}
-          {admin && row("/libraries", "Libraries", FolderOpen)}
-          {row("/settings", "Settings", Settings)}
+          {NAV_MANAGE.filter((m) => admin || !m.admin).map((m) => row(m.to, m.label, m.Icon, m.name === "activity" ? <JobsBadge /> : undefined))}
           {row("/profiles", "Switch profile", Users)}
           <button type="button" className="sheet-row" onClick={attempt("Couldn't sign out", () => logout())}>
             <LogOut size={20} className="text-content-muted" />
@@ -138,7 +114,7 @@ function MoreSheet({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="border-t border-border-light px-4 py-3 text-xs text-content-muted">
-          {status ? (active ? jobs?.current || `${active} jobs running` : "Server idle") : "Connecting…"}
+          {status ? label : "Connecting…"}
           {status && <span className="float-right mono">{fmtVersion(status.version)}</span>}
         </div>
       </div>

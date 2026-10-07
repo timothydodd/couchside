@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ErrorNote } from "../ui";
+import { ErrorNote, GoodNote } from "../ui";
 import { api, useApi } from "../../lib/api";
 import { errText } from "../../lib/errors";
 
@@ -119,7 +119,7 @@ export default function SingleSignOn() {
                 Turn off
               </button>
             )}
-            {msg && <span className={`text-xs ${msg.ok ? "text-good" : "text-critical"}`}>{msg.text}</span>}
+            {msg && (msg.ok ? <GoodNote>{msg.text}</GoodNote> : <ErrorNote>{msg.text}</ErrorNote>)}
           </div>
         </form>
       )}

@@ -1,30 +1,32 @@
-import { useEffect, useState } from "react";
-import { ArrowLeft, Bookmark, BookmarkCheck, Check, Eye, EyeOff, Play, RotateCcw, Star, Trash2, Wand2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Bookmark, BookmarkCheck, Eye, EyeOff, Pencil, Play, Star, Wand2 } from "lucide-react";
+import EpisodeCard from "../components/EpisodeCard";
+import FilesCard from "../components/item/FilesCard";
+import ItemPanel, { type PanelSection } from "../components/manage/ItemPanel";
 import { CastRow, CrewLine } from "../components/Credits";
 import Link from "../components/Link";
 import { PosterArt } from "../components/PosterCard";
-import { EmptyState, ErrorNote, Meter, Spinner } from "../components/ui";
-import { api, backdropUrl, posterUrl, stillUrl, useApi } from "../lib/api";
+import { BackButton, EmptyState, ErrorNote, Loading } from "../components/ui";
+import { api, backdropUrl, posterUrl, useApi } from "../lib/api";
+import { usePhone } from "../lib/media";
+import { useScrollEdges } from "../lib/scroll";
 import { fmtAirDate, fmtBytes, fmtClock, fmtResolution, fmtRuntime, titleLink } from "../lib/format";
-import { canDirectPlay } from "../lib/playback";
 import { EpisodeActions, ExtraActions, TitleActions } from "../components/item/AdminMenus";
-import { PROBLEM_TEXT, type EpisodeRow, type ItemDetail, type MediaFile } from "../lib/types";
+import type { EpisodeRow, ItemDetail, MediaFile } from "../lib/types";
 import { useIsAdmin } from "../stores/auth";
-import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
+import { featureFiles, nextEpisode } from "../lib/items";
 import { attempt } from "../lib/notices";
-import { errText } from "../lib/errors";
 
-export default function ItemPage({ id }: { id: number }) {
+export default function ItemPage({ id, season, edit }: { id: number; season?: number; edit?: boolean }) {
   const { data, error, loading, reload } = useApi<ItemDetail>(`/api/items/${id}`);
-  const back = useRouter((s) => s.back);
   const admin = useIsAdmin();
+  // The Edit panel: open from the button, from "Fix match", or by ?edit=1 (the library table links here).
+  const [editing, setEditing] = useState<PanelSection | null>(edit ? "details" : null);
 
   if (loading && !data) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <Spinner size={22} />
-      </div>
+      <Loading fill />
     );
   }
   if (!data) {
@@ -87,9 +89,7 @@ export default function ItemPage({ id }: { id: number }) {
           <div className="poster-placeholder absolute inset-0" />
         )}
         <div className="hero-fade absolute inset-0" />
-        <button onClick={() => back(isSeries ? "/tv" : "/movies")} className="btn-ghost absolute left-4 top-4 !bg-surface/60 backdrop-blur md:left-6 md:top-5">
-          <ArrowLeft size={15} /> Back
-        </button>
+        <BackButton fallback={isSeries ? "/tv" : "/movies"} overlay />
       </section>
 
       <div className="relative -mt-24 flex flex-col gap-6 gutter sm:-mt-40 md:flex-row">
@@ -163,6 +163,11 @@ export default function ItemPage({ id }: { id: number }) {
               {allWatched ? <EyeOff size={15} /> : <Eye size={15} />}
               {allWatched ? "Mark unwatched" : "Mark watched"}
             </button>
+            {admin && (
+              <button className="btn-ghost !py-2" onClick={() => setEditing("details")}>
+                <Pencil size={15} /> Edit
+              </button>
+            )}
             {admin && <TitleActions item={item} onChange={reload} />}
           </div>
 
@@ -178,14 +183,14 @@ export default function ItemPage({ id }: { id: number }) {
 
           <CrewLine crew={data.crew ?? []} />
 
-          {admin && <MatchPanel id={item.id} status={item.matchStatus} imdbId={item.imdbId} parsed={`${item.parsedTitle}${item.parsedYear ? ` (${item.parsedYear})` : ""}`} onDone={reload} />}
+          {admin && <MatchLine item={item} onFix={() => setEditing("match")} onDone={reload} />}
         </div>
       </div>
 
       <div className="mt-6">
         <CastRow cast={data.cast ?? []} />
       </div>
-      {isSeries && seasons && <Seasons item={item} seasons={seasons} admin={admin} onChange={reload} />}
+      {isSeries && seasons && <Seasons item={item} seasons={seasons} open={season} admin={admin} onChange={reload} />}
       {extras.length > 0 && <Extras item={item} files={extras} admin={admin} onChange={reload} />}
       {!isSeries && files.length > extras.length && <FilesCard files={files.filter((f) => f.role !== "extra")} onChange={reload} />}
       {error && (
@@ -193,16 +198,9 @@ export default function ItemPage({ id }: { id: number }) {
           <ErrorNote>{error}</ErrorNote>
         </div>
       )}
+      {editing && admin && <ItemPanel item={item} section={editing} onClose={() => setEditing(null)} onChanged={() => void reload()} />}
     </div>
   );
-}
-
-/** The files that make up a movie: its parts in order (the best copy of each), or its best copy. */
-function featureFiles(files: MediaFile[], chosen?: MediaFile): MediaFile[] {
-  const parts = files.filter((f) => f.role === "part" && !f.problem); // server order: part number, then biggest
-  if (parts.length) return parts.filter((f, i) => i === 0 || parts[i - 1].partNo !== f.partNo);
-  const copy = chosen ?? files.find((f) => f.role === "copy");
-  return copy ? [copy] : [];
 }
 
 /** A copy of a movie, as the version chooser names it: "4K · HEVC · Extended · 54 GB". */
@@ -210,93 +208,34 @@ function versionLabel(f: MediaFile): string {
   return [fmtResolution(f.width, f.height), f.videoCodec.toUpperCase(), f.edition, fmtBytes(f.size)].filter(Boolean).join(" · ");
 }
 
-/** First episode that isn't finished: resume it, or start the next one. */
-function nextEpisode(seasons: NonNullable<ItemDetail["seasons"]>): EpisodeRow | undefined {
-  const all = seasons.flatMap((s) => s.episodes).filter((e) => !e.problem);
-  return all.find((e) => !e.watched) ?? all[0];
-}
-
-function MatchPanel({ id, status, imdbId, parsed, onDone }: { id: number; status: string; imdbId: string; parsed: string; onDone: () => void }) {
+/** For admins: where the match stands, with "Fix match" opening the Edit panel on it. Polls while a match is pending. */
+function MatchLine({ item, onFix, onDone }: { item: ItemDetail["item"]; onFix: () => void; onDone: () => void }) {
   const hasProvider = !!useStatus((s) => s.status?.providers.length);
-  const [open, setOpen] = useState(false);
-  const [value, setValue] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  // While a match is pending, poll so the page fills in on its own.
   useEffect(() => {
-    if (status !== "pending") return;
+    if (item.matchStatus !== "pending") return;
     const t = setInterval(onDone, 2500);
     return () => clearInterval(t);
-  }, [status, onDone]);
-
+  }, [item.matchStatus, onDone]);
   if (!hasProvider) return null;
-
-  const submit = async (imdb: string) => {
-    setBusy(true);
-    setErr(null);
-    try {
-      await api(`/api/items/${id}/match`, { method: "POST", json: { imdbId: imdb } });
-      setOpen(false);
-      setValue("");
-      onDone();
-    } catch (e) {
-      setErr(errText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
+  const parsed = `${item.parsedTitle}${item.parsedYear ? ` (${item.parsedYear})` : ""}`;
   return (
-    <div className="mt-5">
-      {!open ? (
-        <div className="flex flex-wrap items-center gap-2 text-xs text-content-muted">
-          {status === "unmatched" && <span className="tint-warning rounded px-1.5 py-0.5 font-semibold">Unmatched</span>}
-          <span>
-            Read from files as <span className="text-content-secondary">{parsed}</span>
-            {imdbId && (
-              <>
-                {" · "}
-                <a href={titleLink(imdbId) ?? undefined} target="_blank" rel="noreferrer" className="hover:text-accent">
-                  {imdbId}
-                </a>
-              </>
-            )}
-          </span>
-          <button className="btn-quiet !text-xs" onClick={() => setOpen(true)}>
-            <Wand2 size={13} /> Fix match
-          </button>
-        </div>
-      ) : (
-        <div className="card max-w-xl p-3">
-          <label className="field-label" htmlFor="imdb">
-            IMDb or TMDB id or URL
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="imdb"
-              className="field min-w-0 flex-1"
-              placeholder="tt0133093, or an imdb.com or themoviedb.org link"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && value.trim() && void submit(value)}
-              autoFocus
-            />
-            <button className="btn-primary" disabled={busy || !value.trim()} onClick={() => void submit(value)}>
-              <Check size={15} /> Match
-            </button>
-          </div>
-          <div className="mt-2 flex items-center gap-2">
-            <button className="btn-quiet !text-xs" disabled={busy} onClick={() => void submit("")}>
-              <RotateCcw size={13} /> Retry automatic match
-            </button>
-            <button className="btn-quiet !text-xs ml-auto" onClick={() => setOpen(false)}>
-              Cancel
-            </button>
-          </div>
-          {err && <div className="mt-2 text-xs text-critical">{err}</div>}
-        </div>
-      )}
+    <div className="mt-5 flex flex-wrap items-center gap-2 text-xs text-content-muted">
+      {item.matchStatus === "unmatched" && <span className="badge tint-warning">Unmatched</span>}
+      {item.matchStatus === "pending" && <span className="badge tint-info">Matching…</span>}
+      <span>
+        Read from files as <span className="text-content-secondary">{parsed}</span>
+        {item.imdbId && (
+          <>
+            {" · "}
+            <a href={titleLink(item.imdbId) ?? undefined} target="_blank" rel="noreferrer" className="hover:text-accent">
+              {item.imdbId}
+            </a>
+          </>
+        )}
+      </span>
+      <button className="btn-quiet !text-xs" onClick={onFix}>
+        <Wand2 size={13} /> Fix match
+      </button>
     </div>
   );
 }
@@ -304,213 +243,103 @@ function MatchPanel({ id, status, imdbId, parsed, onDone }: { id: number; status
 function Seasons({
   item,
   seasons,
+  open,
   admin,
   onChange,
 }: {
   item: ItemDetail["item"];
   seasons: NonNullable<ItemDetail["seasons"]>;
+  /** The season to open on (from ?season=, coming back from an episode); else the first with something unwatched. */
+  open?: number;
   admin: boolean;
   onChange: () => void;
 }) {
   const firstUnwatched = seasons.find((s) => s.episodes.some((e) => !e.watched))?.season ?? seasons[0]?.season;
-  const [season, setSeason] = useState(firstUnwatched);
+  const [season, setSeason] = useState(open ?? firstUnwatched);
   const current = seasons.find((s) => s.season === season) ?? seasons[0];
+  const tabs = useRef<HTMLDivElement>(null);
+  useScrollEdges(tabs);
+  // A show opened on a later season: bring its tab into view.
+  useEffect(() => {
+    tabs.current?.querySelector<HTMLElement>(".navtab-active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [season]);
   if (!current) return null;
   return (
     <section className="mt-10 gutter">
-      <div className="flex gap-1 overflow-x-auto border-b border-border-light">
+      <div ref={tabs} className="row-scroll flex gap-1 overflow-x-auto border-b border-border-light">
         {seasons.map((s) => (
-          <button key={s.season} onClick={() => setSeason(s.season)} className={`navtab !text-sm ${s.season === current.season ? "navtab-active" : ""}`}>
+          <button key={s.season} type="button" onClick={() => setSeason(s.season)} className={`navtab shrink-0 !text-sm ${s.season === current.season ? "navtab-active" : ""}`}>
             {s.season === 0 ? "Specials" : `Season ${s.season}`}
           </button>
         ))}
       </div>
-      <ol className="mt-2 flex flex-col">
+      <TileList>
         {current.episodes.map((e) => (
-          <EpisodeItem key={e.id} e={e} actions={admin ? <EpisodeActions item={item} e={e} onChange={onChange} /> : undefined} />
+          <li key={e.id}>
+            <EpisodeTile e={e} actions={admin ? <EpisodeActions item={item} e={e} onChange={onChange} /> : undefined} />
+          </li>
         ))}
-      </ol>
+      </TileList>
     </section>
   );
 }
 
-function EpisodeItem({ e, actions }: { e: EpisodeRow; actions?: React.ReactNode }) {
+/** Episode and extra tiles: a grid from tablet width up, a list on phones. */
+function TileList({ children }: { children: React.ReactNode }) {
+  const phone = usePhone();
+  return <ol className={phone ? "mt-2 flex flex-col" : "mt-4 grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-5"}>{children}</ol>;
+}
+
+function EpisodeTile({ e, actions }: { e: EpisodeRow; actions?: React.ReactNode }) {
+  const phone = usePhone();
+  const name = e.airDate ? fmtAirDate(e.airDate) : `S${e.season} E${e.episode}`;
   return (
-    <StillRow file={e} actions={actions}>
-      <div className="flex items-baseline gap-2">
-        {e.airDate ? (
-          <span className="shrink-0 text-xs font-semibold tabular-nums text-content-muted">{fmtAirDate(e.airDate)}</span>
-        ) : (
-          <span className="text-xs font-semibold tabular-nums text-content-muted">E{e.episode}</span>
-        )}
-        <span className="truncate text-sm font-medium text-content">{e.title || (e.airDate ? "" : `Episode ${e.episode}`)}</span>
-      </div>
-      <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-content-muted">
-        {e.released && <span>{e.released}</span>}
-        {e.durationSec && <span>{fmtRuntime(e.durationSec)}</span>}
-        {e.rating != null && (
-          <span className="inline-flex items-center gap-1">
-            <Star size={11} className="fill-warning text-warning" />
-            {e.rating.toFixed(1)}
-          </span>
-        )}
-      </div>
-    </StillRow>
+    <EpisodeCard
+      file={e}
+      layout={phone ? "row" : "grid"}
+      eyebrow={e.airDate ? fmtAirDate(e.airDate) : `E${e.episode}`}
+      title={e.title || (e.airDate ? "" : `Episode ${e.episode}`)}
+      to={`/episode/${e.id}`}
+      playLabel={`Play ${name}${e.title ? ` ${e.title}` : ""}`}
+      actions={actions}
+      meta={
+        (e.released || e.durationSec || e.rating != null) && (
+          <>
+            {e.released && <span>{e.released}</span>}
+            {e.durationSec && <span>{fmtRuntime(e.durationSec)}</span>}
+            {e.rating != null && (
+              <span className="inline-flex items-center gap-1">
+                <Star size={11} className="fill-warning text-warning" />
+                {e.rating.toFixed(1)}
+              </span>
+            )}
+          </>
+        )
+      }
+    />
   );
 }
 
-/** A movie's bonus material, listed like episodes and titled "Movie - Extra". */
+/** A movie's bonus material, tiled like episodes. */
 function Extras({ item, files, admin, onChange }: { item: ItemDetail["item"]; files: MediaFile[]; admin: boolean; onChange: () => void }) {
-  const title = item.title;
+  const phone = usePhone();
   return (
     <section className="mt-10 gutter">
-      <h2 className="row-title mb-1">Extras</h2>
-      <ol className="flex flex-col">
+      <h2 className="row-title">Extras</h2>
+      <TileList>
         {files.map((f) => (
-          <StillRow key={f.id} file={{ ...f, fileId: f.id }} actions={admin && <ExtraActions item={item} f={f} onChange={onChange} />}>
-            <div className="truncate text-sm font-medium text-content">
-              <span className="text-content-muted">{title} - </span>
-              {f.extraTitle}
-            </div>
-            {f.durationSec && <div className="mt-0.5 text-xs text-content-muted">{fmtRuntime(f.durationSec)}</div>}
-          </StillRow>
+          <li key={f.id}>
+            <EpisodeCard
+              file={{ ...f, fileId: f.id }}
+              layout={phone ? "row" : "grid"}
+              title={f.extraTitle || "Extra"}
+              playLabel={`Play ${f.extraTitle || "extra"}`}
+              meta={f.durationSec ? <span>{fmtRuntime(f.durationSec)}</span> : undefined}
+              actions={admin ? <ExtraActions item={item} f={f} onChange={onChange} /> : undefined}
+            />
+          </li>
         ))}
-      </ol>
-    </section>
-  );
-}
-
-/** A playable row with the file's frame on the left: episodes and extras. */
-function StillRow({
-  file: e,
-  children,
-  actions,
-}: {
-  file: Pick<EpisodeRow, "fileId" | "hasStill" | "durationSec" | "positionSec" | "watched" | "problem">;
-  children: React.ReactNode;
-  /** Beside the row, outside its link (the admin's "⋯"). */
-  actions?: React.ReactNode;
-}) {
-  const progress = e.durationSec && !e.watched ? (e.positionSec / e.durationSec) * 100 : 0;
-  return (
-    <li className="flex items-center gap-1">
-      <Link to={`/play/${e.fileId}`} className="still-link group flex min-w-0 flex-1 items-center gap-4 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted">
-        <div className="still w-44 shrink-0">
-          {e.hasStill ? (
-            <img src={stillUrl(e.fileId)} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
-          ) : (
-            <div className="poster-placeholder absolute inset-0" />
-          )}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-on-accent">
-              <Play size={16} className="translate-x-px fill-current" />
-            </span>
-          </div>
-          {progress > 0 && (
-            <div className="art-progress">
-              <span style={{ width: `${progress}%` }} />
-            </div>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">{children}</div>
-        {e.problem && (
-          <span className="tint-warning shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold" title={PROBLEM_TEXT[e.problem].detail}>
-            {PROBLEM_TEXT[e.problem].label}
-          </span>
-        )}
-        {e.watched && (
-          <span className="tint-good inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold">
-            <Check size={12} /> Watched
-          </span>
-        )}
-      </Link>
-      {actions}
-    </li>
-  );
-}
-
-/** How this browser will play a file. */
-function PlaybackChip({ f }: { f: MediaFile }) {
-  if (f.problem)
-    return (
-      <span className="tint-warning rounded px-1.5 py-0.5 text-[11px] font-semibold" title={PROBLEM_TEXT[f.problem].detail}>
-        {PROBLEM_TEXT[f.problem].label}
-      </span>
-    );
-  if (canDirectPlay(f)) return <span className="tint-good rounded px-1.5 py-0.5 text-[11px] font-semibold">Direct play</span>;
-  if (f.optimized) return <span className="tint-good rounded px-1.5 py-0.5 text-[11px] font-semibold">Optimized</span>;
-  return (
-    <span className="tint-info rounded px-1.5 py-0.5 text-[11px] font-semibold" title="The browser can't play this format as is; it will be converted while you watch">
-      Transcode
-    </span>
-  );
-}
-
-function FilesCard({ files, onChange }: { files: MediaFile[]; onChange: () => void }) {
-  const admin = useIsAdmin();
-  const dropOptimized = attempt("Couldn't delete the optimized copy", async (id: number) => {
-    if (!confirm("Delete the optimized copy? Playback falls back to the original file or a server stream.")) return;
-    await api(`/api/files/${id}/optimized`, { method: "DELETE" });
-    onChange();
-  });
-  return (
-    <section className="mt-10 gutter">
-      <h2 className="row-title mb-3">{files.length === 1 ? "File" : `Files (${files.length})`}</h2>
-      <div className="card overflow-x-auto">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Quality</th>
-              <th className="hidden sm:table-cell">Video</th>
-              <th className="hidden sm:table-cell">Audio</th>
-              <th className="hidden sm:table-cell">Length</th>
-              <th className="text-right">Size</th>
-              <th>Playback</th>
-              <th>Progress</th>
-            </tr>
-          </thead>
-          <tbody>
-            {files.map((f) => (
-              <tr key={f.id}>
-                <td className="mono max-w-xs truncate" title={f.path}>
-                  {f.role === "part" && <span className="chip mr-1.5">Part {f.partNo}</span>}
-                  <Link to={`/play/${f.id}`} className="hover:text-accent">
-                    {f.path}
-                  </Link>
-                </td>
-                <td>{fmtResolution(f.width, f.height) && <span className="chip">{fmtResolution(f.width, f.height)}</span>}</td>
-                <td className="mono hidden text-content-secondary sm:table-cell">{f.videoCodec || "?"}</td>
-                <td className="mono hidden text-content-secondary sm:table-cell">
-                  {f.audioCodec || "?"}
-                  {f.audioTracks > 1 && <span className="text-content-muted"> +{f.audioTracks - 1}</span>}
-                </td>
-                <td className="hidden tabular-nums text-content-secondary sm:table-cell">{fmtRuntime(f.durationSec)}</td>
-                <td className="text-right tabular-nums text-content-secondary">{fmtBytes(f.size)}</td>
-                <td>
-                  <span className="inline-flex items-center gap-1">
-                    <PlaybackChip f={f} />
-                    {f.optimized && admin && (
-                      <button className="btn-quiet !p-1 hover:!text-critical" title="Delete the optimized copy" onClick={() => void dropOptimized(f.id)}>
-                        <Trash2 size={12} />
-                      </button>
-                    )}
-                  </span>
-                </td>
-                <td className="w-32">
-                  {f.watched ? (
-                    <span className="text-xs text-good">Watched</span>
-                  ) : f.durationSec && f.positionSec > 0 ? (
-                    <Meter value={(f.positionSec / f.durationSec) * 100} />
-                  ) : (
-                    <span className="text-xs text-content-muted">—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      </TileList>
     </section>
   );
 }

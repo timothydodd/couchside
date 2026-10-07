@@ -12,6 +12,7 @@ import { useProfile } from "../stores/profile";
 import { useRouter } from "../stores/router";
 import { useCanRecord } from "../stores/auth";
 import { errText } from "../lib/errors";
+import { confirmDialog } from "../lib/ask";
 
 /** Quality choices: 0 is the broadcast's own size. A chosen height is a cap; the server never scales a picture up. */
 export const LIVE_QUALITIES = [0, 1080, 720, 480] as const;
@@ -185,7 +186,7 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
     setRecBusy(true);
     try {
       if (now.recordingStatus === "recording" && now.recordingId) {
-        if (!confirm(`Stop recording "${now.title}"?`)) return;
+        if (!(await confirmDialog({ title: `Stop recording "${now.title}"?`, body: "What's been recorded so far is kept.", action: "Stop recording", danger: true }))) return;
         await api(`/api/dvr/recordings/${now.recordingId}/cancel`, { method: "POST" });
       } else if (!now.recordingStatus) {
         await api("/api/dvr/recordings", { method: "POST", json: { programId: now.id } });

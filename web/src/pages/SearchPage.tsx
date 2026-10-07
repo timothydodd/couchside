@@ -1,18 +1,22 @@
-import { useRef, useState, type ReactNode } from "react";
-import { Lock, Play, Search } from "lucide-react";
+import { useRef, useState } from "react";
+import { Lock, Play, Search, SearchX } from "lucide-react";
 import Link from "../components/Link";
 import { ContinueCard, PosterRow, Row } from "../components/Rows";
 import ProgramDialog from "../components/livetv/ProgramDialog";
-import { EmptyState, ErrorNote, PageHeader, Spinner } from "../components/ui";
+import { RecDot } from "../components/livetv/ChannelBits";
+import { EmptyState, ErrorNote, Loading, PageHeader, Section, Spinner } from "../components/ui";
 import { SearchBox } from "../components/Sidebar";
 import { useApi } from "../lib/api";
 import { fmtSlot } from "../lib/format";
 import type { Program, SearchResult, TvChannel } from "../lib/types";
 
+/** The most each group shows (the server caps at 50); a full group means there may be more. */
+const LIMIT = 50;
+
 /** Results for the sidebar search box, grouped by kind. */
 export default function SearchPage({ q }: { q: string }) {
   const term = q.trim();
-  const { data, error, loading, reload } = useApi<SearchResult>(term ? `/api/search?q=${encodeURIComponent(term)}&limit=20` : null);
+  const { data, error, loading, reload } = useApi<SearchResult>(term ? `/api/search?q=${encodeURIComponent(term)}&limit=${LIMIT}` : null);
   // Keep the last results up while the next query loads, so typing doesn't flash.
   const last = useRef<SearchResult | undefined>(undefined);
   if (data) last.current = data;
@@ -36,12 +40,14 @@ export default function SearchPage({ q }: { q: string }) {
       </>
     );
 
-  const total = res ? res.movies.length + res.series.length + res.episodes.length + res.channels.length + res.programs.length : 0;
+  const groups = res ? [res.movies, res.series, res.episodes, res.channels, res.programs] : [];
+  const total = groups.reduce((n, g) => n + g.length, 0);
+  const capped = groups.some((g) => g.length >= LIMIT);
 
   return (
     <div className="pb-8">
       {phoneBox}
-      <PageHeader title={`Results for “${term}”`} subtitle={res && total ? `${total} found` : undefined}>
+      <PageHeader title={`Results for “${term}”`} subtitle={res && total ? `${total}${capped ? "+" : ""} found` : undefined}>
         {loading && <Spinner />}
       </PageHeader>
       {error && (
@@ -50,11 +56,9 @@ export default function SearchPage({ q }: { q: string }) {
         </div>
       )}
       {!res && loading && (
-        <div className="flex justify-center py-16">
-          <Spinner size={22} />
-        </div>
+        <Loading />
       )}
-      {res && total === 0 && !loading && <EmptyState title={`Nothing matches “${term}”`}>Try fewer letters, or another spelling.</EmptyState>}
+      {res && total === 0 && !loading && <EmptyState icon={<SearchX size={36} strokeWidth={1.5} />} title={`Nothing matches “${term}”`}>Try fewer letters, or another spelling.</EmptyState>}
       {res && (
         <>
           <PosterRow title="Movies" items={res.movies} />
@@ -87,7 +91,7 @@ export default function SearchPage({ q }: { q: string }) {
                     <span className="w-14 shrink-0 text-center text-xs font-semibold tabular-nums text-content-secondary">{p.channel}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-content">
-                        {(p.recordingStatus === "recording" || p.recordingStatus === "scheduled") && <span className="rec-dot mr-1.5" />}
+                        <RecDot status={p.recordingStatus} className="mr-1.5" />
                         {p.title}
                         {p.episodeTitle && <span className="font-normal text-content-secondary"> · {p.episodeTitle}</span>}
                       </span>
@@ -115,15 +119,6 @@ export default function SearchPage({ q }: { q: string }) {
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="gutter py-3">
-      <h2 className="row-title mb-3">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
 function ChannelHit({ c }: { c: TvChannel }) {
   const body = (
     <>
@@ -135,10 +130,21 @@ function ChannelHit({ c }: { c: TvChannel }) {
         <div className="truncate text-sm font-medium text-content">{c.name}</div>
         {c.affiliate && c.affiliate !== c.name && <div className="truncate text-xs text-content-muted">{c.affiliate}</div>}
       </div>
-      {c.drm ? <Lock size={14} className="text-content-muted" aria-label="Encrypted: can't be played" /> : <Play size={15} className="fill-current text-accent" />}
+      {c.drm ? (
+        <span className="badge tint-muted" title="This channel is encrypted (ATSC 3.0 DRM), so it can't be played">
+          <Lock size={11} /> Copy-protected
+        </span>
+      ) : (
+        <Play size={15} className="fill-current text-accent" />
+      )}
     </>
   );
-  if (c.drm) return <div className="card flex items-center gap-3 p-3 opacity-70">{body}</div>;
+  if (c.drm)
+    return (
+      <div className="card flex items-center gap-3 p-3 opacity-70" tabIndex={0} aria-label={`${c.name}: copy-protected, can't be played`}>
+        {body}
+      </div>
+    );
   return (
     <Link to={`/watch/${c.number}`} className="card flex items-center gap-3 p-3 hover:border-accent" aria-label={`Watch ${c.name}`}>
       {body}

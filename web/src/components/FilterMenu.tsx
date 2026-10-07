@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from "react";
 import { SlidersHorizontal, X } from "lucide-react";
-import { useDialog } from "../lib/dialog";
+import { radioKeys, useDialog } from "../lib/dialog";
 import { usePhone } from "../lib/media";
 
 /**
@@ -75,15 +75,25 @@ export function Choices<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div role="radiogroup" aria-label={label}>
+    <div role="radiogroup" aria-label={label} onKeyDown={radioKeys}>
       <div className="field-label">{label}</div>
       <div className="flex flex-wrap gap-1.5">
         {options.map((o) => (
-          <button key={o.id} type="button" role="radio" aria-checked={o.id === value} className="choice" onClick={() => onChange(o.id)}>
+          <button key={o.id} type="button" role="radio" aria-checked={o.id === value} tabIndex={o.id === value ? 0 : -1} className="choice" onClick={() => onChange(o.id)}>
             {o.label}
           </button>
         ))}
       </div>
     </div>
+  );
+}
+
+/** An active filter shown under the search box; tap to clear it. */
+export function ActiveChip({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <button type="button" onClick={onClear} className="choice choice-on inline-flex items-center gap-1 !min-h-7 !text-xs" aria-label={`Clear ${label}`}>
+      {label}
+      <X size={12} />
+    </button>
   );
 }

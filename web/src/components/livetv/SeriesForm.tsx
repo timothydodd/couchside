@@ -3,6 +3,7 @@ import { Check, Repeat, Trash2 } from "lucide-react";
 import { ApiError, api, useApi } from "../../lib/api";
 import type { LibraryMatch, Program, RuleMode, RuleSummary, SeriesRule, TvChannel } from "../../lib/types";
 import { KEEP_OPTIONS, MODE_TEXT, describeSummary, keepLabel } from "./rules";
+import { confirmDialog } from "../../lib/ask";
 
 /** Create or edit the series rule for a program's show. */
 export default function SeriesForm({
@@ -63,7 +64,7 @@ export default function SeriesForm({
   };
 
   const remove = async () => {
-    if (!rule || !confirm(`Stop recording "${rule.title}" as a series? Upcoming recordings from it are cancelled; finished ones are kept.`)) return;
+    if (!rule || !(await confirmDialog({ title: `Stop recording "${rule.title}" as a series?`, body: "Upcoming recordings from it are cancelled; finished ones are kept.", action: "Stop recording", danger: true }))) return;
     setBusy(true);
     try {
       await api(`/api/dvr/rules/${rule.id}`, { method: "DELETE" });

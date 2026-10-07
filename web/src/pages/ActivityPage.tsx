@@ -1,10 +1,11 @@
 import { Cpu, Image, MonitorPlay, Pause, RotateCcw, ScanSearch, Scissors, Search, Square, Trash2, Wand2, X, type LucideIcon } from "lucide-react";
 import Link from "../components/Link";
-import { EmptyState, ErrorNote, Meter, PageHeader, StatTile, StatusPill, type Tone } from "../components/ui";
+import { EmptyState, ErrorNote, Meter, PageHeader, StatTile, StatusPill, type Tone, Loading } from "../components/ui";
 import { api, useApi } from "../lib/api";
 import { fmtAgo, fmtClock } from "../lib/format";
 import type { Job, JobCounts, TranscodeSession } from "../lib/types";
 import { attempt } from "../lib/notices";
+import { confirmDialog } from "../lib/ask";
 
 const KINDS: Record<string, { label: string; Icon: LucideIcon }> = {
   scan: { label: "Scan", Icon: ScanSearch },
@@ -39,7 +40,7 @@ export default function ActivityPage() {
     await reload();
   });
   const clear = attempt("Couldn't clear finished jobs", async () => {
-    if (!confirm("Clear the finished jobs from the list?")) return;
+    if (!(await confirmDialog({ title: "Clear the finished jobs from the list?", action: "Clear" }))) return;
     await api("/api/jobs/clear", { method: "POST" });
     await reload();
   });
@@ -54,24 +55,26 @@ export default function ActivityPage() {
         <button className="btn-ghost" onClick={() => void scanAll()}>
           <ScanSearch size={15} /> Scan all libraries
         </button>
-        <button className="btn-ghost" onClick={() => void clear()} disabled={!data?.jobs.some((j) => j.status === "done")}>
+        <button className="btn-ghost" onClick={() => void clear()} disabled={!data?.jobs.some((j) => j.status === "done" || j.status === "failed")}>
           <Trash2 size={15} /> Clear finished
         </button>
       </PageHeader>
-      <div className="grid grid-cols-3 gap-3 gutter py-4">
+      <div className="grid grid-cols-3 gap-2 gutter py-4 sm:gap-3">
         <StatTile label="Running" value={c?.running ?? "–"} sub={c?.current || undefined} />
         <StatTile label="Queued" value={c?.queued ?? "–"} />
         <StatTile label="Failed" value={c?.failed ?? "–"} tone={c?.failed ? "critical" : undefined} />
       </div>
       {error && (
-        <div className="gutter pb-4">
+        <div className="gutter pt-4">
           <ErrorNote>{error}</ErrorNote>
         </div>
       )}
       <Streams />
       <div className="gutter">
         <h2 className="row-title mb-3">Background jobs</h2>
-        {data && data.jobs.length === 0 ? (
+        {!data ? (
+          !error && <Loading />
+        ) : data.jobs.length === 0 ? (
           <div className="card">
             <EmptyState title="Nothing going on">Scans run automatically on a schedule and whenever you add a library.</EmptyState>
           </div>
@@ -186,7 +189,7 @@ function Streams() {
                   <span>{Math.round(s.aheadSec)}s buffered ahead</span>
                 </div>
               </div>
-              <span title={s.paused ? "Far enough ahead of the player; paused to save CPU" : s.running ? "Encoding" : "Idle"}>
+              <span role="img" aria-label={s.paused ? "Paused" : s.running ? "Encoding" : "Idle"} title={s.paused ? "Far enough ahead of the player; paused to save CPU" : s.running ? "Encoding" : "Idle"}>
                 {s.paused ? <Pause size={15} className="text-content-muted" /> : s.running ? <StatusPill label="" tone="info" pulse /> : <Square size={13} className="text-content-muted" />}
               </span>
             </div>

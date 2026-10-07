@@ -22,10 +22,10 @@ export function PersonPhoto({ person, className = "" }: { person: { personId?: n
 }
 
 /** The billed cast as a row of photos. Each opens what else of theirs is in the library. */
-export function CastRow({ cast }: { cast: CreditRow[] }) {
+export function CastRow({ cast, title = "Cast" }: { cast: CreditRow[]; title?: string }) {
   if (!cast.length) return null;
   return (
-    <Row title="Cast">
+    <Row title={title}>
       {cast.map((c) => (
         <Link key={c.personId} to={`/person/${c.personId}`} className="group w-28 shrink-0" aria-label={`${c.name}${c.role ? `, ${c.role}` : ""}`}>
           <PersonPhoto person={c} className="transition-transform group-hover:-translate-y-0.5 group-focus-visible:ring-2 group-focus-visible:ring-accent" />

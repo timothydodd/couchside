@@ -1,10 +1,13 @@
-import { FolderPlus, Info, Play, Sofa } from "lucide-react";
+import { useRef } from "react";
+import { FolderPlus, Info, Play, ScanSearch, Sofa } from "lucide-react";
 import Link from "../components/Link";
 import { ContinueCard, PosterRow, Row } from "../components/Rows";
-import { EmptyState, ErrorNote, Spinner, StatTile } from "../components/ui";
+import { EmptyState, ErrorNote, StatTile, Loading } from "../components/ui";
 import { api, backdropUrl, useApi } from "../lib/api";
+import { fmtClock } from "../lib/format";
+import { playTarget } from "../lib/items";
 import { attempt } from "../lib/notices";
-import type { Home, ItemSummary } from "../lib/types";
+import type { Home, ItemDetail, ItemSummary } from "../lib/types";
 import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
@@ -19,17 +22,21 @@ export default function HomePage() {
   const go = useRouter((s) => s.go);
   const admin = useIsAdmin();
   const counts = status?.counts;
+  // Picked once, so the 15s poll doesn't swap the hero while it's being read; re-picked only if it leaves the rows.
+  const hero = useRef<ItemSummary | undefined>(undefined);
+  const recent = [...(data?.recentMovies ?? []), ...(data?.recentSeries ?? [])];
+  if (data && (!hero.current || !recent.some((i) => i.id === hero.current!.id))) hero.current = pickFeatured(recent);
+  const featured = hero.current;
+  const scanning = !!status && status.jobs.running + status.jobs.queued > 0;
 
   if (loading && !data) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <Spinner size={22} />
-      </div>
+      <Loading fill />
     );
   }
   if (counts && counts.libraries === 0) {
     return (
-      <EmptyState icon={<Sofa size={40} strokeWidth={1.5} />} title="The couch is empty">
+      <EmptyState icon={<Sofa size={36} strokeWidth={1.5} />} title="The couch is empty">
         Point Couchside at a folder of movies or TV shows and it will scan them, fetch posters and plots, and fill this page.
         {admin ? (
           <div className="mt-4">
@@ -44,7 +51,27 @@ export default function HomePage() {
     );
   }
 
-  const featured = pickFeatured([...(data?.recentMovies ?? []), ...(data?.recentSeries ?? [])]);
+  if (counts && counts.movies + counts.series === 0) {
+    return (
+      <EmptyState
+        icon={scanning ? <ScanSearch size={36} strokeWidth={1.5} className="animate-pulse" /> : <Sofa size={36} strokeWidth={1.5} />}
+        title={scanning ? "Scanning your libraries…" : "No titles yet"}
+        action={
+          admin && !scanning ? (
+            <Link to="/libraries" className="btn-primary">
+              <ScanSearch size={15} /> Scan now
+            </Link>
+          ) : undefined
+        }
+      >
+        {scanning
+          ? "Movies and shows appear here as they're found; posters and plots follow."
+          : admin
+            ? "The libraries' folders had no video files Couchside recognises. Check the folders on the Libraries page, then scan."
+            : "Nothing has been scanned in yet. Ask an admin to check the libraries."}
+      </EmptyState>
+    );
+  }
 
   return (
     <div className="pb-8">
@@ -62,7 +89,15 @@ export default function HomePage() {
           <StatTile
             label="Unmatched"
             value={counts.unmatched.toLocaleString()}
-            sub={!admin ? undefined : status?.providers.length ? "Fix from the title's page" : "Set TMDB_API_KEY to match"}
+            sub={
+              !admin ? undefined : status?.providers.length ? (
+                "Fix from the title's page"
+              ) : (
+                <Link to="/settings/metadata" className="hover:text-accent">
+                  Add a provider to match
+                </Link>
+              )
+            }
             tone={counts.unmatched ? "warning" : undefined}
           />
         </div>
@@ -95,9 +130,11 @@ function pickFeatured(items: ItemSummary[]): ItemSummary | undefined {
   return withArt.find((i) => i.matchStatus === "matched") ?? withArt[0];
 }
 
+/** The newest title, big: its plot, and Play goes straight to the file (resuming if it was started). */
 function Hero({ item }: { item: ItemSummary }) {
-  const { data } = useApi<{ item: { plot: string } }>(`/api/items/${item.id}`);
+  const { data } = useApi<ItemDetail>(`/api/items/${item.id}`);
   const plot = data?.item.plot;
+  const play = data ? playTarget(data) : null;
   return (
     <section className="relative h-[52vh] min-h-80 max-h-[520px] overflow-hidden md:h-[46vh] md:min-h-72">
       <img src={backdropUrl(item)} alt="" className="hero-art" />
@@ -114,8 +151,8 @@ function Hero({ item }: { item: ItemSummary }) {
         </div>
         {plot && <p className="mt-2 line-clamp-2 text-sm text-content-secondary">{plot}</p>}
         <div className="mt-4 flex gap-2">
-          <Link to={`/item/${item.id}`} className="btn-primary">
-            <Play size={15} className="fill-current" /> Watch
+          <Link to={play ? `/play/${play.fileId}` : `/item/${item.id}`} className="btn-primary">
+            <Play size={15} className="fill-current" /> {play && play.resumeAt > 30 ? `Resume ${fmtClock(play.resumeAt)}` : "Play"}
           </Link>
           <Link to={`/item/${item.id}`} className="btn-ghost !bg-surface/60 backdrop-blur">
             <Info size={15} /> Details

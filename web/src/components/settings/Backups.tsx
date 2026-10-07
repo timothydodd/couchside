@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { DatabaseBackup, Download, Trash2 } from "lucide-react";
-import { ErrorNote, Spinner } from "../ui";
+import { ErrorNote, Spinner, Loading } from "../ui";
 import { api, useApi } from "../../lib/api";
 import { fmtAgo, fmtBytes } from "../../lib/format";
 import { attempt } from "../../lib/notices";
+import { confirmDialog } from "../../lib/ask";
 
 interface Backup {
   name: string;
@@ -42,7 +43,7 @@ export default function BackupSettings() {
     }
   });
   const remove = attempt("Couldn't delete the backup", async (b: Backup) => {
-    if (!confirm(`Delete ${b.name}?`)) return;
+    if (!(await confirmDialog({ title: `Delete ${b.name}?`, body: "This backup can't be restored once it's gone.", action: "Delete", danger: true }))) return;
     await api(`/api/system/backups/${encodeURIComponent(b.name)}`, { method: "DELETE" });
     await reload();
   });
@@ -66,6 +67,7 @@ export default function BackupSettings() {
         </button>
       </div>
       {error && !data && <ErrorNote>Couldn't load the backups: {error}</ErrorNote>}
+      {!data && !error && <Loading />}
       {data && (
         <>
           <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
@@ -97,6 +99,13 @@ export default function BackupSettings() {
           ) : (
             <div className="overflow-x-auto">
               <table className="table">
+                <thead>
+                  <tr>
+                    <th>Made</th>
+                    <th className="text-right">Size</th>
+                    <th />
+                  </tr>
+                </thead>
                 <tbody>
                   {data.backups.map((b) => (
                     <tr key={b.name}>
@@ -112,7 +121,7 @@ export default function BackupSettings() {
                           <a className="btn-chip" href={`/api/system/backups/${encodeURIComponent(b.name)}`} download={b.name}>
                             <Download size={11} /> Download
                           </a>
-                          <button className="btn-chip" onClick={() => void remove(b)}>
+                          <button className="btn-chip hover:!text-critical" onClick={() => void remove(b)}>
                             <Trash2 size={11} /> Delete
                           </button>
                         </span>

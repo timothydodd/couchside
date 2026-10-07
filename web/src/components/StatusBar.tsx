@@ -2,13 +2,13 @@ import { Film, MonitorPlay } from "lucide-react";
 import Link from "./Link";
 import { useIsAdmin } from "../stores/auth";
 import { useStatus } from "../stores/status";
+import { RecBadge, useJobsSummary } from "./StatusBits";
 import { fmtVersion } from "../lib/format";
 
 /** Bottom bar: server reachability, background work, metadata provider. */
 export default function StatusBar() {
   const { status, error } = useStatus();
-  const jobs = status?.jobs;
-  const active = jobs ? jobs.queued + jobs.running : 0;
+  const { jobs, active, label: jobLabel } = useJobsSummary();
   // Activity is admin-only; everyone else just sees whether the server is there.
   const admin = useIsAdmin();
 
@@ -17,7 +17,7 @@ export default function StatusBar() {
     : !status
       ? ["bg-warning animate-pulse", "Connecting…"]
       : active
-        ? ["bg-info animate-pulse", jobs?.current || `${active} job${active === 1 ? "" : "s"} queued`]
+        ? ["bg-info animate-pulse", jobLabel]
         : ["bg-good", "Idle"];
 
   return (
@@ -39,12 +39,7 @@ export default function StatusBar() {
           {jobs.failed} failed
         </Link>
       )}
-      {!!status?.livetv?.recording && (
-        <Link to="/livetv/recordings" className="flex items-center gap-1 text-critical hover:underline">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-critical" />
-          {status.livetv.recording} recording
-        </Link>
-      )}
+      <RecBadge to="/livetv/recordings" />
       {admin && !!status?.transcode?.active && (
         <Link to="/activity" className="flex items-center gap-1 text-info hover:underline">
           <MonitorPlay size={12} />

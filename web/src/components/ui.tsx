@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode, type Ref } from "react";
-import { Loader2, Search } from "lucide-react";
-import { menuKeys } from "../lib/dialog";
+import { ArrowLeft, Loader2, Search } from "lucide-react";
+import { menuKeys, radioKeys } from "../lib/dialog";
 import Link from "./Link";
+import { useRouter } from "../stores/router";
 
 // Shared primitives, ported from Portside Lite's components/ui.tsx so both
 // apps look and behave the same.
@@ -24,19 +25,19 @@ export function StatusPill({ label, tone, pulse }: { label: string; tone: Tone; 
   );
 }
 
-/** Progress meter: accent fill on a lighter track of the same hue. */
-export function Meter({ value, className = "" }: { value: number; className?: string }) {
+/** Progress meter: accent fill on a lighter track of the same hue (`tone="critical"` for a recording). */
+export function Meter({ value, className = "", tone = "accent" }: { value: number; className?: string; tone?: "accent" | "critical" }) {
   const v = Math.max(0, Math.min(100, value));
   return (
     <div
       className={`h-1.5 w-full overflow-hidden rounded-full ${className}`}
-      style={{ backgroundColor: "color-mix(in srgb, var(--accent) 18%, transparent)" }}
+      style={{ backgroundColor: `color-mix(in srgb, var(--${tone}) 18%, transparent)` }}
       role="meter"
       aria-valuenow={Math.round(v)}
       aria-valuemin={0}
       aria-valuemax={100}
     >
-      <div className="h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${v}%` }} />
+      <div className={`h-full rounded-full transition-[width] duration-500 ${tone === "critical" ? "bg-critical" : "bg-accent"}`} style={{ width: `${v}%` }} />
     </div>
   );
 }
@@ -62,12 +63,12 @@ export function StatTile({
   return (
     <Tag
       onClick={onClick}
-      className={`card flex flex-col items-start gap-1 border px-4 py-3 text-left ${ring} ${onClick ? "transition-colors hover:border-accent" : ""}`}
+      className={`card flex min-w-0 flex-col items-start gap-1 border px-4 py-3 text-left ${ring} ${onClick ? "transition-colors hover:border-accent" : ""}`}
     >
       <span className="text-xs text-content-muted">{label}</span>
       <span className="text-2xl font-semibold tabular-nums text-content">{value}</span>
       {meter !== undefined && <Meter value={meter} className="my-0.5" />}
-      {sub && <span className="text-xs text-content-secondary">{sub}</span>}
+      {sub && <span className="max-w-full truncate text-xs text-content-secondary">{sub}</span>}
     </Tag>
   );
 }
@@ -84,17 +85,55 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
   );
 }
 
-export function EmptyState({ icon, title, children }: { icon?: ReactNode; title: string; children?: ReactNode }) {
+/** Nothing to show: an icon (size 36, strokeWidth 1.5), a title, a line of why, and optionally a button. */
+export function EmptyState({ icon, title, action, children }: { icon?: ReactNode; title: string; action?: ReactNode; children?: ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 gutter py-16 text-center">
       {icon && <div className="text-content-muted">{icon}</div>}
       <div className="text-sm font-medium text-content">{title}</div>
       {children && <div className="max-w-md text-xs text-content-muted">{children}</div>}
+      {action && <div className="mt-2">{action}</div>}
     </div>
   );
 }
 
-/** A row of mutually exclusive choices (theme, quality…). */
+/**
+ * Goes back through the app's own history, or to `fallback` when the page
+ * was opened directly. `overlay` floats it over a hero picture.
+ */
+export function BackButton({ fallback, label = "Back", overlay = false }: { fallback: string; label?: string; overlay?: boolean }) {
+  const back = useRouter((s) => s.back);
+  return (
+    <button
+      type="button"
+      onClick={() => back(fallback)}
+      className={overlay ? "btn-ghost absolute left-4 top-4 z-10 !bg-surface/60 backdrop-blur md:left-6 md:top-5" : "btn-quiet"}
+    >
+      <ArrowLeft size={15} /> {label}
+    </button>
+  );
+}
+
+/** A page section with a row-style heading (a `Row` without the scroller). */
+export function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="gutter py-3">
+      <h2 className="row-title mb-3">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+/** A centred spinner while a page or card loads; `fill` takes the whole of a flex or full-height parent. */
+export function Loading({ fill = false }: { fill?: boolean }) {
+  return (
+    <div className={`flex items-center justify-center ${fill ? "h-full flex-1" : "py-16"}`}>
+      <Spinner size={22} />
+    </div>
+  );
+}
+
+/** A row of mutually exclusive choices (theme, quality…). The arrow keys move between them. */
 export function Segmented<T extends string | number>({
   value,
   options,
@@ -102,18 +141,19 @@ export function Segmented<T extends string | number>({
   label,
 }: {
   value: T;
-  options: { id: T; label: string }[];
+  options: { id: T; label: ReactNode }[];
   onChange: (v: T) => void;
   label: string;
 }) {
   return (
-    <div className="inline-flex rounded-md border border-border p-0.5" role="radiogroup" aria-label={label}>
+    <div className="inline-flex rounded-md border border-border p-0.5" role="radiogroup" aria-label={label} onKeyDown={radioKeys}>
       {options.map((o) => (
         <button
           key={o.id}
           type="button"
           role="radio"
           aria-checked={value === o.id}
+          tabIndex={value === o.id ? 0 : -1}
           onClick={() => onChange(o.id)}
           className={`rounded px-3 py-1 text-sm transition-colors ${value === o.id ? "bg-accent text-on-accent" : "text-content-secondary hover:text-content"}`}
         >
@@ -134,6 +174,11 @@ export function ErrorNote({ children }: { children: ReactNode }) {
 
 export function WarningNote({ children }: { children: ReactNode }) {
   return <div className="tint-warning rounded-md px-3 py-2 text-xs">{children}</div>;
+}
+
+/** Something that worked, inline (a notice is for actions elsewhere on the page). */
+export function GoodNote({ children }: { children: ReactNode }) {
+  return <div className="tint-good rounded-md px-3 py-2 text-xs">{children}</div>;
 }
 
 export function SearchInput({
@@ -205,7 +250,12 @@ export function MenuButton({
     if (!open) return;
     // Into the menu, so the arrow keys work straight away.
     ref.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
-    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const onDown = (e: MouseEvent) => {
+      if (ref.current?.contains(e.target as Node)) return;
+      setOpen(false);
+      // Back to the trigger only if focus was in the menu (a click elsewhere keeps its own focus).
+      if (ref.current?.contains(document.activeElement)) ref.current?.querySelector<HTMLElement>("button")?.focus();
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.stopPropagation(); // close the menu, not the panel or dialog it's in
@@ -221,7 +271,7 @@ export function MenuButton({
   }, [open]);
   return (
     <div ref={ref} className="relative inline-flex">
-      <button className={className} aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className={className} aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         {icon}
       </button>
       {open && (
@@ -229,10 +279,12 @@ export function MenuButton({
           {items.map((it) => (
             <button
               key={it.id}
+              type="button"
               role="menuitem"
               className={`menu-item ${it.danger ? "menu-item-danger" : ""}`}
               onClick={() => {
                 setOpen(false);
+                ref.current?.querySelector<HTMLElement>("button")?.focus();
                 it.onSelect();
               }}
             >

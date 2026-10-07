@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import Link from "../components/Link";
 import AccountManager from "../components/settings/AccountManager";
 import SingleSignOn from "../components/settings/SingleSignOn";
@@ -15,6 +16,7 @@ import TimingSettings from "../components/settings/TimingSettings";
 import VirtualChannels from "../components/settings/VirtualChannels";
 import { PageHeader } from "../components/ui";
 import { usePhone } from "../lib/media";
+import { useScrollEdges } from "../lib/scroll";
 import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
@@ -33,12 +35,14 @@ export default function SettingsPage() {
   const id = admin && route.name === "settings" ? route.section : "you";
   const section = SECTIONS.find((s) => s.id === id)!;
   const wide = id === "system" || id === "console";
+  const tabs = useRef<HTMLElement>(null);
+  useScrollEdges(tabs); // fades the end of the phone tab bar that has more
 
   return (
     <div>
       <PageHeader title={id === "you" ? "Settings" : section.label} subtitle={section.blurb} />
       {admin && phone && (
-        <nav className="row-scroll gutter flex gap-1 overflow-x-auto border-b border-border-light" aria-label="Settings sections">
+        <nav ref={tabs} className="row-scroll gutter flex gap-1 overflow-x-auto border-b border-border-light" aria-label="Settings sections">
           {SECTIONS.map((s) => (
             <Link key={s.id} to={s.to} aria-current={s.id === id ? "page" : undefined} className={`navtab shrink-0 whitespace-nowrap !text-sm ${s.id === id ? "navtab-active" : ""}`}>
               {s.id === "you" ? "You" : s.label}

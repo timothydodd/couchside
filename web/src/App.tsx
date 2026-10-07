@@ -2,13 +2,14 @@ import { Suspense, useEffect, useLayoutEffect, useRef } from "react";
 import { MobileTabBar, MobileTopBar } from "./components/MobileNav";
 import Sidebar from "./components/Sidebar";
 import StatusBar from "./components/StatusBar";
-import { EmptyState, Spinner } from "./components/ui";
+import { EmptyState, Loading } from "./components/ui";
 import { lazyPage } from "./lib/lazyPage";
 import HomePage from "./pages/HomePage";
 import ItemPage from "./pages/ItemPage";
 import LibraryPage from "./pages/LibraryPage";
 import LinkPage from "./pages/LinkPage";
 import PersonPage from "./pages/PersonPage";
+import EpisodePage from "./pages/EpisodePage";
 import SearchPage from "./pages/SearchPage";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
 import SetupPage from "./pages/SetupPage";
@@ -121,15 +122,14 @@ function Signed() {
         >
           <Suspense
             fallback={
-              <div className="flex h-full items-center justify-center">
-                <Spinner size={22} />
-              </div>
+              <Loading fill />
             }
           >
           {route.name === "home" && <HomePage />}
           {route.name === "movies" && <LibraryPage kind="movie" />}
           {route.name === "tv" && <LibraryPage kind="series" />}
-          {route.name === "item" && <ItemPage id={route.id} />}
+          {route.name === "item" && <ItemPage id={route.id} season={route.season} edit={route.edit} />}
+          {route.name === "episode" && <EpisodePage id={route.id} />}
           {route.name === "livetv" && <LiveTvPage tab={route.tab} />}
           {adminOnly && !admin && <EmptyState title="Admins only">Ask an admin for access to this page.</EmptyState>}
           {route.name === "activity" && admin && <ActivityPage />}

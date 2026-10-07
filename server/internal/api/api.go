@@ -226,6 +226,7 @@ func (s *Server) userRoutes(r chi.Router) {
 
 	r.Get("/items", s.listItems)
 	r.Get("/items/{id}", s.getItem)
+	r.Get("/episodes/{id}", s.getEpisode)
 	r.Get("/people/{id}", s.person)
 	r.Post("/items/{id}/watched", s.itemWatched)
 	r.Put("/items/{id}/version", s.setVersion)
@@ -323,6 +324,7 @@ func (s *Server) adminRoutes(r chi.Router) {
 	r.Post("/items/{id}/optimize", s.optimizeItem)
 	r.Post("/items/{id}/commercials", s.findItemCommercials)
 	r.Post("/files/{id}/commercials/dismissed", s.dismissCommercial)
+	r.Get("/items/{id}/manage", s.manageItem)
 	r.Get("/items/{id}/files", s.itemFiles)
 	r.Get("/items/{id}/lookup", s.itemLookup)
 	r.Delete("/items/{id}", s.deleteItem)

@@ -40,7 +40,10 @@ func fakeTMDB(t *testing.T, hits *[]string) *TMDB {
 				"in_production":false,"episode_run_time":[60],"number_of_seasons":8,"vote_average":8.4,"vote_count":20000,
 				"external_ids":{"imdb_id":"tt0944947"},"content_ratings":{"results":[{"iso_3166_1":"US","rating":"TV-MA"}]}}`))
 		case r.URL.Path == "/tv/1399/season/1":
-			w.Write([]byte(`{"episodes":[{"episode_number":1,"season_number":1,"name":"Winter Is Coming","air_date":"2011-04-17","vote_average":7.9,"vote_count":300},
+			w.Write([]byte(`{"episodes":[{"id":63056,"episode_number":1,"season_number":1,"name":"Winter Is Coming","air_date":"2011-04-17","vote_average":7.9,"vote_count":300,
+				"overview":"Ned Stark is summoned.","runtime":62,"still_path":"/w1.jpg",
+				"guest_stars":[{"id":1,"name":"Joseph Mawle","character":"Benjen Stark","profile_path":"/jm.jpg","order":0}],
+				"crew":[{"id":2,"name":"Tim Van Patten","job":"Director"},{"id":3,"name":"David Benioff","job":"Writer"},{"id":4,"name":"Someone","job":"Gaffer"}]},
 				{"episode_number":2,"season_number":1,"name":"The Kingsroad","air_date":"2011-04-24","vote_average":0,"vote_count":0}]}`))
 		case r.URL.Path == "/tv/77777":
 			w.Write([]byte(`{"id":77777,"name":"Obscure Show","first_air_date":"2020-01-01","in_production":true,"external_ids":{"imdb_id":null}}`))
@@ -103,6 +106,17 @@ func TestTMDBByImdbIDAndSeason(t *testing.T) {
 	}
 	if eps[1].Rating != nil {
 		t.Errorf("an unrated episode got rating %v", *eps[1].Rating)
+	}
+	e := eps[0]
+	if e.Plot != "Ned Stark is summoned." || e.RuntimeMin == nil || *e.RuntimeMin != 62 || e.StillURL != tmdbImages+"w780/w1.jpg" || e.TMDBID != 63056 {
+		t.Errorf("episode details = %+v", e)
+	}
+	// Guest stars, then the director and writer; a gaffer isn't a key job.
+	if len(e.Credits) != 3 || e.Credits[0].Role != "Benjen Stark" || e.Credits[0].Kind != "cast" || e.Credits[1].Role != "Director" || e.Credits[2].Role != "Writer" {
+		t.Errorf("episode credits = %+v", e.Credits)
+	}
+	if eps[1].RuntimeMin != nil || eps[1].StillURL != "" || len(eps[1].Credits) != 0 {
+		t.Errorf("an episode TMDB knows little about = %+v", eps[1])
 	}
 	// Titles TMDB knows no IMDb id for keep a TMDB reference, which works everywhere an IMDb id does.
 	d, err = p.ByImdbID(ctx, Series, "tmdb:tv:77777")

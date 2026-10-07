@@ -1,12 +1,13 @@
 import { CalendarClock, Film, Pause, Play, RadioTower, Repeat, RotateCcw, Square, Trash2, X } from "lucide-react";
 import Link from "../Link";
-import { EmptyState, ErrorNote, Spinner } from "../ui";
+import { EmptyState, ErrorNote, Loading, Meter } from "../ui";
 import { api, useApi } from "../../lib/api";
 import { fmtBytes, fmtDay, fmtSlot, fmtTime } from "../../lib/format";
 import type { Recording, RuleMode, SeriesRule } from "../../lib/types";
 import { KEEP_OPTIONS, MODE_TEXT, describeSummary, keepLabel } from "./rules";
 import { useOwnerCheck } from "../../stores/auth";
 import { attempt } from "../../lib/notices";
+import { confirmDialog, type ConfirmOptions } from "../../lib/ask";
 
 /** DVR: recording now, upcoming, recorded and failed. */
 export default function Recordings() {
@@ -15,17 +16,15 @@ export default function Recordings() {
   // Who may change what: admins anything, people allowed to record their own.
   const may = useOwnerCheck();
 
-  const act = attempt("Couldn't change the recording", async (path: string, method: "POST" | "DELETE", confirmText?: string) => {
-    if (confirmText && !confirm(confirmText)) return;
+  const act = attempt("Couldn't change the recording", async (path: string, method: "POST" | "DELETE", ask?: ConfirmOptions) => {
+    if (ask && !(await confirmDialog({ danger: true, ...ask }))) return;
     await api(path, { method });
     await reload();
   });
 
   if (loading && !data)
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <Spinner size={22} />
-      </div>
+      <Loading fill />
     );
 
   const recs = data ?? [];
@@ -46,7 +45,7 @@ export default function Recordings() {
     await Promise.all([reloadRules(), reload()]);
   });
   const deleteRule = attempt("Couldn't stop recording the series", async (r: SeriesRule) => {
-    if (!confirm(`Stop recording "${r.title}" as a series? Upcoming recordings from it are cancelled; finished ones are kept.`)) return;
+    if (!(await confirmDialog({ title: `Stop recording "${r.title}" as a series?`, body: "Upcoming recordings from it are cancelled; finished ones are kept.", action: "Stop recording", danger: true }))) return;
     await api(`/api/dvr/rules/${r.id}`, { method: "DELETE" });
     await Promise.all([reloadRules(), reload()]);
   });
@@ -78,7 +77,7 @@ export default function Recordings() {
                     <div className="flex items-center gap-1.5">
                       <Repeat size={13} className="shrink-0 text-accent" />
                       <span className="truncate text-sm font-semibold text-content">{r.title}</span>
-                      {!r.enabled && <span className="tint-muted rounded px-1.5 text-[11px] font-semibold">Paused</span>}
+                      {!r.enabled && <span className="tint-muted badge">Paused</span>}
                     </div>
                     <div className="mt-0.5 truncate text-xs text-content-muted">
                       {r.channel ? `Only ${r.channel}` : "Any channel"}
@@ -119,7 +118,7 @@ export default function Recordings() {
       )}
 
       {recs.length === 0 && !rules?.length && (
-        <EmptyState icon={<CalendarClock size={34} strokeWidth={1.5} />} title="Nothing recorded or scheduled">
+        <EmptyState icon={<CalendarClock size={36} strokeWidth={1.5} />} title="Nothing recorded or scheduled">
           Open the guide, pick a show and choose Record.
         </EmptyState>
       )}
@@ -131,7 +130,7 @@ export default function Recordings() {
             {live.map((r) => {
               const pct = Math.min(100, ((now - r.startAt) / (r.endAt - r.startAt)) * 100);
               return (
-                <div key={r.id} className="card flex items-center gap-3 border-critical/40 p-3">
+                <div key={r.id} className="card flex flex-wrap items-center gap-3 border-critical/40 p-3">
                   <span className="rec-dot animate-pulse" />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium text-content">{r.title}</div>
@@ -139,22 +138,23 @@ export default function Recordings() {
                       {r.channel} {r.channelName} · until {fmtTime(r.endAt + r.padAfter)}
                       {label(r) && ` · ${label(r)}`}
                     </div>
-                    <div className="mt-1.5 h-1 overflow-hidden rounded-full" style={{ backgroundColor: "color-mix(in srgb, var(--critical) 18%, transparent)" }}>
-                      <div className="h-full rounded-full bg-critical" style={{ width: `${Math.max(0, pct)}%` }} />
-                    </div>
+                    <Meter value={pct} tone="critical" className="mt-1.5 !h-1" />
                     {r.error && <div className="mt-1 truncate text-xs text-warning">{r.error}</div>}
                   </div>
-                  <Link to={`/recording/${r.id}`} className="btn-primary" title="Play this recording from the beginning">
-                    <Play size={13} className="fill-current" /> From start
-                  </Link>
-                  <Link to={`/watch/${r.channel}`} className="btn-ghost" title="Jump to the live broadcast">
-                    <RadioTower size={14} /> Live
-                  </Link>
-                  {may(r.ownerId) && (
-                    <button className="btn-ghost hover:!border-critical hover:!text-critical" onClick={() => void act(`/api/dvr/recordings/${r.id}/cancel`, "POST", `Stop recording "${r.title}"? What's been recorded so far is kept.`)}>
-                      <Square size={12} className="fill-current" /> Stop
-                    </button>
-                  )}
+                  {/* On phones the buttons take a row of their own under the text. */}
+                  <div className="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
+                    <Link to={`/recording/${r.id}`} className="btn-primary" title="Play this recording from the beginning">
+                      <Play size={13} className="fill-current" /> From start
+                    </Link>
+                    <Link to={`/watch/${r.channel}`} className="btn-ghost" title="Jump to the live broadcast">
+                      <RadioTower size={14} /> Live
+                    </Link>
+                    {may(r.ownerId) && (
+                      <button className="btn-ghost hover:!border-critical hover:!text-critical" onClick={() => void act(`/api/dvr/recordings/${r.id}/cancel`, "POST", { title: `Stop recording "${r.title}"?`, body: "What's been recorded so far is kept.", action: "Stop recording" })}>
+                        <Square size={12} className="fill-current" /> Stop
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -243,7 +243,7 @@ export default function Recordings() {
                       {may(r.ownerId) && (
                         <button
                           className="btn-chip hover:!border-critical hover:!text-critical"
-                          onClick={() => void act(`/api/dvr/recordings/${r.id}`, "DELETE", `Delete the recording of "${r.title}"? The file is removed.`)}
+                          onClick={() => void act(`/api/dvr/recordings/${r.id}`, "DELETE", { title: `Delete the recording of "${r.title}"?`, body: "The file is removed from disk.", action: "Delete" })}
                         >
                           <Trash2 size={11} /> Delete
                         </button>
@@ -262,6 +262,13 @@ export default function Recordings() {
           <h2 className="row-title mb-3">Didn't record</h2>
           <div className="card overflow-x-auto">
             <table className="table">
+              <thead>
+                <tr>
+                  <th>Recording</th>
+                  <th>When</th>
+                  <th />
+                </tr>
+              </thead>
               <tbody>
                 {failed.map((r) => (
                   <tr key={r.id}>

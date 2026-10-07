@@ -112,7 +112,11 @@ func (w *Worker) match(ctx context.Context, itemID int64) error {
 			}
 			meta := make([]db.EpisodeMeta, len(eps))
 			for i, e := range eps {
-				meta[i] = db.EpisodeMeta{Season: e.Season, Episode: e.Episode, Title: e.Title, Released: e.Released, Rating: e.Rating, ImdbID: e.ImdbID}
+				meta[i] = db.EpisodeMeta{Season: e.Season, Episode: e.Episode, Title: e.Title, Released: e.Released, Rating: e.Rating, ImdbID: e.ImdbID,
+					Plot: e.Plot, RuntimeMin: e.RuntimeMin, StillURL: e.StillURL, TMDBID: e.TMDBID}
+				for _, c := range e.Credits {
+					meta[i].Credits = append(meta[i].Credits, db.Credit{PersonID: c.PersonID, Name: c.Name, ProfilePath: c.ProfilePath, Kind: c.Kind, Role: c.Role, Order: c.Order})
+				}
 			}
 			if err := w.db.ApplyEpisodeMeta(ctx, itemID, meta); err != nil {
 				return err
@@ -185,10 +189,59 @@ func (w *Worker) artwork(ctx context.Context, itemID int64) error {
 	if err := w.db.SetArtwork(ctx, itemID, hasPoster, hasBackdrop); err != nil {
 		return err
 	}
+	if item.Kind == "series" {
+		// The provider's episode stills, in place of the frame grabs.
+		stills, err := w.db.EpisodeStills(ctx, itemID)
+		if err != nil {
+			return err
+		}
+		for _, st := range stills {
+			switch err := w.episodeStill(ctx, st.StillURL, st.FileID); {
+			case errors.Is(err, errGone):
+				// The frame grab stays.
+			case err != nil:
+				errs = append(errs, fmt.Sprintf("still %d: %s", st.FileID, err))
+			}
+		}
+	}
 	if len(errs) > 0 {
 		return fmt.Errorf("%s", strings.Join(errs, "; "))
 	}
 	return nil
+}
+
+// episodeStill downloads an episode's still from the provider over the
+// file's frame grab, once per link.
+func (w *Worker) episodeStill(ctx context.Context, url string, fileID int64) error {
+	dst := FileStillPath(w.cfg.CacheDir, fileID)
+	dir := filepath.Dir(dst)
+	if fetchedFrom(dir, "still", url) {
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	orig := filepath.Join(dir, "still.orig")
+	if err := download(ctx, url, orig); err != nil {
+		return err
+	}
+	defer os.Remove(orig)
+	if err := w.ff.Resize(ctx, orig, dst, 480); err != nil {
+		return err
+	}
+	markFetched(dir, "still", url)
+	return w.db.SetFileStill(ctx, fileID, true)
+}
+
+// stillFromProvider reports whether a file's still came from the provider
+// (its .src names the link) and is still on disk.
+func stillFromProvider(dst string) bool {
+	src, err := os.ReadFile(filepath.Join(filepath.Dir(dst), "still.src"))
+	if err != nil || len(src) == 0 {
+		return false
+	}
+	_, err = os.Stat(dst)
+	return err == nil
 }
 
 // fetchedFrom records which link an artwork file came from, so a re-match
@@ -312,6 +365,10 @@ func (w *Worker) still(ctx context.Context, fileID int64) error {
 	dst := FileStillPath(w.cfg.CacheDir, fileID)
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
+	}
+	if stillFromProvider(dst) {
+		// The provider's still is already there (the file was re-scanned); keep it.
+		return w.db.SetFileStill(ctx, fileID, true)
 	}
 	if err := w.ff.FrameGrab(ctx, f.Path, dst, imaging.GrabOffset(f.DurationSec, 0.25), 480); err != nil {
 		return err

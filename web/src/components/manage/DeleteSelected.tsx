@@ -1,8 +1,8 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Trash2 } from "lucide-react";
+import Modal from "../Modal";
 import { ErrorNote } from "../ui";
 import { api } from "../../lib/api";
-import { useDialog } from "../../lib/dialog";
 import { errText } from "../../lib/errors";
 import { fmtBytes } from "../../lib/format";
 import { notify } from "../../lib/notices";
@@ -19,9 +19,6 @@ export default function DeleteSelected({ items, onClose, onDeleted }: { items: I
   const [done, setDone] = useState<number | null>(null); // titles deleted so far, while running
   const [err, setErr] = useState<string | null>(null);
   const busy = done !== null;
-  const dialog = useRef<HTMLDivElement>(null);
-  const close = () => !busy && onClose();
-  useDialog(dialog, close);
 
   const n = items.length;
   const what = n === 1 ? "title" : "titles";
@@ -48,8 +45,8 @@ export default function DeleteSelected({ items, onClose, onDeleted }: { items: I
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-backdrop/55 p-4" onClick={close}>
-      <div className="card w-full max-w-md p-4 shadow-[var(--shadow-md)]" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Delete ${n} ${what}`} ref={dialog}>
+    <Modal label={`Delete ${n} ${what}`} role="alertdialog" onClose={onClose} busy={busy}>
+      <>
         <div className="text-base font-semibold text-content">
           Delete {n} {what}?
         </div>
@@ -79,7 +76,7 @@ export default function DeleteSelected({ items, onClose, onDeleted }: { items: I
             <Trash2 size={14} /> {busy ? `Deleting ${(done ?? 0) + 1} of ${n}…` : `Delete ${n} ${what}`}
           </button>
         </div>
-      </div>
-    </div>
+      </>
+    </Modal>
   );
 }

@@ -34,11 +34,19 @@ type Credit struct {
 	Order       int
 }
 
+// Episode is one episode of a season. TMDB also gives the synopsis, running
+// time, a still, its own id and the guest stars and crew; OMDb only the first
+// four fields and an IMDb id.
 type Episode struct {
 	Season, Episode int
 	Title, Released string
 	Rating          *float64
 	ImdbID          string
+	Plot            string
+	RuntimeMin      *int
+	StillURL        string
+	TMDBID          int64
+	Credits         []Credit // guest stars (cast) and the episode's director and writers (crew)
 }
 
 // Kind is what we're looking up.

@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { Bookmark, BookmarkX, ChevronDown, Clapperboard, Combine, Eye, EyeOff, Play, RefreshCw, Scissors, Settings2, Trash2, Tv, X } from "lucide-react";
+import { Bookmark, BookmarkX, ChevronDown, Clapperboard, Combine, Eye, EyeOff, Play, RefreshCw, Scissors, SearchX, Settings2, Trash2, Tv } from "lucide-react";
 import Link from "../components/Link";
 import PosterGrid from "../components/PosterGrid";
 import DeleteSelected from "../components/manage/DeleteSelected";
 import MergeTitles from "../components/manage/MergeTitles";
-import FilterMenu, { Choices } from "../components/FilterMenu";
-import { EmptyState, ErrorNote, MenuButton, SearchInput, Spinner } from "../components/ui";
+import FilterMenu, { ActiveChip, Choices } from "../components/FilterMenu";
+import { EmptyState, ErrorNote, MenuButton, SearchInput, Loading } from "../components/ui";
 import { api, useApi } from "../lib/api";
 import { attempt, notify } from "../lib/notices";
 import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
 import { useQueue, type QueueEntry } from "../stores/queue";
 import { useStatus } from "../stores/status";
-import type { Item, ItemDetail, ItemKind, ItemSummary } from "../lib/types";
+import type { ItemDetail, ItemKind, ItemSummary } from "../lib/types";
 
 type Sort = "title" | "added" | "year" | "rating";
 type Filter = "all" | "unwatched" | "watched" | "list" | "unmatched";
@@ -24,17 +24,8 @@ const SORTS: Record<Sort, (a: ItemSummary, b: ItemSummary) => number> = {
   rating: (a, b) => (b.rating ?? -1) - (a.rating ?? -1) || a.sortTitle.localeCompare(b.sortTitle),
 };
 
+const SORT_LABELS: Record<Sort, string> = { title: "Title", added: "Recently added", year: "Year", rating: "Rating" };
 const FILTER_LABELS: Record<Filter, string> = { all: "All", unwatched: "Unwatched", watched: "Watched", list: "My list", unmatched: "Unmatched" };
-
-/** An active filter under the search box; tap to clear it. */
-function ActiveChip({ label, onClear }: { label: string; onClear: () => void }) {
-  return (
-    <button type="button" onClick={onClear} className="choice choice-on inline-flex items-center gap-1 !min-h-7 !text-xs" aria-label={`Clear ${label}`}>
-      {label}
-      <X size={12} />
-    </button>
-  );
-}
 
 // Keep filter choices per library view across navigation.
 const saved: Record<string, { q: string; sort: Sort; filter: Filter; genre: string }> = {};
@@ -46,7 +37,6 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
   const [sort, setSort] = useState<Sort>(init.sort);
   const [filter, setFilter] = useState<Filter>(init.filter);
   const [genre, setGenre] = useState(init.genre);
-  saved[kind] = { q, sort, filter, genre };
 
   const genres = useMemo(() => [...new Set((data ?? []).flatMap((i) => i.genres))].sort(), [data]);
 
@@ -146,19 +136,24 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
       await reload();
     })();
 
-  // The title's panel in its library's Manage view (the grid's rows don't say which library).
-  const manage = attempt("Couldn't open Manage", async (it: ItemSummary) => {
-    const { libraryId } = await api<Item>(`/api/items/${it.id}`);
-    go(`/libraries/${libraryId}?item=${it.id}`);
-  });
 
-  const title = kind === "movie" ? "Movies" : "TV Shows";
+  // Remember the choices for this view, for when it's opened again.
+  useEffect(() => {
+    saved[kind] = { q, sort, filter, genre };
+  }, [kind, q, sort, filter, genre]);
+
+  const resetFilters = () => {
+    setFilter("all");
+    setGenre("");
+    setSort("title");
+  };
+  const title = kind === "movie" ? "Movies" : "TV shows";
   const noun = kind === "movie" ? "movie" : "show";
   const total = data?.length ?? 0;
 
   return (
     <div className="flex h-full flex-col">
-      <header className="gutter border-b border-border-light pb-3 pt-4 md:pt-5">
+      <header className="gutter border-b border-border-light pb-3 pt-5">
         <div className="flex items-baseline justify-between gap-3">
           <h1 className="text-lg font-semibold text-content">{title}</h1>
           <span className="text-xs text-content-muted">
@@ -173,11 +168,7 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
           <SearchInput large value={q} onChange={setQ} placeholder={`Search ${noun}s`} aria-label={`Search ${noun}s`} className="min-w-0 flex-1 md:max-w-xl" />
           <FilterMenu
             active={(filter !== "all" ? 1 : 0) + (genre ? 1 : 0) + (sort !== "title" ? 1 : 0)}
-            onReset={() => {
-              setFilter("all");
-              setGenre("");
-              setSort("title");
-            }}
+            onReset={resetFilters}
           >
             <Choices<Sort>
               label="Sort by"
@@ -233,11 +224,11 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
                 ...(chosen.length === 1
                   ? [
                       {
-                        id: "manage",
-                        label: "Manage…",
-                        detail: "Fix the match, artwork and files",
+                        id: "edit",
+                        label: "Edit…",
+                        detail: "Details, match, artwork and files, on its page",
                         icon: <Settings2 size={14} />,
-                        onSelect: () => void manage(chosen[0]),
+                        onSelect: () => go(`/item/${chosen[0].id}?edit=1`),
                       },
                     ]
                   : []),
@@ -258,6 +249,7 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
           <div className="mt-2 flex flex-wrap gap-1.5">
             {filter !== "all" && <ActiveChip label={FILTER_LABELS[filter]} onClear={() => setFilter("all")} />}
             {genre && <ActiveChip label={genre} onClear={() => setGenre("")} />}
+            {sort !== "title" && <ActiveChip label={`Sorted by ${SORT_LABELS[sort].toLowerCase()}`} onClear={() => setSort("title")} />}
           </div>
         )}
       </header>
@@ -267,16 +259,28 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
         </div>
       )}
       {loading && !data ? (
-        <div className="flex flex-1 items-center justify-center">
-          <Spinner size={22} />
-        </div>
+        <Loading fill />
       ) : total === 0 ? (
         <EmptyState icon={kind === "movie" ? <Clapperboard size={36} strokeWidth={1.5} /> : <Tv size={36} strokeWidth={1.5} />} title={`No ${noun}s yet`}>
-          Add a {kind === "movie" ? "Movies" : "TV"} library on the <Link to="/libraries" className="text-accent hover:underline">Libraries</Link> page, or
-          wait for the current scan to finish.
+          {admin ? (
+            <>
+              Add a {kind === "movie" ? "Movies" : "TV shows"} library on the <Link to="/libraries" className="text-accent hover:underline">Libraries</Link> page,
+              or wait for the current scan to finish.
+            </>
+          ) : (
+            "Nothing has been scanned in yet. Ask an admin to add a library."
+          )}
         </EmptyState>
       ) : items.length === 0 ? (
-        <EmptyState title="Nothing matches those filters" />
+        <EmptyState
+          icon={<SearchX size={36} strokeWidth={1.5} />}
+          title="Nothing matches those filters"
+          action={
+            <button className="btn-ghost" onClick={resetFilters}>
+              Reset filters
+            </button>
+          }
+        />
       ) : (
         <PosterGrid items={items} memoryKey={kind} selection={admin ? { ids: picked, onClick: pick } : undefined} />
       )}

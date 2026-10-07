@@ -64,7 +64,7 @@ export default function SessionList({ url }: { url: string }) {
             <div className="min-w-0 flex-1">
               <div className="truncate text-content">
                 {s.device || (s.client === "tv" ? "TV app" : describeAgent(s.userAgent))}
-                {s.current && <span className="tint-good ml-2 rounded px-1.5 text-[11px] font-semibold">This device</span>}
+                {s.current && <span className="tint-good ml-2 badge">This device</span>}
               </div>
               <div className="truncate text-xs text-content-muted">
                 {[s.ip, `active ${fmtAgo(s.lastUsedAt)}`, `signed in ${new Date(s.createdAt * 1000).toLocaleDateString()}`].filter(Boolean).join(" · ")}

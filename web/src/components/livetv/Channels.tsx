@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Lock, Play } from "lucide-react";
 import Link from "../Link";
-import { PinButton, SignalBars } from "./ChannelBits";
+import { PinButton, RecDot, SignalBars } from "./ChannelBits";
 import FilterBar from "./FilterBar";
 import { channelNameMatches, channelPasses, genresOf, programFilterActive, programMatches, type TvFilters } from "./filters";
 import ProgramDialog from "./ProgramDialog";
-import { EmptyState, ErrorNote, Meter, Spinner } from "../ui";
+import { EmptyState, ErrorNote, Meter, Loading } from "../ui";
 import { useApi } from "../../lib/api";
 import { fmtTime } from "../../lib/format";
 import type { ChannelNow, Program, TvChannel } from "../../lib/types";
@@ -26,9 +26,7 @@ export default function Channels({ filters, setFilters }: { filters: TvFilters; 
 
   if (loading && !data)
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <Spinner size={22} />
-      </div>
+      <Loading fill />
     );
 
   return (
@@ -59,7 +57,7 @@ export default function Channels({ filters, setFilters }: { filters: TvFilters; 
                 </div>
                 {p ? (
                   <button className="mt-0.5 block w-full truncate text-left text-sm font-medium text-content hover:text-accent" onClick={() => setOpen({ p, c })}>
-                    {(p.recordingStatus === "recording" || p.recordingStatus === "scheduled") && <span className="rec-dot mr-1.5" />}
+                    <RecDot status={p.recordingStatus} className="mr-1.5" />
                     {p.title}
                   </button>
                 ) : (
