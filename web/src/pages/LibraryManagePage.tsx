@@ -1,13 +1,14 @@
 import { memo, useMemo, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowUp, Copy, Cpu, ImageUp } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Clapperboard, Copy, Cpu, ImageUp, Pencil, RefreshCw, ScanSearch, Trash2, Tv } from "lucide-react";
 import Link from "../components/Link";
-import ItemPanel from "../components/manage/ItemPanel";
+import LibraryForm from "../components/LibraryForm";
 import { PosterArt } from "../components/PosterCard";
 import { EmptyState, ErrorNote, PageHeader, SearchInput, Spinner } from "../components/ui";
 import { api, useApi } from "../lib/api";
 import { fmtAgo, fmtBytes } from "../lib/format";
 import { codecLabel, extraFiles, qualityLabel, qualityTier, qualityTone } from "../lib/quality";
 import type { Library, ManageRow } from "../lib/types";
+import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
 import { attempt, notify } from "../lib/notices";
 import { confirmDialog } from "../lib/ask";
@@ -40,11 +41,26 @@ const SORTS: Record<SortKey, (a: ManageRow, b: ManageRow) => number> = {
   added: (a, b) => a.addedAt - b.addedAt,
 };
 
+const scan = attempt("Couldn't start the scan", async (id: number) => {
+  await api(`/api/libraries/${id}/scan`, { method: "POST" });
+  notify("Scanning; progress is on the Activity page.", "info");
+  void useStatus.getState().refresh();
+});
+const rematch = attempt("Couldn't re-match the library", async (l: Library) => {
+  if (!(await confirmDialog({ title: `Look up every title in "${l.name}" again?`, body: "This refreshes details, posters, backdrops and cast from the metadata providers. Matches you fixed by hand stay as they are.", action: "Re-match" }))) return;
+  const r = await api<{ queued: number }>(`/api/libraries/${l.id}/rematch`, { method: "POST" });
+  notify(`Queued ${r.queued} lookup${r.queued === 1 ? "" : "s"}; progress is on the Activity page.`, "info");
+  void useStatus.getState().refresh();
+});
+
 /**
- * One library as a sortable table: quality, duplicates, unmatched titles.
- * Picking a row opens a panel to fix its match, change artwork or delete files.
+ * A library's settings: its name, folder and options, scans and bulk jobs,
+ * and every title as a sortable table (quality, duplicates, unmatched).
+ * A title's row opens its page with the Edit panel.
  */
 export default function LibraryManagePage({ id }: { id: number }) {
+  const go = useRouter((s) => s.go);
+  const [editing, setEditing] = useState(false);
   const [anyPending, setAnyPending] = useState(false);
   const { data, error, reload } = useApi<{ library: Library; items: ManageRow[] }>(`/api/libraries/${id}/manage`, {
     pollMs: anyPending ? 3000 : undefined,
@@ -52,8 +68,6 @@ export default function LibraryManagePage({ id }: { id: number }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "title", desc: false });
-  // ?item=<id> opens that title's panel (the Movies and TV grids link here).
-  const [open, setOpen] = useState<number | null>(() => Number(new URLSearchParams(location.search).get("item")) || null);
 
   const items = useMemo(() => data?.items ?? [], [data]);
   const pending = items.some((r) => r.matchStatus === "pending");
@@ -82,8 +96,13 @@ export default function LibraryManagePage({ id }: { id: number }) {
 
   const lib = data?.library;
   const totalSize = items.reduce((s, r) => s + r.size, 0);
-  const openRow = items.find((r) => r.id === open) ?? null;
   const movies = lib?.kind === "movies";
+  const remove = attempt("Couldn't remove the library", async (l: Library) => {
+    if (!(await confirmDialog({ title: `Remove "${l.name}" from Couchside?`, body: "Your files are not touched; only the library entry, watch history and artwork go.", action: "Remove", danger: true }))) return;
+    await api(`/api/libraries/${l.id}`, { method: "DELETE" });
+    void useStatus.getState().refresh();
+    go("/libraries", { replace: true });
+  });
 
   const header = (key: SortKey, label: string, className = "") => (
     <th className={className} aria-sort={sort.key === key ? (sort.desc ? "descending" : "ascending") : undefined}>
@@ -100,20 +119,58 @@ export default function LibraryManagePage({ id }: { id: number }) {
   return (
     <div>
       <PageHeader
-        title={lib ? `Manage ${lib.name}` : "Manage library"}
-        subtitle={lib ? `${items.length.toLocaleString()} ${movies ? "movies" : "shows"} · ${lib.fileCount.toLocaleString()} files · ${fmtBytes(totalSize)}` : undefined}
+        title={lib ? lib.name : "Library"}
+        subtitle={lib ? `${items.length.toLocaleString()} ${movies ? (items.length === 1 ? "movie" : "movies") : items.length === 1 ? "show" : "shows"} · ${lib.fileCount.toLocaleString()} files · ${fmtBytes(totalSize)} · scanned ${fmtAgo(lib.lastScanAt)}` : undefined}
       >
         <Link to="/libraries" className="btn-quiet">
           <ArrowLeft size={15} /> Libraries
         </Link>
-        {lib && (
-          <button className="btn-ghost" onClick={() => void optimizeAll(lib)} title="Encode browser-friendly copies of every file that needs transcoding">
-            <Cpu size={15} /> Optimize all
-          </button>
-        )}
       </PageHeader>
       <div className="flex flex-col gap-3 gutter py-4">
         {error && <ErrorNote>{error}</ErrorNote>}
+        {lib &&
+          (editing ? (
+            <LibraryForm
+              library={lib}
+              onDone={() => {
+                setEditing(false);
+                void reload();
+                void useStatus.getState().refresh();
+              }}
+              onCancel={() => setEditing(false)}
+            />
+          ) : (
+            <div className="card flex flex-wrap items-center gap-4 px-4 py-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-muted text-accent">{movies ? <Clapperboard size={18} /> : <Tv size={18} />}</div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-content">{lib.name}</span>
+                  <span className="badge tint-muted">{movies ? "Movies" : "TV shows"}</span>
+                  {lib.trickplay && <span className="badge tint-muted">Preview thumbnails</span>}
+                  {lib.intros && <span className="badge tint-muted">Finds intros</span>}
+                </div>
+                <div className="mono mt-0.5 truncate text-content-muted">{lib.path}</div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button className="btn-ghost" onClick={() => setEditing(true)}>
+                  <Pencil size={15} /> Edit
+                </button>
+                <button className="btn-ghost" onClick={() => void scan(lib.id)} title="Look for new, changed and removed files">
+                  <ScanSearch size={15} /> Scan
+                </button>
+                <button className="btn-ghost" onClick={() => void rematch(lib)} title="Look up details, artwork and cast again for every title">
+                  <RefreshCw size={15} /> Re-match
+                </button>
+                <button className="btn-ghost" onClick={() => void optimizeAll(lib)} title="Encode browser-friendly copies of every file that needs transcoding">
+                  <Cpu size={15} /> Optimize all
+                </button>
+                <button className="btn-ghost hover:!border-critical hover:!text-critical" onClick={() => void remove(lib)} title="Files on disk stay; its watch history and artwork go">
+                  <Trash2 size={15} /> Remove
+                </button>
+              </div>
+            </div>
+          ))}
+        <h2 className="row-title mt-3">Titles</h2>
         <div className="flex flex-wrap items-center gap-2">
           <SearchInput value={q} onChange={setQ} placeholder={movies ? "Find a movie…" : "Find a show…"} className="w-full sm:w-64" />
           <div className="inline-flex rounded-md border border-border p-0.5" role="radiogroup" aria-label="Show">
@@ -163,47 +220,38 @@ export default function LibraryManagePage({ id }: { id: number }) {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <Row key={r.id} r={r} active={r.id === open} onOpen={() => setOpen(r.id)} />
+                  <Row key={r.id} r={r} />
                 ))}
               </tbody>
             </table>
           </div>
         )}
       </div>
-      {openRow && lib && <ItemPanel row={openRow} library={lib} onClose={() => setOpen(null)} onChanged={() => void reload()} />}
     </div>
   );
 }
 
 // Memoised on the row's content: the list is fetched again every few
 // seconds while anything is matching, and only rows that changed should
-// render again. (onOpen is a new function each time but always opens r.)
-const Row = memo(RowView, (a, b) => a.active === b.active && JSON.stringify(a.r) === JSON.stringify(b.r));
+// render again.
+const Row = memo(RowView, (a, b) => JSON.stringify(a.r) === JSON.stringify(b.r));
 
-function RowView({ r, active, onOpen }: { r: ManageRow; active: boolean; onOpen: () => void }) {
+/** One title; its name opens its page with the Edit panel. */
+function RowView({ r }: { r: ManageRow }) {
   const extra = extraFiles(r);
   const range = r.kind === "series" && r.minHeight && qualityTier(r.minHeight) !== qualityTier(r.maxHeight);
   return (
-    <tr className={`cursor-pointer ${active ? "bg-muted" : ""}`} onClick={onOpen}>
+    <tr>
       <td className="!py-1">
-        <div className="poster relative h-12 w-8 overflow-hidden rounded">
+        <Link to={`/item/${r.id}`} className="poster relative block h-12 w-8 overflow-hidden rounded" aria-label={r.title}>
           <PosterArt item={r} bare />
-        </div>
+        </Link>
       </td>
       <td className="max-w-md">
         <div className="flex min-w-0 items-center gap-2">
-          {/* A real button, so the row can be opened from the keyboard. */}
-          <button
-            type="button"
-            className="truncate text-left font-medium text-content hover:text-accent"
-            aria-haspopup="dialog"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpen();
-            }}
-          >
+          <Link to={`/item/${r.id}?edit=1`} className="title-link truncate font-medium text-content">
             {r.title}
-          </button>
+          </Link>
           {r.year && <span className="text-content-muted">{r.year}</span>}
           {r.matchStatus === "unmatched" && <span className="badge tint-warning">Unmatched</span>}
           {r.matchStatus === "pending" && <span className="badge tint-info">Matching…</span>}

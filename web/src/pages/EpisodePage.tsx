@@ -1,7 +1,9 @@
-import { ArrowLeft, ChevronLeft, ChevronRight, Eye, EyeOff, Play, Star } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Eye, EyeOff, Pencil, Play, Star } from "lucide-react";
 import { CastRow, CrewLine } from "../components/Credits";
 import FilesCard from "../components/item/FilesCard";
 import { EpisodeActions } from "../components/item/AdminMenus";
+import ItemPanel from "../components/manage/ItemPanel";
 import Link from "../components/Link";
 import { EmptyState, ErrorNote, Spinner } from "../components/ui";
 import { api, backdropUrl, stillUrl, useApi } from "../lib/api";
@@ -16,6 +18,7 @@ export default function EpisodePage({ id }: { id: number }) {
   const { data, error, loading, reload } = useApi<EpisodeDetail>(`/api/episodes/${id}`);
   const back = useRouter((s) => s.back);
   const admin = useIsAdmin();
+  const [editing, setEditing] = useState(false);
 
   if (loading && !data) {
     return (
@@ -105,6 +108,11 @@ export default function EpisodePage({ id }: { id: number }) {
             {e.watched ? <EyeOff size={15} /> : <Eye size={15} />}
             {e.watched ? "Mark unwatched" : "Mark watched"}
           </button>
+          {admin && (
+            <button className="btn-ghost !py-2" onClick={() => setEditing(true)}>
+              <Pencil size={15} /> Edit
+            </button>
+          )}
           {admin && <EpisodeActions item={series} e={e} onChange={reload} className="btn-ghost !px-2.5 !py-2" />}
         </div>
 
@@ -132,6 +140,14 @@ export default function EpisodePage({ id }: { id: number }) {
         <div className="gutter pt-4">
           <ErrorNote>{error}</ErrorNote>
         </div>
+      )}
+      {editing && admin && (
+        <ItemPanel
+          item={series}
+          episode={{ season: e.season, episode: e.episode, label: `${number}${e.title ? ` · ${e.title}` : ""}` }}
+          onClose={() => setEditing(false)}
+          onChanged={() => void reload()}
+        />
       )}
     </div>
   );

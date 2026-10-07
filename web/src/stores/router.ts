@@ -8,7 +8,7 @@ export type Route =
   | { name: "home" }
   | { name: "movies" }
   | { name: "tv" }
-  | { name: "item"; id: number; season?: number }
+  | { name: "item"; id: number; season?: number; edit?: boolean }
   | { name: "episode"; id: number }
   | { name: "play"; fileId: number }
   | { name: "livetv"; tab: "guide" | "channels" | "recordings" }
@@ -46,8 +46,9 @@ export function parseRoute(path: string): Route {
   if (m && (SETTINGS_SECTIONS as readonly string[]).includes(m[1]) && m[1] !== "you") return { name: "settings", section: m[1] as SettingsSection };
   m = p.match(/^\/item\/(\d+)$/);
   if (m) {
-    const season = new URLSearchParams(query).get("season");
-    return { name: "item", id: Number(m[1]), season: season === null ? undefined : Number(season) };
+    const q = new URLSearchParams(query);
+    const season = q.get("season");
+    return { name: "item", id: Number(m[1]), season: season === null ? undefined : Number(season), edit: q.has("edit") || undefined };
   }
   m = p.match(/^\/episode\/(\d+)$/);
   if (m) return { name: "episode", id: Number(m[1]) };

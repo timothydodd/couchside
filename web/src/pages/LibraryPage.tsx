@@ -12,7 +12,7 @@ import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
 import { useQueue, type QueueEntry } from "../stores/queue";
 import { useStatus } from "../stores/status";
-import type { Item, ItemDetail, ItemKind, ItemSummary } from "../lib/types";
+import type { ItemDetail, ItemKind, ItemSummary } from "../lib/types";
 
 type Sort = "title" | "added" | "year" | "rating";
 type Filter = "all" | "unwatched" | "watched" | "list" | "unmatched";
@@ -146,11 +146,6 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
       await reload();
     })();
 
-  // The title's panel in its library's Manage view (the grid's rows don't say which library).
-  const manage = attempt("Couldn't open Manage", async (it: ItemSummary) => {
-    const { libraryId } = await api<Item>(`/api/items/${it.id}`);
-    go(`/libraries/${libraryId}?item=${it.id}`);
-  });
 
   const title = kind === "movie" ? "Movies" : "TV Shows";
   const noun = kind === "movie" ? "movie" : "show";
@@ -233,11 +228,11 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
                 ...(chosen.length === 1
                   ? [
                       {
-                        id: "manage",
-                        label: "Manage…",
-                        detail: "Fix the match, artwork and files",
+                        id: "edit",
+                        label: "Edit…",
+                        detail: "Details, match, artwork and files, on its page",
                         icon: <Settings2 size={14} />,
-                        onSelect: () => void manage(chosen[0]),
+                        onSelect: () => go(`/item/${chosen[0].id}?edit=1`),
                       },
                     ]
                   : []),

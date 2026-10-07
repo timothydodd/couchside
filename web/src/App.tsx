@@ -130,7 +130,7 @@ function Signed() {
           {route.name === "home" && <HomePage />}
           {route.name === "movies" && <LibraryPage kind="movie" />}
           {route.name === "tv" && <LibraryPage kind="series" />}
-          {route.name === "item" && <ItemPage id={route.id} season={route.season} />}
+          {route.name === "item" && <ItemPage id={route.id} season={route.season} edit={route.edit} />}
           {route.name === "episode" && <EpisodePage id={route.id} />}
           {route.name === "livetv" && <LiveTvPage tab={route.tab} />}
           {adminOnly && !admin && <EmptyState title="Admins only">Ask an admin for access to this page.</EmptyState>}

@@ -41,6 +41,31 @@ func (s *Server) manageItems(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"library": lib, "items": rows})
 }
 
+// manageItem is one title's Manage row and its library, for the Edit panel on its page.
+func (s *Server) manageItem(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	row, err := s.db.ManageRow(r.Context(), id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	item, err := s.db.Item(r.Context(), id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	lib, err := s.db.Library(r.Context(), item.LibraryID)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"item": row, "library": lib})
+}
+
 func (s *Server) itemFiles(w http.ResponseWriter, r *http.Request) {
 	id, err := idParam(r)
 	if err != nil {

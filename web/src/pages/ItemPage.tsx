@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Bookmark, BookmarkCheck, Check, Eye, EyeOff, Play, RotateCcw, Star, Wand2 } from "lucide-react";
+import { ArrowLeft, Bookmark, BookmarkCheck, Eye, EyeOff, Pencil, Play, Star, Wand2 } from "lucide-react";
 import EpisodeCard from "../components/EpisodeCard";
 import FilesCard from "../components/item/FilesCard";
+import ItemPanel, { type PanelSection } from "../components/manage/ItemPanel";
 import { CastRow, CrewLine } from "../components/Credits";
 import Link from "../components/Link";
 import { PosterArt } from "../components/PosterCard";
@@ -16,12 +17,13 @@ import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
 import { attempt } from "../lib/notices";
-import { errText } from "../lib/errors";
 
-export default function ItemPage({ id, season }: { id: number; season?: number }) {
+export default function ItemPage({ id, season, edit }: { id: number; season?: number; edit?: boolean }) {
   const { data, error, loading, reload } = useApi<ItemDetail>(`/api/items/${id}`);
   const back = useRouter((s) => s.back);
   const admin = useIsAdmin();
+  // The Edit panel: open from the button, from "Fix match", or by ?edit=1 (the library table links here).
+  const [editing, setEditing] = useState<PanelSection | null>(edit ? "details" : null);
 
   if (loading && !data) {
     return (
@@ -166,6 +168,11 @@ export default function ItemPage({ id, season }: { id: number; season?: number }
               {allWatched ? <EyeOff size={15} /> : <Eye size={15} />}
               {allWatched ? "Mark unwatched" : "Mark watched"}
             </button>
+            {admin && (
+              <button className="btn-ghost !py-2" onClick={() => setEditing("details")}>
+                <Pencil size={15} /> Edit
+              </button>
+            )}
             {admin && <TitleActions item={item} onChange={reload} />}
           </div>
 
@@ -181,7 +188,7 @@ export default function ItemPage({ id, season }: { id: number; season?: number }
 
           <CrewLine crew={data.crew ?? []} />
 
-          {admin && <MatchPanel id={item.id} status={item.matchStatus} imdbId={item.imdbId} parsed={`${item.parsedTitle}${item.parsedYear ? ` (${item.parsedYear})` : ""}`} onDone={reload} />}
+          {admin && <MatchLine item={item} onFix={() => setEditing("match")} onDone={reload} />}
         </div>
       </div>
 
@@ -196,6 +203,7 @@ export default function ItemPage({ id, season }: { id: number; season?: number }
           <ErrorNote>{error}</ErrorNote>
         </div>
       )}
+      {editing && admin && <ItemPanel item={item} section={editing} onClose={() => setEditing(null)} onChanged={() => void reload()} />}
     </div>
   );
 }
@@ -219,87 +227,34 @@ function nextEpisode(seasons: NonNullable<ItemDetail["seasons"]>): EpisodeRow | 
   return all.find((e) => !e.watched) ?? all[0];
 }
 
-function MatchPanel({ id, status, imdbId, parsed, onDone }: { id: number; status: string; imdbId: string; parsed: string; onDone: () => void }) {
+/** For admins: where the match stands, with "Fix match" opening the Edit panel on it. Polls while a match is pending. */
+function MatchLine({ item, onFix, onDone }: { item: ItemDetail["item"]; onFix: () => void; onDone: () => void }) {
   const hasProvider = !!useStatus((s) => s.status?.providers.length);
-  const [open, setOpen] = useState(false);
-  const [value, setValue] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  // While a match is pending, poll so the page fills in on its own.
   useEffect(() => {
-    if (status !== "pending") return;
+    if (item.matchStatus !== "pending") return;
     const t = setInterval(onDone, 2500);
     return () => clearInterval(t);
-  }, [status, onDone]);
-
+  }, [item.matchStatus, onDone]);
   if (!hasProvider) return null;
-
-  const submit = async (imdb: string) => {
-    setBusy(true);
-    setErr(null);
-    try {
-      await api(`/api/items/${id}/match`, { method: "POST", json: { imdbId: imdb } });
-      setOpen(false);
-      setValue("");
-      onDone();
-    } catch (e) {
-      setErr(errText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
+  const parsed = `${item.parsedTitle}${item.parsedYear ? ` (${item.parsedYear})` : ""}`;
   return (
-    <div className="mt-5">
-      {!open ? (
-        <div className="flex flex-wrap items-center gap-2 text-xs text-content-muted">
-          {status === "unmatched" && <span className="tint-warning rounded px-1.5 py-0.5 font-semibold">Unmatched</span>}
-          <span>
-            Read from files as <span className="text-content-secondary">{parsed}</span>
-            {imdbId && (
-              <>
-                {" · "}
-                <a href={titleLink(imdbId) ?? undefined} target="_blank" rel="noreferrer" className="hover:text-accent">
-                  {imdbId}
-                </a>
-              </>
-            )}
-          </span>
-          <button className="btn-quiet !text-xs" onClick={() => setOpen(true)}>
-            <Wand2 size={13} /> Fix match
-          </button>
-        </div>
-      ) : (
-        <div className="card max-w-xl p-3">
-          <label className="field-label" htmlFor="imdb">
-            IMDb or TMDB id or URL
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="imdb"
-              className="field min-w-0 flex-1"
-              placeholder="tt0133093, or an imdb.com or themoviedb.org link"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && value.trim() && void submit(value)}
-              autoFocus
-            />
-            <button className="btn-primary" disabled={busy || !value.trim()} onClick={() => void submit(value)}>
-              <Check size={15} /> Match
-            </button>
-          </div>
-          <div className="mt-2 flex items-center gap-2">
-            <button className="btn-quiet !text-xs" disabled={busy} onClick={() => void submit("")}>
-              <RotateCcw size={13} /> Retry automatic match
-            </button>
-            <button className="btn-quiet !text-xs ml-auto" onClick={() => setOpen(false)}>
-              Cancel
-            </button>
-          </div>
-          {err && <div className="mt-2 text-xs text-critical">{err}</div>}
-        </div>
-      )}
+    <div className="mt-5 flex flex-wrap items-center gap-2 text-xs text-content-muted">
+      {item.matchStatus === "unmatched" && <span className="badge tint-warning">Unmatched</span>}
+      {item.matchStatus === "pending" && <span className="badge tint-info">Matching…</span>}
+      <span>
+        Read from files as <span className="text-content-secondary">{parsed}</span>
+        {item.imdbId && (
+          <>
+            {" · "}
+            <a href={titleLink(item.imdbId) ?? undefined} target="_blank" rel="noreferrer" className="hover:text-accent">
+              {item.imdbId}
+            </a>
+          </>
+        )}
+      </span>
+      <button className="btn-quiet !text-xs" onClick={onFix}>
+        <Wand2 size={13} /> Fix match
+      </button>
     </div>
   );
 }

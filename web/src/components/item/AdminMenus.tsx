@@ -1,6 +1,4 @@
-import { useState } from "react";
 import { Copy, Cpu, Eye, EyeOff, FastForward, FolderOpen, MoreHorizontal, Pencil, RefreshCw, RotateCcw, Scissors, Trash2 } from "lucide-react";
-import EditDetails from "./EditDetails";
 import { MenuButton, type MenuItem } from "../ui";
 import { api } from "../../lib/api";
 import { attempt, notify } from "../../lib/notices";
@@ -164,23 +162,15 @@ export function ExtraActions({ item, f, onChange }: { item: Item; f: MediaFile; 
   return <MenuButton label={`Actions for ${name}`} icon={<MoreHorizontal size={16} />} items={items} align="start" className="tile-action" />;
 }
 
-/** The "⋯" beside Mark watched, for admins: edit, jobs and delete for the whole movie or show. */
+/** The "⋯" beside Mark watched, for admins: jobs, the library's settings and delete for the whole movie or show (Edit is its own button). */
 export function TitleActions({ item, onChange }: { item: Item; onChange: () => void }) {
   const comskip = useStatus((s) => s.status?.comskip);
   const go = useRouter((s) => s.go);
-  const [editing, setEditing] = useState(false);
   const series = item.kind === "series";
   const what = series ? "episode" : "file";
   const count = (n: number) => `${n} ${what}${n === 1 ? "" : "s"}`;
 
   const items: MenuItem[] = [
-    {
-      id: "edit",
-      label: "Edit details",
-      detail: "Title, year, rating, genres and description, by hand.",
-      icon: <Pencil size={15} />,
-      onSelect: () => setEditing(true),
-    },
     {
       id: "scan",
       label: "Scan library",
@@ -240,9 +230,9 @@ export function TitleActions({ item, onChange }: { item: Item; onChange: () => v
   }
   items.push(
     {
-      id: "manage",
-      label: "Manage in library",
-      detail: "Files, duplicates, artwork and matching, in the library's table.",
+      id: "library",
+      label: "Library settings",
+      detail: "The library this title is in: its folder, scans and every title's quality.",
       icon: <FolderOpen size={15} />,
       onSelect: () => go(`/libraries/${item.libraryId}`),
     },
@@ -262,10 +252,5 @@ export function TitleActions({ item, onChange }: { item: Item; onChange: () => v
     },
   );
 
-  return (
-    <>
-      <MenuButton label="More actions" icon={<MoreHorizontal size={16} />} items={items} align="end" className="btn-ghost !px-2.5 !py-2" />
-      {editing && <EditDetails item={item} onClose={() => setEditing(false)} onSaved={onChange} />}
-    </>
-  );
+  return <MenuButton label="More actions" icon={<MoreHorizontal size={16} />} items={items} align="end" className="btn-ghost !px-2.5 !py-2" />;
 }

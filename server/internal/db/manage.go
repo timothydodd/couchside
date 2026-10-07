@@ -34,6 +34,22 @@ type ManageRow struct {
 // ManageRows lists a library's items with the file facts the Manage view
 // sorts and filters on.
 func (d *DB) ManageRows(ctx context.Context, libraryID int64) ([]ManageRow, error) {
+	return d.manageRows(ctx, `EXISTS (SELECT 1 FROM files fl WHERE fl.media_item_id = m.id AND fl.library_id = ?)`, libraryID)
+}
+
+// ManageRow is one title's Manage row, for the title page's Edit panel.
+func (d *DB) ManageRow(ctx context.Context, itemID int64) (ManageRow, error) {
+	rows, err := d.manageRows(ctx, `m.id = ?`, itemID)
+	if err != nil {
+		return ManageRow{}, err
+	}
+	if len(rows) == 0 {
+		return ManageRow{}, ErrNotFound
+	}
+	return rows[0], nil
+}
+
+func (d *DB) manageRows(ctx context.Context, where string, arg any) ([]ManageRow, error) {
 	rows, err := d.sql.QueryContext(ctx, `SELECT m.id, m.kind, m.title, m.year, m.parsed_title, m.parsed_year,
 		m.match_status, m.imdb_id, m.has_poster, m.custom_poster, m.custom_backdrop, m.updated_at, m.added_at,
 		(SELECT COUNT(*) FROM files f WHERE f.media_item_id = m.id),
@@ -49,7 +65,7 @@ func (d *DB) ManageRows(ctx context.Context, libraryID int64) ([]ManageRow, erro
 		FROM media_items m
 		LEFT JOIN files best ON best.id = (SELECT f.id FROM files f WHERE f.media_item_id = m.id AND f.role <> 'extra'
 		  ORDER BY COALESCE(f.height, 0) DESC, f.size DESC LIMIT 1)
-		WHERE EXISTS (SELECT 1 FROM files fl WHERE fl.media_item_id = m.id AND fl.library_id = ?) ORDER BY m.sort_title`, libraryID)
+		WHERE `+where+` ORDER BY m.sort_title`, arg)
 	if err != nil {
 		return nil, err
 	}

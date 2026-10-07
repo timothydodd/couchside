@@ -1,75 +1,101 @@
 import { useEffect, useRef, useState } from "react";
-import { Cpu, ExternalLink, MoreHorizontal, RotateCcw, Scissors, Trash2, X, Pencil } from "lucide-react";
+import { X } from "lucide-react";
 import Link from "../Link";
 import { PosterArt } from "../PosterCard";
-import { ErrorNote, JobNote, MenuButton, type MenuItem } from "../ui";
+import { ErrorNote, JobNote, Spinner } from "../ui";
 import ArtworkEditor from "./ArtworkEditor";
 import FileList from "./FileList";
 import MetadataSearch from "./MetadataSearch";
-import { api, useApi } from "../../lib/api";
+import DetailsEditor from "../item/DetailsEditor";
+import { useApi } from "../../lib/api";
 import { fmtBytes, relPath } from "../../lib/format";
-import type { DeleteResult, ItemDetail, Library, ManageFile, ManageRow } from "../../lib/types";
-import EditDetails from "../item/EditDetails";
-import { useStatus } from "../../stores/status";
+import type { DeleteResult, Item, Library, ManageFile, ManageRow } from "../../lib/types";
+import { useRouter } from "../../stores/router";
 import { useDialog } from "../../lib/dialog";
-import { errText } from "../../lib/errors";
 
-/** A message at the top of the panel: what a delete or a queued job did. */
+/** A message at the top of the panel: what a delete did. */
 type Note = { text: string; error?: boolean };
 
-/** Everything you can do to one movie or show, in a drawer over the Manage table. */
-export default function ItemPanel({ row, library, onClose, onChanged }: { row: ManageRow; library: Library; onClose: () => void; onChanged: () => void }) {
-  const { data: files, error: filesError, reload: reloadFiles } = useApi<ManageFile[]>(`/api/items/${row.id}/files`);
+export type PanelSection = "details" | "match" | "artwork" | "files";
+
+/**
+ * Everything an admin can change about one movie or show, in a drawer over
+ * its page: details by hand, the match, the artwork, and its files (roles,
+ * extra copies, deleting). Jobs and deleting the whole title stay in the
+ * page's "⋯". With `episode`, only that episode's files are listed; the
+ * rest belongs to the show.
+ */
+export default function ItemPanel({
+  item,
+  episode,
+  section,
+  onClose,
+  onChanged,
+}: {
+  item: Item;
+  /** Scope the panel to one episode: its number for the file list, and how the header names it. */
+  episode?: { season: number; episode: number; label: string };
+  /** The section to scroll to on open. */
+  section?: PanelSection;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const { data, error, reload: reloadRow } = useApi<{ item: ManageRow; library: Library }>(`/api/items/${item.id}/manage`);
+  const { data: files, error: filesError, reload: reloadFiles } = useApi<ManageFile[]>(`/api/items/${item.id}/files`);
   const [note, setNote] = useState<Note | null>(null);
+  const go = useRouter((s) => s.go);
 
   const dialog = useRef<HTMLElement>(null);
   useDialog(dialog, onClose);
-  useEffect(() => setNote(null), [row.id]);
-  // Edit details needs the full title (its description and what's set by hand), fetched when asked for.
-  const [editing, setEditing] = useState(false);
-  const { data: detail } = useApi<ItemDetail>(editing ? `/api/items/${row.id}` : null);
+  useEffect(() => setNote(null), [item.id]);
+  // Open on the section asked for, once the row has loaded and it's rendered.
+  const scrolled = useRef(false);
+  useEffect(() => {
+    if (!section || scrolled.current || !data) return;
+    scrolled.current = true;
+    dialog.current?.querySelector(`[data-section="${section}"]`)?.scrollIntoView({ block: "start" });
+  }, [section, data]);
 
   const changed = () => {
+    void reloadRow();
     void reloadFiles();
     onChanged();
   };
   const deleted = (r: DeleteResult) => {
     const parts = [`Deleted ${r.deleted} file${r.deleted === 1 ? "" : "s"} (${fmtBytes(r.bytes)}).`];
-    if (r.keptFolders.length) parts.push(`Left ${r.keptFolders.map((f) => relPath(f, library.path)).join(", ")}: it still holds other files (artwork, .nfo).`);
+    if (r.keptFolders.length && data) parts.push(`Left ${r.keptFolders.map((f) => relPath(f, data.library.path)).join(", ")}: it still holds other files (artwork, .nfo).`);
     setNote({ text: parts.join(" ") });
-    if (r.itemsRemoved.includes(row.id)) {
-      onChanged();
+    if (r.itemsRemoved.includes(item.id)) {
       onClose();
+      go(item.kind === "series" ? "/tv" : "/movies", { replace: true });
       return;
     }
     changed();
   };
 
+  const row = data?.item;
+  const shown = episode ? files?.filter((f) => f.season === episode.season && f.episode === episode.episode) : files;
+  const what = episode ? episode.label : item.title;
+
   return (
     <>
       <div className="fixed inset-0 z-30 bg-backdrop/30" onClick={onClose} />
-      <aside className="side-panel" role="dialog" aria-modal="true" aria-label={`Manage ${row.title}`} ref={dialog}>
+      <aside className="side-panel" role="dialog" aria-modal="true" aria-label={`Edit ${what}`} ref={dialog}>
         <div className="flex items-start gap-3 px-4 py-4">
-          <div className="poster relative w-16 shrink-0">
-            <PosterArt item={row} bare />
+          <div className="poster relative w-12 shrink-0">
+            <PosterArt item={item} bare />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-base font-semibold leading-tight text-content">{row.title}</div>
-            <div className="mt-0.5 text-xs text-content-muted">
-              {[row.year, row.kind === "series" ? `${row.episodeCount} episodes` : null, `${row.fileCount} file${row.fileCount === 1 ? "" : "s"}`, fmtBytes(row.size)]
-                .filter(Boolean)
-                .join(" · ")}
-            </div>
-            <div className="mt-1.5 flex items-center gap-3">
-              <Link to={`/item/${row.id}`} className="inline-flex items-center gap-1 text-xs text-content-secondary hover:text-accent">
-                <ExternalLink size={12} /> Open page
-              </Link>
-              <button type="button" className="inline-flex items-center gap-1 text-xs text-content-secondary hover:text-accent" onClick={() => setEditing(true)}>
-                <Pencil size={12} /> Edit details
-              </button>
-            </div>
+            <div className="text-xs text-content-muted">Edit</div>
+            <div className="truncate text-base font-semibold leading-tight text-content">{what}</div>
+            {row && !episode && (
+              <div className="mt-0.5 text-xs text-content-muted">
+                {[row.year, row.kind === "series" ? `${row.episodeCount} episodes` : null, `${row.fileCount} file${row.fileCount === 1 ? "" : "s"}`, fmtBytes(row.size)]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </div>
+            )}
           </div>
-          <ItemActions row={row} onNote={setNote} />
           <button className="btn-quiet" onClick={onClose} aria-label="Close">
             <X size={16} />
           </button>
@@ -86,127 +112,46 @@ export default function ItemPanel({ row, library, onClose, onChanged }: { row: M
               )}
             </div>
           )}
-          <MetadataSearch row={row} onMatched={onChanged} />
-          <ArtworkEditor row={row} onChanged={onChanged} />
-          <FileList kind={row.kind} files={files} error={filesError} libraryPath={library.path} onDeleted={deleted} onChanged={changed} />
-          <DeleteItem row={row} onDeleted={deleted} />
+          {error && (
+            <div className="px-4 pb-3">
+              <ErrorNote>{error}</ErrorNote>
+            </div>
+          )}
+          {!data && !error && (
+            <div className="flex justify-center py-10">
+              <Spinner size={20} />
+            </div>
+          )}
+          {row && episode && (
+            <section className="panel-section">
+              <p className="text-xs text-content-muted">
+                The details, match and artwork belong to the show.{" "}
+                <Link to={`/item/${item.id}?edit=1`} className="text-content-secondary hover:text-accent">
+                  Edit {item.title}
+                </Link>
+              </p>
+            </section>
+          )}
+          {row && !episode && (
+            <>
+              <div data-section="details">
+                <DetailsEditor item={item} onSaved={changed} />
+              </div>
+              <div data-section="match">
+                <MetadataSearch row={row} onMatched={changed} />
+              </div>
+              <div data-section="artwork">
+                <ArtworkEditor row={row} onChanged={changed} />
+              </div>
+            </>
+          )}
+          {row && data && (
+            <div data-section="files">
+              <FileList kind={row.kind} files={shown} error={filesError} libraryPath={data.library.path} onDeleted={deleted} onChanged={changed} />
+            </div>
+          )}
         </div>
       </aside>
-      {editing && detail && (
-        <EditDetails
-          item={detail.item}
-          onClose={() => setEditing(false)}
-          onSaved={() => {
-            onChanged();
-          }}
-        />
-      )}
     </>
-  );
-}
-
-/**
- * Background jobs for one title, behind a "⋯" in the panel header: optimize
- * copies, and commercial detection when comskip is installed.
- */
-function ItemActions({ row, onNote }: { row: ManageRow; onNote: (n: Note) => void }) {
-  const comskip = useStatus((s) => s.status?.comskip);
-  const series = row.kind === "series";
-  const what = series ? "episode" : "file";
-  const run = async (path: string, json: unknown, done: (queued: number) => string) => {
-    try {
-      const r = await api<{ queued: number }>(path, { method: "POST", json });
-      onNote({ text: done(r?.queued ?? 0) });
-      void useStatus.getState().refresh();
-    } catch (e) {
-      onNote({ text: errText(e), error: true });
-    }
-  };
-  const optimize = () =>
-    run(`/api/items/${row.id}/optimize`, undefined, (n) =>
-      n
-        ? `Queued ${n} encode${n === 1 ? "" : "s"}; progress is on the Activity page.`
-        : series
-          ? "Every episode already plays in the browser or has an optimized copy."
-          : "This already plays in the browser or has an optimized copy.",
-    );
-  const commercials = (redo: boolean) =>
-    run(`/api/items/${row.id}/commercials`, { redo }, (n) =>
-      n
-        ? `Looking for commercials in ${n} ${what}${n === 1 ? "" : "s"}; progress is on the Activity page.`
-        : series
-          ? "Every episode has already been checked for commercials."
-          : "This has already been checked for commercials.",
-    );
-  const items: MenuItem[] = [
-    {
-      id: "optimize",
-      label: series ? "Optimize every episode" : "Optimize",
-      detail: "Encode browser-friendly H.264 copies of files that can't play directly (about 1–4 GB per movie at 1080p).",
-      icon: <Cpu size={15} />,
-      onSelect: () => void optimize(),
-    },
-  ];
-  if (comskip)
-    items.push(
-      {
-        id: "commercials",
-        label: series ? "Find commercials in every episode" : "Find commercials",
-        detail: series ? "Checks episodes that haven't been checked yet." : "Runs if it hasn't been checked yet.",
-        icon: <Scissors size={15} />,
-        onSelect: () => void commercials(false),
-      },
-      {
-        id: "commercials-redo",
-        label: series ? "Check every episode again" : "Check for commercials again",
-        detail: series ? "Also re-checks episodes already done." : "Replaces the breaks found before.",
-        icon: <RotateCcw size={15} />,
-        onSelect: () => void commercials(true),
-      },
-    );
-  return <MenuButton label="Actions" icon={<MoreHorizontal size={16} />} items={items} align="end" className="btn-quiet" />;
-}
-
-function DeleteItem({ row, onDeleted }: { row: ManageRow; onDeleted: (r: DeleteResult) => void }) {
-  const [confirm, setConfirm] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  useEffect(() => setConfirm(false), [row.id]);
-  const what = row.kind === "series" ? "series" : "movie";
-  const run = async () => {
-    setBusy(true);
-    setErr(null);
-    try {
-      onDeleted(await api<DeleteResult>(`/api/items/${row.id}`, { method: "DELETE" }));
-    } catch (e) {
-      setErr(errText(e));
-    } finally {
-      setBusy(false);
-      setConfirm(false);
-    }
-  };
-  return (
-    <section className="panel-section">
-      <div className="card-title mb-2">Delete</div>
-      <p className="text-xs text-content-muted">
-        Deletes {row.kind === "series" ? "every episode" : "every copy"} of this {what} from the NAS: {row.fileCount} file{row.fileCount === 1 ? "" : "s"},{" "}
-        {fmtBytes(row.size)}, and matching subtitle files. Empty folders are removed. This can't be undone.
-      </p>
-      {err && (
-        <div className="mt-2">
-          <ErrorNote>{err}</ErrorNote>
-        </div>
-      )}
-      <div className="mt-3 flex gap-2">
-        <button className={confirm ? "btn-danger" : "btn-ghost hover:!border-critical hover:!text-critical"} disabled={busy} onClick={() => (confirm ? void run() : setConfirm(true))}>
-          <Trash2 size={14} /> {confirm ? `Yes, delete the whole ${what}` : `Delete ${what}`}
-        </button>
-        {confirm && (
-          <button className="btn-quiet" onClick={() => setConfirm(false)}>
-            Cancel
-          </button>
-        )}
-      </div>
-    </section>
   );
 }

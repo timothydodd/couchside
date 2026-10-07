@@ -20,7 +20,7 @@ Suggested order: **P6** first (the dialogs everything else confirms with),
 | P2  | Episode page: plot, still, guest stars, crew            | Feature  | M    | Done |
 | P3  | Picture plays, everything else opens the page           | Feature  | S    | Done |
 | P4  | Rows that scroll: cast, Home, search                    | Fix      | S    | Done |
-| P5  | Edit a title from its page; Manage is library settings  | Feature  | M    |      |
+| P5  | Edit a title from its page; Manage is library settings  | Feature  | M    | Done |
 | P6  | Couchside's own confirm and prompt dialogs              | Fix      | S    | Done |
 | P7  | Shared badge, empty, loading and error blocks           | Cleanup  | S    |      |
 | P8  | Back buttons and page headers behave alike              | Fix      | S    |      |
@@ -119,54 +119,29 @@ shows paging arrows in its heading when there's more than fits, disabled at
 each end and hidden for coarse pointers (`.row-nav`). The Settings phone
 tab bar gets the fade. The season tabs follow in P1.
 
-## P5 · Edit a title from its page; Manage is library settings
+## P5 · Edit a title from its page; Manage is library settings · Done
 
-**Why.** The title page's "⋯" (`components/item/AdminMenus.tsx`
-`TitleActions`) already has Edit details (title, year, rating, genres,
-description), scan, optimize, intros, commercials and delete, and each
-episode and extra has its own "⋯". What it can't do is change the poster or
-backdrop, search for the right match (only paste an id: `MatchPanel`,
-`pages/ItemPage.tsx:220`), mark a movie file as a part or a copy, or delete
-one copy of a movie. Those live only in `ItemPanel`
-(`components/manage/ItemPanel.tsx`) behind `/libraries/{id}`, reached by
-"Manage in library" and then finding the title again in a table. One place
-to edit a title, and the Manage view left to what's about the library.
+**Why.** The title page's "⋯" had Edit details, jobs and delete, but the
+poster and backdrop, searching for the right match, file roles and deleting
+one copy lived only in a panel behind `/libraries/{id}`, reached by
+"Manage in library" and then finding the title again in a table.
 
-**Scope**
-- `GET /api/items/{id}/manage` (admin) returns the item's `ManageRow`
-  (`db.ManageRows` already computes it per library; add a one-item
-  variant), so `ItemPanel` can open from an item id without the table.
-- The title page (and P2's episode page) gets an admin `btn-ghost` "Edit"
-  (`Pencil`) beside Mark watched, opening `ItemPanel` as the drawer it
-  already is. Its sections, in order: Details (the `EditDetails` fields,
-  inline rather than a second modal), Match (`MetadataSearch`, with the
-  id/URL box from `MatchPanel` as its second row), Artwork
-  (`ArtworkEditor`), Files (`FileList`: roles, best copy, delete file,
-  delete the optimized copy). The jobs and Delete stay in the "⋯" menu,
-  where they are now; drop the panel's own `ItemActions` and `DeleteItem`.
-  The panel takes `itemId`, loads its own row, and `onChanged` reloads the
-  page behind it.
-- Remove from `ItemPage`: `MatchPanel` (keep the one-line "Unmatched ·
-  read from files as …" status, whose "Fix match" opens the panel on
-  Match), and the delete-optimized button in `FilesCard`. `FilesCard`
-  stays for everyone as a read-only "which copy plays" table; hide it when
-  there's one file with nothing notable.
-- `TitleActions`' "Manage in library" becomes "Library settings".
-- `LibraryManagePage` becomes **Library settings**: name and path
-  (`PUT /api/libraries/{id}`, today only in the `LibrariesPage` form),
-  Scan, Optimize all, Re-match, Delete library, and the stats line. The
-  table stays below as "Titles" (quality, duplicates, unmatched, SD are
-  still the way to find what needs fixing; the multi-select Merge and
-  Delete stay), but a row's title is a `Link` to `/item/{id}?edit=1`,
-  which opens the title page with the panel open. Drop the `?item=` open
-  path (`LibraryPage.tsx:152` links there; point it at the same URL).
-- `LibrariesPage`'s split button keeps Scan; its menu loses what moved.
-- Phones: the drawer is already full-width (`max-w-md`); check the Files
-  section's role `select` and title input wrap.
-
-**Done when** a wrong poster, a wrong match, a duplicate copy and a
-misfiled extra can all be fixed from the title page without visiting
-Libraries, and `/libraries/{id}` edits the library's own settings.
+**Done.** `GET /api/items/{id}/manage` returns one title's Manage row and
+its library. The title page (and the episode page) has an admin **Edit**
+button beside Mark watched, opening `ItemPanel` as a drawer over the page
+with Details (`components/item/DetailsEditor.tsx`, the old `EditDetails`
+modal as an inline section), Match (`MetadataSearch`), Artwork
+(`ArtworkEditor`) and Files (`FileList`: roles, extra copies, delete). On
+an episode's page the panel lists that episode's copies and links to the
+show for the rest. Jobs and deleting the whole title stay in the "⋯",
+whose "Manage in library" is now "Library settings". "Fix match" on the
+title page opens the panel on Match; `/item/{id}?edit=1` opens it on
+Details (the library table, and the Movies and TV grids' "Edit…", link
+there). `/libraries/{id}` is now the library's settings page: a card with
+its name, folder and options (Edit, through the shared
+`components/LibraryForm.tsx`), Scan, Re-match, Optimize all and Remove,
+and the titles table under it with each title linking to its page. The
+Libraries list's split button says Settings and its menu lost Edit.
 
 ---
 
