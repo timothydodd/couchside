@@ -7,6 +7,7 @@ import { api, useApi } from "../../lib/api";
 import type { VirtualChannel, VirtualConfig } from "../../lib/types";
 import { useStatus } from "../../stores/status";
 import { attempt, notify } from "../../lib/notices";
+import { confirmDialog } from "../../lib/ask";
 
 /**
  * Couchside's own channels: made from the library, they play around the clock
@@ -20,7 +21,7 @@ export default function VirtualChannels() {
     void useStatus.getState().refresh(); // Live TV may have just appeared
   };
   const remove = attempt("Couldn't delete the channel", async (c: VirtualChannel) => {
-    if (!confirm(`Delete channel ${c.number} ${c.name}? Your files aren't touched.`)) return;
+    if (!(await confirmDialog({ title: `Delete channel ${c.number} ${c.name}?`, body: "Your files aren't touched.", action: "Delete", danger: true }))) return;
     await api(`/api/livetv/virtual/${c.id}`, { method: "DELETE" });
     saved();
   });

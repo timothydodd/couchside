@@ -5,6 +5,7 @@ import { api, useApi } from "../lib/api";
 import { fmtAgo, fmtClock } from "../lib/format";
 import type { Job, JobCounts, TranscodeSession } from "../lib/types";
 import { attempt } from "../lib/notices";
+import { confirmDialog } from "../lib/ask";
 
 const KINDS: Record<string, { label: string; Icon: LucideIcon }> = {
   scan: { label: "Scan", Icon: ScanSearch },
@@ -39,7 +40,7 @@ export default function ActivityPage() {
     await reload();
   });
   const clear = attempt("Couldn't clear finished jobs", async () => {
-    if (!confirm("Clear the finished jobs from the list?")) return;
+    if (!(await confirmDialog({ title: "Clear the finished jobs from the list?", action: "Clear" }))) return;
     await api("/api/jobs/clear", { method: "POST" });
     await reload();
   });

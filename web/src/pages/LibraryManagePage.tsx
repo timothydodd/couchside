@@ -9,15 +9,23 @@ import { fmtAgo, fmtBytes } from "../lib/format";
 import { codecLabel, extraFiles, qualityLabel, qualityTier, qualityTone } from "../lib/quality";
 import type { Library, ManageRow } from "../lib/types";
 import { useStatus } from "../stores/status";
-import { attempt } from "../lib/notices";
+import { attempt, notify } from "../lib/notices";
+import { confirmDialog } from "../lib/ask";
 
 type Filter = "all" | "duplicates" | "unmatched" | "low";
 type SortKey = "title" | "quality" | "files" | "size" | "added";
 
 const optimizeAll = attempt("Couldn't queue the encodes", async (l: Library) => {
-  if (!confirm(`Encode browser-friendly copies of everything in "${l.name}" that can't play directly?\n\nThis runs in the background, one file at a time, and the copies take disk space in the cache volume (roughly 1-4 GB per movie at 1080p).`)) return;
+  if (
+    !(await confirmDialog({
+      title: `Optimize everything in "${l.name}"?`,
+      body: "Encodes browser-friendly copies of every file that can't play directly. This runs in the background, one file at a time, and the copies take disk space in the cache volume (roughly 1-4 GB per movie at 1080p).",
+      action: "Optimize",
+    }))
+  )
+    return;
   const r = await api<{ queued: number }>(`/api/libraries/${l.id}/optimize`, { method: "POST" });
-  alert(r.queued ? `Queued ${r.queued} encodes. Follow them on the Activity page.` : "Nothing to do: everything already plays directly or has an optimized copy.");
+  notify(r.queued ? `Queued ${r.queued} encode${r.queued === 1 ? "" : "s"}; progress is on the Activity page.` : "Nothing to do: everything already plays directly or has an optimized copy.", "info");
   void useStatus.getState().refresh();
 });
 

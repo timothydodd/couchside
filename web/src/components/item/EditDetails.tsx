@@ -1,8 +1,8 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Pencil } from "lucide-react";
+import Modal from "../Modal";
 import { ErrorNote } from "../ui";
 import { api } from "../../lib/api";
-import { useDialog } from "../../lib/dialog";
 import { errText } from "../../lib/errors";
 import type { Item } from "../../lib/types";
 
@@ -22,9 +22,6 @@ export default function EditDetails({ item, onClose, onSaved }: { item: Item; on
   const [plot, setPlot] = useState(o.plot ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const dialog = useRef<HTMLDivElement>(null);
-  const close = () => !busy && onClose();
-  useDialog(dialog, close);
 
   const save = async () => {
     setBusy(true);
@@ -50,8 +47,8 @@ export default function EditDetails({ item, onClose, onSaved }: { item: Item; on
   const providerHint = item.matchProvider ? `Empty fields use what ${item.matchProvider === "tmdb" ? "TMDB" : "the provider"} says.` : "Empty fields use the file name's title and year.";
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-backdrop/55 p-4" onClick={close}>
-      <div className="card w-full max-w-lg p-4 shadow-[var(--shadow-md)]" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Edit details of ${item.title}`} ref={dialog}>
+    <Modal label={`Edit details of ${item.title}`} onClose={onClose} busy={busy} className="max-w-lg p-4" zIndex="z-50">
+      <>
         <div className="text-base font-semibold text-content">Edit details</div>
         <p className="mt-1 text-xs text-content-muted">{providerHint} What you fill in stays, even when the title is matched again.</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_6rem]">
@@ -96,7 +93,7 @@ export default function EditDetails({ item, onClose, onSaved }: { item: Item; on
             <Pencil size={14} /> {busy ? "Saving…" : "Save"}
           </button>
         </div>
-      </div>
-    </div>
+      </>
+    </Modal>
   );
 }

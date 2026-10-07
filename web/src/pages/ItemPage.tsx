@@ -14,6 +14,7 @@ import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
 import { attempt } from "../lib/notices";
 import { errText } from "../lib/errors";
+import { confirmDialog } from "../lib/ask";
 
 export default function ItemPage({ id }: { id: number }) {
   const { data, error, loading, reload } = useApi<ItemDetail>(`/api/items/${id}`);
@@ -449,7 +450,7 @@ function PlaybackChip({ f }: { f: MediaFile }) {
 function FilesCard({ files, onChange }: { files: MediaFile[]; onChange: () => void }) {
   const admin = useIsAdmin();
   const dropOptimized = attempt("Couldn't delete the optimized copy", async (id: number) => {
-    if (!confirm("Delete the optimized copy? Playback falls back to the original file or a server stream.")) return;
+    if (!(await confirmDialog({ title: "Delete the optimized copy?", body: "Playback falls back to the original file or a server stream.", action: "Delete", danger: true }))) return;
     await api(`/api/files/${id}/optimized`, { method: "DELETE" });
     onChange();
   });

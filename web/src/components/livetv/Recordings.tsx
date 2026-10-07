@@ -7,6 +7,7 @@ import type { Recording, RuleMode, SeriesRule } from "../../lib/types";
 import { KEEP_OPTIONS, MODE_TEXT, describeSummary, keepLabel } from "./rules";
 import { useOwnerCheck } from "../../stores/auth";
 import { attempt } from "../../lib/notices";
+import { confirmDialog, type ConfirmOptions } from "../../lib/ask";
 
 /** DVR: recording now, upcoming, recorded and failed. */
 export default function Recordings() {
@@ -15,8 +16,8 @@ export default function Recordings() {
   // Who may change what: admins anything, people allowed to record their own.
   const may = useOwnerCheck();
 
-  const act = attempt("Couldn't change the recording", async (path: string, method: "POST" | "DELETE", confirmText?: string) => {
-    if (confirmText && !confirm(confirmText)) return;
+  const act = attempt("Couldn't change the recording", async (path: string, method: "POST" | "DELETE", ask?: ConfirmOptions) => {
+    if (ask && !(await confirmDialog({ danger: true, ...ask }))) return;
     await api(path, { method });
     await reload();
   });
@@ -46,7 +47,7 @@ export default function Recordings() {
     await Promise.all([reloadRules(), reload()]);
   });
   const deleteRule = attempt("Couldn't stop recording the series", async (r: SeriesRule) => {
-    if (!confirm(`Stop recording "${r.title}" as a series? Upcoming recordings from it are cancelled; finished ones are kept.`)) return;
+    if (!(await confirmDialog({ title: `Stop recording "${r.title}" as a series?`, body: "Upcoming recordings from it are cancelled; finished ones are kept.", action: "Stop recording", danger: true }))) return;
     await api(`/api/dvr/rules/${r.id}`, { method: "DELETE" });
     await Promise.all([reloadRules(), reload()]);
   });
@@ -151,7 +152,7 @@ export default function Recordings() {
                     <RadioTower size={14} /> Live
                   </Link>
                   {may(r.ownerId) && (
-                    <button className="btn-ghost hover:!border-critical hover:!text-critical" onClick={() => void act(`/api/dvr/recordings/${r.id}/cancel`, "POST", `Stop recording "${r.title}"? What's been recorded so far is kept.`)}>
+                    <button className="btn-ghost hover:!border-critical hover:!text-critical" onClick={() => void act(`/api/dvr/recordings/${r.id}/cancel`, "POST", { title: `Stop recording "${r.title}"?`, body: "What's been recorded so far is kept.", action: "Stop recording" })}>
                       <Square size={12} className="fill-current" /> Stop
                     </button>
                   )}
@@ -243,7 +244,7 @@ export default function Recordings() {
                       {may(r.ownerId) && (
                         <button
                           className="btn-chip hover:!border-critical hover:!text-critical"
-                          onClick={() => void act(`/api/dvr/recordings/${r.id}`, "DELETE", `Delete the recording of "${r.title}"? The file is removed.`)}
+                          onClick={() => void act(`/api/dvr/recordings/${r.id}`, "DELETE", { title: `Delete the recording of "${r.title}"?`, body: "The file is removed from disk.", action: "Delete" })}
                         >
                           <Trash2 size={11} /> Delete
                         </button>

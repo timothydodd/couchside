@@ -7,6 +7,7 @@ import { attempt, notify } from "../../lib/notices";
 import type { DeleteResult, EpisodeRow, Item, MediaFile } from "../../lib/types";
 import { useRouter } from "../../stores/router";
 import { useStatus } from "../../stores/status";
+import { confirmDialog, promptDialog } from "../../lib/ask";
 
 const episodeName = (e: EpisodeRow) =>
   `${e.airDate ? e.airDate : `S${e.season}·E${e.episode}`}${e.title ? ` "${e.title}"` : ""}`;
@@ -75,7 +76,7 @@ export function EpisodeActions({ item, e, onChange }: { item: Item; e: EpisodeRo
     icon: <Trash2 size={15} />,
     danger: true,
     onSelect: attempt("Couldn't delete", async () => {
-      if (!confirm(`Delete ${episodeName(e)} of ${item.title} from disk? This can't be undone.`)) return;
+      if (!(await confirmDialog({ title: `Delete ${episodeName(e)}?`, body: `Removes this episode of ${item.title} and its subtitles from disk. This can't be undone.`, action: "Delete", danger: true }))) return;
       const r = await api<DeleteResult>(file, { method: "DELETE" });
       notify(`Deleted ${episodeName(e)}.`, "info");
       if (r.itemsRemoved.includes(item.id)) go("/tv", { replace: true });
@@ -99,9 +100,9 @@ export function ExtraActions({ item, f, onChange }: { item: Item; f: MediaFile; 
       detail: "The name shown after the film's title.",
       icon: <Pencil size={15} />,
       onSelect: attempt("Couldn't rename", async () => {
-        const t = prompt("Name of this extra:", f.extraTitle);
-        if (t == null || !t.trim()) return;
-        await api(`${file}/role`, { method: "PUT", json: { role: "extra", partNo: 0, extraTitle: t.trim() } });
+        const t = await promptDialog({ title: "Rename this extra", body: `Shown after ${item.title}'s name.`, value: f.extraTitle, placeholder: "Behind the Scenes", maxLength: 200 });
+        if (t == null || t === f.extraTitle) return;
+        await api(`${file}/role`, { method: "PUT", json: { role: "extra", partNo: 0, extraTitle: t } });
         onChange();
       }),
     },
@@ -154,7 +155,7 @@ export function ExtraActions({ item, f, onChange }: { item: Item; f: MediaFile; 
     icon: <Trash2 size={15} />,
     danger: true,
     onSelect: attempt("Couldn't delete", async () => {
-      if (!confirm(`Delete ${name} (${item.title}) from disk? This can't be undone.`)) return;
+      if (!(await confirmDialog({ title: `Delete ${name}?`, body: `Removes this extra of ${item.title} and its subtitles from disk. This can't be undone.`, action: "Delete", danger: true }))) return;
       const r = await api<DeleteResult>(file, { method: "DELETE" });
       notify(`Deleted ${name}.`, "info");
       if (r.itemsRemoved.includes(item.id)) go("/movies", { replace: true });
@@ -252,7 +253,7 @@ export function TitleActions({ item, onChange }: { item: Item; onChange: () => v
       icon: <Trash2 size={15} />,
       danger: true,
       onSelect: attempt("Couldn't delete", async () => {
-        if (!confirm(`Delete ${item.title} (${count(item.fileCount)}) from disk? This can't be undone.`)) return;
+        if (!(await confirmDialog({ title: `Delete ${item.title}?`, body: `Removes ${series ? `all ${count(item.fileCount)}` : "the video files"} and their subtitles from disk. This can't be undone.`, action: series ? "Delete show" : "Delete", danger: true }))) return;
         await api<DeleteResult>(`/api/items/${item.id}`, { method: "DELETE" });
         notify(`Deleted ${item.title}.`, "info");
         go(series ? "/tv" : "/movies", { replace: true });

@@ -7,6 +7,7 @@ import { ApiError, api } from "../../lib/api";
 import { fmtSlot } from "../../lib/format";
 import type { Program, TvChannel } from "../../lib/types";
 import { useDialog } from "../../lib/dialog";
+import { confirmDialog } from "../../lib/ask";
 
 /** Program details with Watch and Record actions. */
 export default function ProgramDialog({
@@ -56,7 +57,7 @@ export default function ProgramDialog({
 
   const cancel = async () => {
     if (!program.recordingId) return;
-    if (program.recordingStatus === "recording" && !confirm(`Stop recording "${program.title}"? What's been recorded so far is kept.`)) return;
+    if (program.recordingStatus === "recording" && !(await confirmDialog({ title: `Stop recording "${program.title}"?`, body: "What's been recorded so far is kept.", action: "Stop recording", danger: true }))) return;
     setBusy(true);
     setMsg(null);
     try {

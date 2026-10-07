@@ -7,8 +7,9 @@ import { api, useApi } from "../lib/api";
 import { fmtAgo } from "../lib/format";
 import type { Library } from "../lib/types";
 import { useStatus } from "../stores/status";
-import { attempt } from "../lib/notices";
+import { attempt, notify } from "../lib/notices";
 import { errText } from "../lib/errors";
+import { confirmDialog } from "../lib/ask";
 
 export default function LibrariesPage() {
   const { data, error, reload } = useApi<Library[]>("/api/libraries", { pollMs: 5000 });
@@ -20,13 +21,13 @@ export default function LibrariesPage() {
     void useStatus.getState().refresh();
   });
   const rematch = attempt("Couldn't re-match the library", async (l: Library) => {
-    if (!confirm(`Look up every title in "${l.name}" again?\n\nThis refreshes details, posters, backdrops and cast from the metadata providers. Matches you fixed by hand stay as they are.`)) return;
+    if (!(await confirmDialog({ title: `Look up every title in "${l.name}" again?`, body: "This refreshes details, posters, backdrops and cast from the metadata providers. Matches you fixed by hand stay as they are.", action: "Re-match" }))) return;
     const r = await api<{ queued: number }>(`/api/libraries/${l.id}/rematch`, { method: "POST" });
-    alert(`Queued ${r.queued} lookups. Follow them on the Activity page.`);
+    notify(`Queued ${r.queued} lookup${r.queued === 1 ? "" : "s"}; progress is on the Activity page.`, "info");
     void useStatus.getState().refresh();
   });
   const remove = attempt("Couldn't remove the library", async (l: Library) => {
-    if (!confirm(`Remove "${l.name}" from Couchside? Your files are not touched; only the library entry, watch history and artwork go.`)) return;
+    if (!(await confirmDialog({ title: `Remove "${l.name}" from Couchside?`, body: "Your files are not touched; only the library entry, watch history and artwork go.", action: "Remove", danger: true }))) return;
     await api(`/api/libraries/${l.id}`, { method: "DELETE" });
     await reload();
     void useStatus.getState().refresh();

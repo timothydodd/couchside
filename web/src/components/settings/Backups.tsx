@@ -4,6 +4,7 @@ import { ErrorNote, Spinner } from "../ui";
 import { api, useApi } from "../../lib/api";
 import { fmtAgo, fmtBytes } from "../../lib/format";
 import { attempt } from "../../lib/notices";
+import { confirmDialog } from "../../lib/ask";
 
 interface Backup {
   name: string;
@@ -42,7 +43,7 @@ export default function BackupSettings() {
     }
   });
   const remove = attempt("Couldn't delete the backup", async (b: Backup) => {
-    if (!confirm(`Delete ${b.name}?`)) return;
+    if (!(await confirmDialog({ title: `Delete ${b.name}?`, body: "This backup can't be restored once it's gone.", action: "Delete", danger: true }))) return;
     await api(`/api/system/backups/${encodeURIComponent(b.name)}`, { method: "DELETE" });
     await reload();
   });

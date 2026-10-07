@@ -1,8 +1,8 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Combine } from "lucide-react";
+import Modal from "../Modal";
 import { ErrorNote } from "../ui";
 import { api } from "../../lib/api";
-import { useDialog } from "../../lib/dialog";
 import { errText } from "../../lib/errors";
 import type { ItemSummary } from "../../lib/types";
 
@@ -19,9 +19,6 @@ export default function MergeTitles({ items, onClose, onMerged }: { items: ItemS
   const [as, setAs] = useState<"copy" | "extra">("copy");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const dialog = useRef<HTMLDivElement>(null);
-  const close = () => !busy && onClose();
-  useDialog(dialog, close);
 
   const run = async () => {
     setBusy(true);
@@ -37,8 +34,8 @@ export default function MergeTitles({ items, onClose, onMerged }: { items: ItemS
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-backdrop/55 p-4" onClick={close}>
-      <div className="card w-full max-w-md p-4 shadow-[var(--shadow-md)]" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Merge titles" ref={dialog}>
+    <Modal label="Merge titles" onClose={onClose} busy={busy}>
+      <>
         <div className="text-base font-semibold text-content">Merge {items.length} titles into one</div>
         <div className="mt-3 field-label">Keep</div>
         <div className="mt-1 flex max-h-56 flex-col gap-1 overflow-y-auto" role="radiogroup" aria-label="Title to keep">
@@ -93,7 +90,7 @@ export default function MergeTitles({ items, onClose, onMerged }: { items: ItemS
             <Combine size={14} /> {busy ? "Merging…" : "Merge"}
           </button>
         </div>
-      </div>
-    </div>
+      </>
+    </Modal>
   );
 }
