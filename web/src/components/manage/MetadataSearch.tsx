@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import FadeImg from "../FadeImg";
 import { Check, Search } from "lucide-react";
 import { ErrorNote, Spinner } from "../ui";
 import { api } from "../../lib/api";
@@ -94,7 +95,7 @@ export default function MetadataSearch({ row, onMatched }: { row: ManageRow; onM
           {results.map((r) => (
             <li key={r.imdbId} className={`flex items-center gap-3 rounded-md border px-2 py-1.5 ${r.imdbId === row.imdbId ? "border-accent" : "border-border-light"}`}>
               <div className="h-15 w-10 shrink-0 overflow-hidden rounded bg-raised">
-                {r.poster && <img src={r.poster} alt="" loading="lazy" className="h-full w-full object-cover" />}
+                {r.poster && <FadeImg src={r.poster} alt="" loading="lazy" className="h-full w-full object-cover" />}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm text-content">{r.title}</div>

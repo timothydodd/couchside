@@ -1,4 +1,5 @@
 import { PersonPhoto } from "../components/Credits";
+import FadeImg from "../components/FadeImg";
 import EpisodeCard from "../components/EpisodeCard";
 import PosterCard from "../components/PosterCard";
 import { BackButton, EmptyState, ErrorNote, Loading, Section } from "../components/ui";
@@ -42,7 +43,7 @@ export default function PersonPage({ id }: { id: number }) {
       {/* A hero like a title's: their photo blown up and blurred, as a title with no backdrop gets its poster. */}
       <section className="relative h-48 overflow-hidden sm:h-56">
         {person.hasPhoto ? (
-          <img src={personPhotoUrl(person.id)} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover object-top opacity-50 blur-2xl" />
+          <FadeImg src={personPhotoUrl(person.id)} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover object-top blur-2xl" style={{ "--img-opacity": 0.5 } as React.CSSProperties} />
         ) : (
           <div className="poster-placeholder absolute inset-0" />
         )}

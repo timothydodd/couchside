@@ -1,5 +1,6 @@
 import { CalendarClock, Film, Pause, Play, RadioTower, Repeat, RotateCcw, Square, Trash2, X } from "lucide-react";
 import Link from "../Link";
+import FadeImg from "../FadeImg";
 import { EmptyState, ErrorNote, Loading, Meter } from "../ui";
 import { api, useApi } from "../../lib/api";
 import { fmtBytes, fmtDay, fmtSlot, fmtTime } from "../../lib/format";
@@ -71,7 +72,7 @@ export default function Recordings() {
               return (
                 <div key={r.id} className={`card flex gap-3 p-3 ${r.enabled ? "" : "opacity-60"}`}>
                   <div className="h-16 w-28 shrink-0 overflow-hidden rounded-md bg-raised">
-                    {r.imageUrl ? <img src={r.imageUrl} alt="" loading="lazy" className="h-full w-full object-cover" /> : <div className="poster-placeholder h-full w-full" />}
+                    {r.imageUrl ? <FadeImg src={r.imageUrl} alt="" loading="lazy" className="h-full w-full object-cover" /> : <div className="poster-placeholder h-full w-full" />}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">

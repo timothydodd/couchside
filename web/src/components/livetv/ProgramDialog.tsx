@@ -3,6 +3,7 @@ import { AlertTriangle, CircleDot, Play, Repeat, Square, X } from "lucide-react"
 import SeriesForm from "./SeriesForm";
 import { useCanRecord } from "../../stores/auth";
 import Link from "../Link";
+import FadeImg from "../FadeImg";
 import { ApiError, api } from "../../lib/api";
 import { fmtSlot } from "../../lib/format";
 import type { Program, TvChannel } from "../../lib/types";
@@ -75,7 +76,7 @@ export default function ProgramDialog({
       <div className="anim-pop card relative max-h-[92vh] w-full max-w-lg overflow-y-auto shadow-[var(--shadow-md)]" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={program.title} ref={dialog}>
         {program.imageUrl && (
           <div className="relative aspect-video bg-raised">
-            <img src={program.imageUrl} alt="" className="h-full w-full object-cover" />
+            <FadeImg src={program.imageUrl} alt="" className="h-full w-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-surface)] to-transparent" />
           </div>
         )}

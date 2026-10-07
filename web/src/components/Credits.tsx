@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Link from "./Link";
+import FadeImg from "./FadeImg";
 import { Row } from "./Rows";
 import { personPhotoUrl } from "../lib/api";
 import type { CreditRow } from "../lib/types";
@@ -11,7 +12,7 @@ export function PersonPhoto({ person, className = "" }: { person: { personId?: n
   return (
     <div className={`person-photo ${className}`}>
       {person.hasPhoto && !failed ? (
-        <img src={personPhotoUrl(id)} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} className="absolute inset-0 h-full w-full object-cover" />
+        <FadeImg src={personPhotoUrl(id)} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} className="absolute inset-0 h-full w-full object-cover" />
       ) : (
         <div aria-hidden="true" className="poster-placeholder absolute inset-0 flex items-center justify-center text-3xl font-semibold text-content-secondary">
           {Array.from(person.name.trim())[0] ?? "?"}

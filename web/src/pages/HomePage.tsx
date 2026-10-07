@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { FolderPlus, Info, Play, ScanSearch, Sofa } from "lucide-react";
 import Link from "../components/Link";
+import FadeImg from "../components/FadeImg";
 import { ContinueCard, PosterRow, Row } from "../components/Rows";
 import { EmptyState, ErrorNote, StatTile, Loading } from "../components/ui";
 import { api, backdropUrl, useApi } from "../lib/api";
@@ -137,7 +138,7 @@ function Hero({ item }: { item: ItemSummary }) {
   const play = data ? playTarget(data) : null;
   return (
     <section className="relative h-[52vh] min-h-80 max-h-[520px] overflow-hidden md:h-[46vh] md:min-h-72">
-      <img src={backdropUrl(item)} alt="" className="hero-art" />
+      <FadeImg src={backdropUrl(item)} alt="" className="hero-art" />
       <div className="hero-fade absolute inset-0" />
       <div className="absolute inset-x-0 bottom-0 max-w-2xl gutter pb-6">
         <div className="text-[11px] font-semibold uppercase tracking-widest brand-text">Just added</div>
