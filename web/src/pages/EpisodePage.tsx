@@ -1,22 +1,20 @@
 import { useState } from "react";
-import { ArrowLeft, ChevronLeft, ChevronRight, Eye, EyeOff, Pencil, Play, Star } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, EyeOff, Pencil, Play, Star } from "lucide-react";
 import { CastRow, CrewLine } from "../components/Credits";
 import FilesCard from "../components/item/FilesCard";
 import { EpisodeActions } from "../components/item/AdminMenus";
 import ItemPanel from "../components/manage/ItemPanel";
 import Link from "../components/Link";
-import { EmptyState, ErrorNote, Loading } from "../components/ui";
+import { BackButton, EmptyState, ErrorNote, Loading } from "../components/ui";
 import { api, backdropUrl, stillUrl, useApi } from "../lib/api";
 import { fmtAirDate, fmtClock, fmtResolution, fmtRuntime } from "../lib/format";
 import { attempt } from "../lib/notices";
 import { PROBLEM_TEXT, type EpisodeDetail, type EpisodeRef } from "../lib/types";
 import { useIsAdmin } from "../stores/auth";
-import { useRouter } from "../stores/router";
 
 /** One episode: its still, synopsis, guest stars and crew, its copies, and the episodes either side. */
 export default function EpisodePage({ id }: { id: number }) {
   const { data, error, loading, reload } = useApi<EpisodeDetail>(`/api/episodes/${id}`);
-  const back = useRouter((s) => s.back);
   const admin = useIsAdmin();
   const [editing, setEditing] = useState(false);
 
@@ -65,9 +63,7 @@ export default function EpisodePage({ id }: { id: number }) {
           <div className="poster-placeholder absolute inset-0" />
         )}
         <div className="hero-fade absolute inset-0" />
-        <button onClick={() => back(showPage)} className="btn-ghost absolute left-4 top-4 !bg-surface/60 backdrop-blur md:left-6 md:top-5">
-          <ArrowLeft size={15} /> Back
-        </button>
+        <BackButton fallback={showPage} overlay />
       </section>
 
       <div className="relative -mt-24 gutter sm:-mt-32">

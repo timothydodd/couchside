@@ -1,17 +1,14 @@
-import { ArrowLeft } from "lucide-react";
 import { PersonPhoto } from "../components/Credits";
 import EpisodeCard from "../components/EpisodeCard";
 import PosterCard from "../components/PosterCard";
-import { EmptyState, ErrorNote, Loading } from "../components/ui";
-import { useApi } from "../lib/api";
+import { BackButton, EmptyState, ErrorNote, Loading } from "../components/ui";
+import { personPhotoUrl, useApi } from "../lib/api";
 import { usePhone } from "../lib/media";
 import type { PersonDetail } from "../lib/types";
-import { useRouter } from "../stores/router";
 
 /** Everything in the library a cast or crew member is in, newest first. */
 export default function PersonPage({ id }: { id: number }) {
   const { data, error, loading, reload } = useApi<PersonDetail>(`/api/people/${id}`);
-  const back = useRouter((s) => s.back);
   const phone = usePhone();
 
   if (loading && !data)
@@ -42,15 +39,20 @@ export default function PersonPage({ id }: { id: number }) {
 
   return (
     <div className="pb-8">
-      <div className="gutter pt-4">
-        <button className="btn-quiet" onClick={() => back("/")}>
-          <ArrowLeft size={15} /> Back
-        </button>
-      </div>
-      <header className="flex items-end gap-5 gutter pb-2 pt-4">
-        <PersonPhoto person={person} className="w-32 shrink-0" />
+      {/* A hero like a title's: their photo blown up and blurred, as a title with no backdrop gets its poster. */}
+      <section className="relative h-48 overflow-hidden sm:h-56">
+        {person.hasPhoto ? (
+          <img src={personPhotoUrl(person.id)} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover object-top opacity-50 blur-2xl" />
+        ) : (
+          <div className="poster-placeholder absolute inset-0" />
+        )}
+        <div className="hero-fade absolute inset-0" />
+        <BackButton fallback="/" overlay />
+      </section>
+      <header className="relative -mt-20 flex items-end gap-4 gutter pb-2 sm:-mt-24 sm:gap-5">
+        <PersonPhoto person={person} className="w-24 shrink-0 shadow-[var(--shadow-poster)] sm:w-32" />
         <div className="min-w-0 pb-1">
-          <h1 className="text-3xl font-bold leading-tight text-content">{person.name}</h1>
+          <h1 className="text-2xl font-bold leading-tight text-content sm:text-3xl">{person.name}</h1>
           <p className="mt-1 text-sm text-content-muted">
             {count} {count === 1 ? "title" : "titles"} in your library
           </p>

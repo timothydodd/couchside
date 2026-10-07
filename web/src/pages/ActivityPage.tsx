@@ -59,7 +59,7 @@ export default function ActivityPage() {
           <Trash2 size={15} /> Clear finished
         </button>
       </PageHeader>
-      <div className="grid grid-cols-3 gap-3 gutter py-4">
+      <div className="grid grid-cols-3 gap-2 gutter py-4 sm:gap-3">
         <StatTile label="Running" value={c?.running ?? "–"} sub={c?.current || undefined} />
         <StatTile label="Queued" value={c?.queued ?? "–"} />
         <StatTile label="Failed" value={c?.failed ?? "–"} tone={c?.failed ? "critical" : undefined} />

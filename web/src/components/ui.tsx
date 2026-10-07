@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode, type Ref } from "react";
-import { Loader2, Search } from "lucide-react";
+import { ArrowLeft, Loader2, Search } from "lucide-react";
 import { menuKeys } from "../lib/dialog";
 import Link from "./Link";
+import { useRouter } from "../stores/router";
 
 // Shared primitives, ported from Portside Lite's components/ui.tsx so both
 // apps look and behave the same.
@@ -62,12 +63,12 @@ export function StatTile({
   return (
     <Tag
       onClick={onClick}
-      className={`card flex flex-col items-start gap-1 border px-4 py-3 text-left ${ring} ${onClick ? "transition-colors hover:border-accent" : ""}`}
+      className={`card flex min-w-0 flex-col items-start gap-1 border px-4 py-3 text-left ${ring} ${onClick ? "transition-colors hover:border-accent" : ""}`}
     >
       <span className="text-xs text-content-muted">{label}</span>
       <span className="text-2xl font-semibold tabular-nums text-content">{value}</span>
       {meter !== undefined && <Meter value={meter} className="my-0.5" />}
-      {sub && <span className="text-xs text-content-secondary">{sub}</span>}
+      {sub && <span className="max-w-full truncate text-xs text-content-secondary">{sub}</span>}
     </Tag>
   );
 }
@@ -93,6 +94,23 @@ export function EmptyState({ icon, title, action, children }: { icon?: ReactNode
       {children && <div className="max-w-md text-xs text-content-muted">{children}</div>}
       {action && <div className="mt-2">{action}</div>}
     </div>
+  );
+}
+
+/**
+ * Goes back through the app's own history, or to `fallback` when the page
+ * was opened directly. `overlay` floats it over a hero picture.
+ */
+export function BackButton({ fallback, label = "Back", overlay = false }: { fallback: string; label?: string; overlay?: boolean }) {
+  const back = useRouter((s) => s.back);
+  return (
+    <button
+      type="button"
+      onClick={() => back(fallback)}
+      className={overlay ? "btn-ghost absolute left-4 top-4 z-10 !bg-surface/60 backdrop-blur md:left-6 md:top-5" : "btn-quiet"}
+    >
+      <ArrowLeft size={15} /> {label}
+    </button>
   );
 }
 

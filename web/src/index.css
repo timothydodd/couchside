@@ -263,7 +263,7 @@ body {
 
   /* Sub-tab / pill navigation item. */
   .navtab {
-    @apply px-2.5 py-1.5 text-xs text-content-muted transition-colors hover:text-content;
+    @apply border-b-2 border-transparent px-2.5 py-1.5 text-xs text-content-muted transition-colors hover:text-content;
   }
   .navtab-active {
     @apply border-b-2 border-accent text-content;

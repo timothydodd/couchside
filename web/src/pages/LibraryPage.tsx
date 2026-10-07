@@ -158,7 +158,7 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="gutter border-b border-border-light pb-3 pt-4 md:pt-5">
+      <header className="gutter border-b border-border-light pb-3 pt-5">
         <div className="flex items-baseline justify-between gap-3">
           <h1 className="text-lg font-semibold text-content">{title}</h1>
           <span className="text-xs text-content-muted">

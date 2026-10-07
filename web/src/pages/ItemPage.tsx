@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Bookmark, BookmarkCheck, Eye, EyeOff, Pencil, Play, Star, Wand2 } from "lucide-react";
+import { Bookmark, BookmarkCheck, Eye, EyeOff, Pencil, Play, Star, Wand2 } from "lucide-react";
 import EpisodeCard from "../components/EpisodeCard";
 import FilesCard from "../components/item/FilesCard";
 import ItemPanel, { type PanelSection } from "../components/manage/ItemPanel";
 import { CastRow, CrewLine } from "../components/Credits";
 import Link from "../components/Link";
 import { PosterArt } from "../components/PosterCard";
-import { EmptyState, ErrorNote, Loading } from "../components/ui";
+import { BackButton, EmptyState, ErrorNote, Loading } from "../components/ui";
 import { api, backdropUrl, posterUrl, useApi } from "../lib/api";
 import { usePhone } from "../lib/media";
 import { useScrollEdges } from "../lib/scroll";
@@ -14,13 +14,11 @@ import { fmtAirDate, fmtBytes, fmtClock, fmtResolution, fmtRuntime, titleLink } 
 import { EpisodeActions, ExtraActions, TitleActions } from "../components/item/AdminMenus";
 import type { EpisodeRow, ItemDetail, MediaFile } from "../lib/types";
 import { useIsAdmin } from "../stores/auth";
-import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
 import { attempt } from "../lib/notices";
 
 export default function ItemPage({ id, season, edit }: { id: number; season?: number; edit?: boolean }) {
   const { data, error, loading, reload } = useApi<ItemDetail>(`/api/items/${id}`);
-  const back = useRouter((s) => s.back);
   const admin = useIsAdmin();
   // The Edit panel: open from the button, from "Fix match", or by ?edit=1 (the library table links here).
   const [editing, setEditing] = useState<PanelSection | null>(edit ? "details" : null);
@@ -90,9 +88,7 @@ export default function ItemPage({ id, season, edit }: { id: number; season?: nu
           <div className="poster-placeholder absolute inset-0" />
         )}
         <div className="hero-fade absolute inset-0" />
-        <button onClick={() => back(isSeries ? "/tv" : "/movies")} className="btn-ghost absolute left-4 top-4 !bg-surface/60 backdrop-blur md:left-6 md:top-5">
-          <ArrowLeft size={15} /> Back
-        </button>
+        <BackButton fallback={isSeries ? "/tv" : "/movies"} overlay />
       </section>
 
       <div className="relative -mt-24 flex flex-col gap-6 gutter sm:-mt-40 md:flex-row">

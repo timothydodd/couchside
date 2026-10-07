@@ -23,8 +23,8 @@ Suggested order: **P6** first (the dialogs everything else confirms with),
 | P5  | Edit a title from its page; Manage is library settings  | Feature  | M    | Done |
 | P6  | Couchside's own confirm and prompt dialogs              | Fix      | S    | Done |
 | P7  | Shared badge, empty, loading and error blocks           | Cleanup  | S    | Done |
-| P8  | Back buttons and page headers behave alike              | Fix      | S    |      |
-| P9  | Phone layout: rows that crowd or run off                | Fix      | S    |      |
+| P8  | Back buttons and page headers behave alike              | Fix      | S    | Done |
+| P9  | Phone layout: rows that crowd or run off                | Fix      | S    | Done |
 | P10 | Home: the hero plays, and says why it's empty           | Fix      | S    |      |
 | P11 | Guide: time shifts show a loading state                 | Fix      | S    |      |
 | P12 | Copy: one name for things, admin-only advice to admins  | Fix      | S    |      |
@@ -181,39 +181,26 @@ recovery codes. Backups and "Didn't record" tables have headers; the
 Backups delete chip has the critical hover; Two-step's Cancel reports a
 failure.
 
-## P8 · Back buttons and page headers behave alike
+## P8 · Back buttons and page headers behave alike · Done
 
-**Scope**
-- Back buttons: `PersonPage.tsx:44` (`btn-quiet`, own row, falls back to
-  `/`), `ItemPage.tsx:90` (`btn-ghost` over the backdrop), `LibraryManage-
-  Page.tsx:98` (a "Libraries" link that ignores `router.back`),
-  `SignInPage.tsx:83`. One `BackButton` in `ui.tsx` taking `fallback`,
-  with a `variant="overlay"` for hero pages; `PersonPage` gets the hero
-  treatment (a blurred photo, like a title with no backdrop) so it matches
-  `ItemPage` and P2's episode page.
-- `LibraryPage.tsx:161` and `PersonPage.tsx:48` hand-roll headers; use
-  `PageHeader`. `PersonPage`'s 128px photo beside a `text-3xl` name has no
-  phone sizing.
-- `LiveTvPage.tsx:44` tabs lack `aria-current`; `SettingsPage.tsx:43` has
-  it. `.navtab-active` adds `border-b-2` with no base border
-  (`index.css:265`), so the active tab is 2px taller: give `.navtab` a
-  transparent border.
+**Done.** `BackButton` (`ui.tsx`: `fallback`, `label`, `overlay`) is the
+one back control: the title, episode and person pages float it over their
+hero, the library settings page and sign-in use the plain one. A person's
+page has a hero now (their photo blown up and blurred, as a title with no
+backdrop gets its poster), with phone sizes for the photo and name. The
+Movies and TV header's top padding matches `PageHeader`. Live TV's tabs
+carry `aria-current`, and `.navtab` has a transparent base border so the
+active tab no longer grows by 2px.
 
-## P9 · Phone layout: rows that crowd or run off
+## P9 · Phone layout: rows that crowd or run off · Done
 
-**Scope**
-- `LiveTvPage.tsx:49`: `guideError` sits in the tab row with `ml-auto`
-  inside `overflow-x-auto`; a long message pushes the tabs off. Put it
-  under the tabs as an `ErrorNote`.
-- `Recordings.tsx:134`: the "Recording now" card packs text, a bar and
-  three buttons in one non-wrapping row. Stack below `sm`.
-- `LibrariesPage.tsx:76`: the library row's stats and split button wrap
-  unevenly. Two rows below `sm`: name and path, then stats and actions.
-- `ActivityPage.tsx:61`: three stat tiles always; the "Running" tile's
-  `sub` is a full job label and `StatTile` doesn't truncate. Two columns
-  below `sm`, truncate the sub.
-- `SettingsPage.tsx:41`: the phone tab bar hides its scrollbar with no
-  cue; P4's edge fade covers it.
+**Done.** Live TV's guide error is a `WarningNote` under the tabs, not a
+span in the scrolling tab row. The "Recording now" card wraps its buttons
+onto their own row below `sm`. A library's row on the Libraries page puts
+its counts and split button on a second row below `sm` (`sm:contents`
+restores the single line). `StatTile` truncates its sub-line, so the
+running job's label can't widen the Activity tiles. The Settings phone
+tab bar's fade came with P4.
 
 ## P10 · Home: the hero plays, and says why it's empty
 

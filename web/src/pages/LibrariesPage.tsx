@@ -72,13 +72,14 @@ export default function LibrariesPage() {
                 </div>
                 <div className="mono mt-0.5 truncate text-content-muted">{l.path}</div>
               </div>
-              <div className="text-right text-xs text-content-secondary">
+              <div className="flex w-full items-center justify-between gap-3 sm:contents">
+              <div className="text-xs text-content-secondary sm:text-right">
                 <div className="tabular-nums">
                   {l.itemCount.toLocaleString()} {l.kind === "movies" ? "movies" : "shows"} · {l.fileCount.toLocaleString()} files
                 </div>
                 <div className="text-content-muted">Scanned {fmtAgo(l.lastScanAt)}</div>
               </div>
-              <div className="split-btn ml-auto">
+              <div className="split-btn sm:ml-auto">
                 <Link to={`/libraries/${l.id}`} className="btn-ghost" title="Name, folder and options, and every title's quality and duplicates">
                   <Settings2 size={15} /> Settings
                 </Link>
@@ -106,6 +107,7 @@ export default function LibrariesPage() {
                     },
                   ]}
                 />
+              </div>
               </div>
             </div>
         ))}

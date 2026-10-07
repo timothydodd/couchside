@@ -130,7 +130,7 @@ export default function Recordings() {
             {live.map((r) => {
               const pct = Math.min(100, ((now - r.startAt) / (r.endAt - r.startAt)) * 100);
               return (
-                <div key={r.id} className="card flex items-center gap-3 border-critical/40 p-3">
+                <div key={r.id} className="card flex flex-wrap items-center gap-3 border-critical/40 p-3">
                   <span className="rec-dot animate-pulse" />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium text-content">{r.title}</div>
@@ -143,17 +143,20 @@ export default function Recordings() {
                     </div>
                     {r.error && <div className="mt-1 truncate text-xs text-warning">{r.error}</div>}
                   </div>
-                  <Link to={`/recording/${r.id}`} className="btn-primary" title="Play this recording from the beginning">
-                    <Play size={13} className="fill-current" /> From start
-                  </Link>
-                  <Link to={`/watch/${r.channel}`} className="btn-ghost" title="Jump to the live broadcast">
-                    <RadioTower size={14} /> Live
-                  </Link>
-                  {may(r.ownerId) && (
-                    <button className="btn-ghost hover:!border-critical hover:!text-critical" onClick={() => void act(`/api/dvr/recordings/${r.id}/cancel`, "POST", { title: `Stop recording "${r.title}"?`, body: "What's been recorded so far is kept.", action: "Stop recording" })}>
-                      <Square size={12} className="fill-current" /> Stop
-                    </button>
-                  )}
+                  {/* On phones the buttons take a row of their own under the text. */}
+                  <div className="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
+                    <Link to={`/recording/${r.id}`} className="btn-primary" title="Play this recording from the beginning">
+                      <Play size={13} className="fill-current" /> From start
+                    </Link>
+                    <Link to={`/watch/${r.channel}`} className="btn-ghost" title="Jump to the live broadcast">
+                      <RadioTower size={14} /> Live
+                    </Link>
+                    {may(r.ownerId) && (
+                      <button className="btn-ghost hover:!border-critical hover:!text-critical" onClick={() => void act(`/api/dvr/recordings/${r.id}/cancel`, "POST", { title: `Stop recording "${r.title}"?`, body: "What's been recorded so far is kept.", action: "Stop recording" })}>
+                        <Square size={12} className="fill-current" /> Stop
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ArrowLeft, Lock, LogIn } from "lucide-react";
 import AuthShell from "../components/auth/AuthShell";
 import ProfileAvatar from "../components/ProfileAvatar";
-import { ErrorNote, WarningNote } from "../components/ui";
+import { BackButton, ErrorNote, WarningNote } from "../components/ui";
 import type { ProfileStub } from "../lib/types";
 import { ApiError } from "../lib/api";
 import { authError, useAuth } from "../stores/auth";
@@ -80,9 +80,7 @@ export default function SignInPage({ switching = false }: { switching?: boolean 
       }
       top={
         switching && (
-          <button className="btn-quiet" onClick={() => back("/")}>
-            <ArrowLeft size={15} /> Back
-          </button>
+          <BackButton fallback="/" />
         )
       }
     >

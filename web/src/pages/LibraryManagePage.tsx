@@ -1,9 +1,9 @@
 import { memo, useMemo, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowUp, Clapperboard, Copy, Cpu, ImageUp, Pencil, RefreshCw, ScanSearch, Trash2, Tv } from "lucide-react";
+import { ArrowDown, ArrowUp, Clapperboard, Copy, Cpu, ImageUp, Pencil, RefreshCw, ScanSearch, Trash2, Tv } from "lucide-react";
 import Link from "../components/Link";
 import LibraryForm from "../components/LibraryForm";
 import { PosterArt } from "../components/PosterCard";
-import { EmptyState, ErrorNote, PageHeader, SearchInput, Loading } from "../components/ui";
+import { BackButton, EmptyState, ErrorNote, Loading, PageHeader, SearchInput } from "../components/ui";
 import { api, useApi } from "../lib/api";
 import { fmtAgo, fmtBytes } from "../lib/format";
 import { codecLabel, extraFiles, qualityLabel, qualityTier, qualityTone } from "../lib/quality";
@@ -122,9 +122,7 @@ export default function LibraryManagePage({ id }: { id: number }) {
         title={lib ? lib.name : "Library"}
         subtitle={lib ? `${items.length.toLocaleString()} ${movies ? (items.length === 1 ? "movie" : "movies") : items.length === 1 ? "show" : "shows"} · ${lib.fileCount.toLocaleString()} files · ${fmtBytes(totalSize)} · scanned ${fmtAgo(lib.lastScanAt)}` : undefined}
       >
-        <Link to="/libraries" className="btn-quiet">
-          <ArrowLeft size={15} /> Libraries
-        </Link>
+        <BackButton fallback="/libraries" label="Libraries" />
       </PageHeader>
       <div className="flex flex-col gap-3 gutter py-4">
         {error && <ErrorNote>{error}</ErrorNote>}
