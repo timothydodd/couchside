@@ -27,7 +27,12 @@ func (s *Server) person(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"person": p, "items": items})
+	episodes, err := s.db.PersonEpisodes(ctx, id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"person": p, "items": items, "episodes": episodes})
 }
 
 // personPhoto serves a person's photo, fetching it from TMDB on first use.

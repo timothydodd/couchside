@@ -17,12 +17,18 @@ type Credit struct {
 
 // SetCredits replaces an item's cast and crew.
 func (d *DB) SetCredits(ctx context.Context, itemID int64, credits []Credit) error {
+	return d.setCredits(ctx, "item_credits", "item_id", itemID, credits)
+}
+
+// setCredits replaces the credits of one item or episode (table and its
+// owner column), adding or refreshing the people.
+func (d *DB) setCredits(ctx context.Context, table, col string, ownerID int64, credits []Credit) error {
 	tx, err := d.sql.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM item_credits WHERE item_id = ?`, itemID); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM `+table+` WHERE `+col+` = ?`, ownerID); err != nil {
 		return err
 	}
 	for _, c := range credits {
@@ -36,19 +42,20 @@ func (d *DB) SetCredits(ctx context.Context, itemID int64, credits []Credit) err
 			c.PersonID, c.Name, c.ProfilePath); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO item_credits (item_id, person_id, kind, role, ord) VALUES (?, ?, ?, ?, ?)`,
-			itemID, c.PersonID, c.Kind, c.Role, c.Order); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO `+table+` (`+col+`, person_id, kind, role, ord) VALUES (?, ?, ?, ?, ?)`,
+			ownerID, c.PersonID, c.Kind, c.Role, c.Order); err != nil {
 			return err
 		}
 	}
 	return tx.Commit()
 }
 
-// PrunePeople drops people no title credits any more (their titles were
-// removed or re-matched) and returns their ids, so the caller can remove
-// their cached photos.
+// PrunePeople drops people no title or episode credits any more (their
+// titles were removed or re-matched) and returns their ids, so the caller
+// can remove their cached photos.
 func (d *DB) PrunePeople(ctx context.Context) ([]int64, error) {
-	rows, err := d.sql.QueryContext(ctx, `DELETE FROM people WHERE id NOT IN (SELECT person_id FROM item_credits) RETURNING id`)
+	rows, err := d.sql.QueryContext(ctx, `DELETE FROM people WHERE id NOT IN (SELECT person_id FROM item_credits)
+		AND id NOT IN (SELECT person_id FROM episode_credits) RETURNING id`)
 	if err != nil {
 		return nil, err
 	}
@@ -75,9 +82,13 @@ type CreditRow struct {
 // ItemCredits returns a title's cast in billing order and its crew, one row
 // per person (a writer-director is listed once).
 func (d *DB) ItemCredits(ctx context.Context, itemID int64) (cast, crew []CreditRow, err error) {
+	return d.credits(ctx, "item_credits", "item_id", itemID)
+}
+
+func (d *DB) credits(ctx context.Context, table, col string, ownerID int64) (cast, crew []CreditRow, err error) {
 	rows, err := d.sql.QueryContext(ctx, `SELECT c.kind, p.id, p.name, p.profile_path <> '',
-		group_concat(c.role, ', ') FROM item_credits c JOIN people p ON p.id = c.person_id
-		WHERE c.item_id = ? GROUP BY c.kind, p.id ORDER BY c.kind, MIN(c.ord), p.name`, itemID)
+		group_concat(c.role, ', ') FROM `+table+` c JOIN people p ON p.id = c.person_id
+		WHERE c.`+col+` = ? GROUP BY c.kind, p.id ORDER BY c.kind, MIN(c.ord), p.name`, ownerID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -141,17 +152,23 @@ func (d *DB) PersonItems(ctx context.Context, personID int64) ([]PersonItem, err
 		if err := rows.Scan(scanSummary(&it.ItemSummary, &roles)...); err != nil {
 			return nil, err
 		}
-		it.Roles = []string{}
-		if roles != nil {
-			for _, r := range strings.Split(*roles, "|") {
-				if r != "" {
-					it.Roles = append(it.Roles, r)
-				}
-			}
-		}
+		it.Roles = splitRoles(roles)
 		out = append(out, it)
 	}
 	return out, rows.Err()
+}
+
+// splitRoles turns group_concat's "Neo|Director" into a list (never nil).
+func splitRoles(roles *string) []string {
+	out := []string{}
+	if roles != nil {
+		for _, r := range strings.Split(*roles, "|") {
+			if r != "" {
+				out = append(out, r)
+			}
+		}
+	}
+	return out
 }
 
 // ItemIDsInLibrary lists a library's items, for re-matching them all.

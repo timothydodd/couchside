@@ -1,8 +1,10 @@
 import { ArrowLeft } from "lucide-react";
 import { PersonPhoto } from "../components/Credits";
+import EpisodeCard from "../components/EpisodeCard";
 import PosterCard from "../components/PosterCard";
 import { EmptyState, ErrorNote, Spinner } from "../components/ui";
 import { useApi } from "../lib/api";
+import { usePhone } from "../lib/media";
 import type { PersonDetail } from "../lib/types";
 import { useRouter } from "../stores/router";
 
@@ -10,6 +12,7 @@ import { useRouter } from "../stores/router";
 export default function PersonPage({ id }: { id: number }) {
   const { data, error, loading, reload } = useApi<PersonDetail>(`/api/people/${id}`);
   const back = useRouter((s) => s.back);
+  const phone = usePhone();
 
   if (loading && !data)
     return (
@@ -34,9 +37,10 @@ export default function PersonPage({ id }: { id: number }) {
     );
   }
 
-  const { person, items } = data;
+  const { person, items, episodes } = data;
   const movies = items.filter((i) => i.kind === "movie");
   const shows = items.filter((i) => i.kind === "series");
+  const count = items.length + episodes.length;
 
   return (
     <div className="pb-8">
@@ -50,7 +54,7 @@ export default function PersonPage({ id }: { id: number }) {
         <div className="min-w-0 pb-1">
           <h1 className="text-3xl font-bold leading-tight text-content">{person.name}</h1>
           <p className="mt-1 text-sm text-content-muted">
-            {items.length} {items.length === 1 ? "title" : "titles"} in your library
+            {count} {count === 1 ? "title" : "titles"} in your library
           </p>
         </div>
       </header>
@@ -77,6 +81,31 @@ export default function PersonPage({ id }: { id: number }) {
               </div>
             </section>
           ),
+      )}
+      {episodes.length > 0 && (
+        <section className="gutter py-3">
+          <h2 className="row-title mb-3">Episodes</h2>
+          <ol className={phone ? "flex flex-col" : "grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-5"}>
+            {episodes.map((e) => (
+              <li key={e.id}>
+                <EpisodeCard
+                  file={e}
+                  layout={phone ? "row" : "grid"}
+                  eyebrow={`S${e.season} E${e.episode}`}
+                  title={e.title || `Episode ${e.episode}`}
+                  to={`/episode/${e.id}`}
+                  playLabel={`Play ${e.seriesTitle} S${e.season} E${e.episode}`}
+                  meta={
+                    <>
+                      <span className="text-content-secondary">{e.seriesTitle}</span>
+                      {e.roles.length > 0 && <span>{e.roles.join(", ")}</span>}
+                    </>
+                  }
+                />
+              </li>
+            ))}
+          </ol>
+        </section>
       )}
     </div>
   );

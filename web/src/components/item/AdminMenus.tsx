@@ -18,7 +18,7 @@ const queued = (what: string) => {
 };
 
 /** The "⋯" on an episode row, for admins: re-scan, encode, commercials, delete. */
-export function EpisodeActions({ item, e, onChange }: { item: Item; e: EpisodeRow; onChange: () => void }) {
+export function EpisodeActions({ item, e, onChange, className = "tile-action" }: { item: Item; e: EpisodeRow; onChange: () => void; className?: string }) {
   const comskip = useStatus((s) => s.status?.comskip);
   const go = useRouter((s) => s.go);
   const file = `/api/files/${e.fileId}`;
@@ -84,7 +84,7 @@ export function EpisodeActions({ item, e, onChange }: { item: Item; e: EpisodeRo
     }),
   });
 
-  return <MenuButton label="Episode actions" icon={<MoreHorizontal size={16} />} items={items} align="start" className="tile-action" />;
+  return <MenuButton label="Episode actions" icon={<MoreHorizontal size={16} />} items={items} align="start" className={className} />;
 }
 
 /** The "⋯" on one of a movie's extras: rename it, make it a copy of the film instead, and the file actions. */

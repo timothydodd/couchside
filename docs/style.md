@@ -74,6 +74,17 @@ it is grey.
 - **New reusable styles** go in `index.css` under `@layer components`, named
   like the existing ones (`.poster`, `.still`, `.chip`, `.badge`, `.card`).
 
+## What a click does
+
+- A **poster** (2:3) opens the title's page. Nothing on it plays.
+- A **16:9 tile** (an episode, an extra, Continue Watching) plays from the
+  picture, which shows a play button on hover, and opens the page from the
+  caption. Nothing in between is clickable, so a mis-click does nothing. A
+  file that can't be played has no play link; its picture opens the page,
+  where the problem is explained.
+- A **row** of tiles scrolls sideways; its heading carries the paging
+  arrows for a mouse (`Row` in `components/Rows.tsx`).
+
 ## Artwork
 
 - `python3 branding/make-icons.py` writes the web icons from the logo, and

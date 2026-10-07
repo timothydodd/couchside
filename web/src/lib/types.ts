@@ -104,10 +104,31 @@ export interface Person {
   hasPhoto: boolean;
 }
 
-/** A person's page: who they are and the library's titles they're in. */
+/** A person's page: who they are and the library's titles and episodes they're in. */
 export interface PersonDetail {
   person: Person;
   items: (ItemSummary & { roles: string[] })[];
+  episodes: (EpisodeRow & { seriesId: number; seriesTitle: string; roles: string[] })[];
+}
+
+/** An episode's page. */
+export interface EpisodeDetail {
+  episode: EpisodeRow & { seriesId: number; plot: string; runtimeMin: number | null; imdbId: string; tmdbId: number };
+  series: Item;
+  /** Every copy, best first. */
+  files: MediaFile[];
+  /** Guest stars. */
+  cast: CreditRow[];
+  crew: CreditRow[];
+  prev: EpisodeRef | null;
+  next: EpisodeRef | null;
+}
+
+export interface EpisodeRef {
+  id: number;
+  season: number;
+  episode: number;
+  title: string;
 }
 
 export interface PlayInfo {

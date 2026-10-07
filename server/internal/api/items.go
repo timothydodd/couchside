@@ -85,6 +85,46 @@ func (s *Server) getItem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+// getEpisode is an episode's page: the episode, its show, every copy of it,
+// its guest stars and crew, and its neighbours.
+func (s *Server) getEpisode(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	ctx := r.Context()
+	e, err := s.db.Episode(ctx, id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	series, err := s.db.Item(ctx, e.SeriesID)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	files, err := s.db.EpisodeCopies(ctx, id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	for i := range files {
+		files[i].Path = filepath.Base(files[i].Path)
+	}
+	cast, crew, err := s.db.EpisodeCredits(ctx, id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	prev, next, err := s.db.EpisodeNeighbours(ctx, e)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"episode": e, "series": series, "files": files, "cast": cast, "crew": crew, "prev": prev, "next": next})
+}
+
 // setVersion remembers which copy of a title this profile watches.
 func (s *Server) setVersion(w http.ResponseWriter, r *http.Request) {
 	id, err := idParam(r)

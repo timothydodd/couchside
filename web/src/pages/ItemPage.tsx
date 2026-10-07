@@ -1,25 +1,24 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Bookmark, BookmarkCheck, Check, Eye, EyeOff, Play, RotateCcw, Star, Trash2, Wand2 } from "lucide-react";
+import { ArrowLeft, Bookmark, BookmarkCheck, Check, Eye, EyeOff, Play, RotateCcw, Star, Wand2 } from "lucide-react";
 import EpisodeCard from "../components/EpisodeCard";
+import FilesCard from "../components/item/FilesCard";
 import { CastRow, CrewLine } from "../components/Credits";
 import Link from "../components/Link";
 import { PosterArt } from "../components/PosterCard";
-import { EmptyState, ErrorNote, Meter, Spinner } from "../components/ui";
+import { EmptyState, ErrorNote, Spinner } from "../components/ui";
 import { api, backdropUrl, posterUrl, useApi } from "../lib/api";
 import { usePhone } from "../lib/media";
 import { useScrollEdges } from "../lib/scroll";
 import { fmtAirDate, fmtBytes, fmtClock, fmtResolution, fmtRuntime, titleLink } from "../lib/format";
-import { canDirectPlay } from "../lib/playback";
 import { EpisodeActions, ExtraActions, TitleActions } from "../components/item/AdminMenus";
-import { PROBLEM_TEXT, type EpisodeRow, type ItemDetail, type MediaFile } from "../lib/types";
+import type { EpisodeRow, ItemDetail, MediaFile } from "../lib/types";
 import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
 import { attempt } from "../lib/notices";
 import { errText } from "../lib/errors";
-import { confirmDialog } from "../lib/ask";
 
-export default function ItemPage({ id }: { id: number }) {
+export default function ItemPage({ id, season }: { id: number; season?: number }) {
   const { data, error, loading, reload } = useApi<ItemDetail>(`/api/items/${id}`);
   const back = useRouter((s) => s.back);
   const admin = useIsAdmin();
@@ -189,7 +188,7 @@ export default function ItemPage({ id }: { id: number }) {
       <div className="mt-6">
         <CastRow cast={data.cast ?? []} />
       </div>
-      {isSeries && seasons && <Seasons item={item} seasons={seasons} admin={admin} onChange={reload} />}
+      {isSeries && seasons && <Seasons item={item} seasons={seasons} open={season} admin={admin} onChange={reload} />}
       {extras.length > 0 && <Extras item={item} files={extras} admin={admin} onChange={reload} />}
       {!isSeries && files.length > extras.length && <FilesCard files={files.filter((f) => f.role !== "extra")} onChange={reload} />}
       {error && (
@@ -308,16 +307,19 @@ function MatchPanel({ id, status, imdbId, parsed, onDone }: { id: number; status
 function Seasons({
   item,
   seasons,
+  open,
   admin,
   onChange,
 }: {
   item: ItemDetail["item"];
   seasons: NonNullable<ItemDetail["seasons"]>;
+  /** The season to open on (from ?season=, coming back from an episode); else the first with something unwatched. */
+  open?: number;
   admin: boolean;
   onChange: () => void;
 }) {
   const firstUnwatched = seasons.find((s) => s.episodes.some((e) => !e.watched))?.season ?? seasons[0]?.season;
-  const [season, setSeason] = useState(firstUnwatched);
+  const [season, setSeason] = useState(open ?? firstUnwatched);
   const current = seasons.find((s) => s.season === season) ?? seasons[0];
   const tabs = useRef<HTMLDivElement>(null);
   useScrollEdges(tabs);
@@ -361,6 +363,7 @@ function EpisodeTile({ e, actions }: { e: EpisodeRow; actions?: React.ReactNode 
       layout={phone ? "row" : "grid"}
       eyebrow={e.airDate ? fmtAirDate(e.airDate) : `E${e.episode}`}
       title={e.title || (e.airDate ? "" : `Episode ${e.episode}`)}
+      to={`/episode/${e.id}`}
       playLabel={`Play ${name}${e.title ? ` ${e.title}` : ""}`}
       actions={actions}
       meta={
@@ -401,92 +404,6 @@ function Extras({ item, files, admin, onChange }: { item: ItemDetail["item"]; fi
           </li>
         ))}
       </TileList>
-    </section>
-  );
-}
-
-/** How this browser will play a file. */
-function PlaybackChip({ f }: { f: MediaFile }) {
-  if (f.problem)
-    return (
-      <span className="tint-warning rounded px-1.5 py-0.5 text-[11px] font-semibold" title={PROBLEM_TEXT[f.problem].detail}>
-        {PROBLEM_TEXT[f.problem].label}
-      </span>
-    );
-  if (canDirectPlay(f)) return <span className="tint-good rounded px-1.5 py-0.5 text-[11px] font-semibold">Direct play</span>;
-  if (f.optimized) return <span className="tint-good rounded px-1.5 py-0.5 text-[11px] font-semibold">Optimized</span>;
-  return (
-    <span className="tint-info rounded px-1.5 py-0.5 text-[11px] font-semibold" title="The browser can't play this format as is; it will be converted while you watch">
-      Transcode
-    </span>
-  );
-}
-
-function FilesCard({ files, onChange }: { files: MediaFile[]; onChange: () => void }) {
-  const admin = useIsAdmin();
-  const dropOptimized = attempt("Couldn't delete the optimized copy", async (id: number) => {
-    if (!(await confirmDialog({ title: "Delete the optimized copy?", body: "Playback falls back to the original file or a server stream.", action: "Delete", danger: true }))) return;
-    await api(`/api/files/${id}/optimized`, { method: "DELETE" });
-    onChange();
-  });
-  return (
-    <section className="mt-10 gutter">
-      <h2 className="row-title mb-3">{files.length === 1 ? "File" : `Files (${files.length})`}</h2>
-      <div className="card overflow-x-auto">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Quality</th>
-              <th className="hidden sm:table-cell">Video</th>
-              <th className="hidden sm:table-cell">Audio</th>
-              <th className="hidden sm:table-cell">Length</th>
-              <th className="text-right">Size</th>
-              <th>Playback</th>
-              <th>Progress</th>
-            </tr>
-          </thead>
-          <tbody>
-            {files.map((f) => (
-              <tr key={f.id}>
-                <td className="mono max-w-xs truncate" title={f.path}>
-                  {f.role === "part" && <span className="chip mr-1.5">Part {f.partNo}</span>}
-                  <Link to={`/play/${f.id}`} className="hover:text-accent">
-                    {f.path}
-                  </Link>
-                </td>
-                <td>{fmtResolution(f.width, f.height) && <span className="chip">{fmtResolution(f.width, f.height)}</span>}</td>
-                <td className="mono hidden text-content-secondary sm:table-cell">{f.videoCodec || "?"}</td>
-                <td className="mono hidden text-content-secondary sm:table-cell">
-                  {f.audioCodec || "?"}
-                  {f.audioTracks > 1 && <span className="text-content-muted"> +{f.audioTracks - 1}</span>}
-                </td>
-                <td className="hidden tabular-nums text-content-secondary sm:table-cell">{fmtRuntime(f.durationSec)}</td>
-                <td className="text-right tabular-nums text-content-secondary">{fmtBytes(f.size)}</td>
-                <td>
-                  <span className="inline-flex items-center gap-1">
-                    <PlaybackChip f={f} />
-                    {f.optimized && admin && (
-                      <button className="btn-quiet !p-1 hover:!text-critical" title="Delete the optimized copy" onClick={() => void dropOptimized(f.id)}>
-                        <Trash2 size={12} />
-                      </button>
-                    )}
-                  </span>
-                </td>
-                <td className="w-32">
-                  {f.watched ? (
-                    <span className="text-xs text-good">Watched</span>
-                  ) : f.durationSec && f.positionSec > 0 ? (
-                    <Meter value={(f.positionSec / f.durationSec) * 100} />
-                  ) : (
-                    <span className="text-xs text-content-muted">—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </section>
   );
 }

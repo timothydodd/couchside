@@ -17,8 +17,8 @@ Suggested order: **P6** first (the dialogs everything else confirms with),
 | ID  | Story                                                   | Kind     | Size | Done |
 | --- | ------------------------------------------------------- | -------- | ---- | ---- |
 | P1  | Episodes as a grid, list on phones                      | Feature  | S    | Done |
-| P2  | Episode page: plot, still, guest stars, crew            | Feature  | M    |      |
-| P3  | Picture plays, everything else opens the page           | Feature  | S    |      |
+| P2  | Episode page: plot, still, guest stars, crew            | Feature  | M    | Done |
+| P3  | Picture plays, everything else opens the page           | Feature  | S    | Done |
 | P4  | Rows that scroll: cast, Home, search                    | Fix      | S    | Done |
 | P5  | Edit a title from its page; Manage is library settings  | Feature  | M    |      |
 | P6  | Couchside's own confirm and prompt dialogs              | Fix      | S    | Done |
@@ -63,83 +63,47 @@ the end that scrolls and bring the open season's tab into view. The old
 `StillRow` and `EpisodeItem` are gone. The caption becomes a link in P3,
 once P2 gives it a page.
 
-## P2 · Episode page: plot, still, guest stars, crew
+## P2 · Episode page: plot, still, guest stars, crew · Done
 
-**Why.** Clicking an episode plays it; there's nowhere to read what it's
-about or who's in it. The `episodes` table holds only title, date, rating
-and IMDb id (`db/migrations/0001_init.sql:39`), and `tmdbSeason`
-(`metadata/tmdb.go:200`) drops TMDB's `overview`, `still_path`, `runtime`,
-`guest_stars` and `crew` when it decodes the season. The still shown today is
-a frame grab at 25% (`worker.still`, `worker/match.go:301`).
+**Why.** Clicking an episode played it; there was nowhere to read what it's
+about or who's in it. The `episodes` table held only title, date, rating
+and IMDb id, and `tmdbSeason` dropped TMDB's `overview`, `still_path`,
+`runtime`, `guest_stars` and `crew`.
 
-**Scope, server (P2a)**
-- Migration 0021: `episodes.plot TEXT`, `runtime_min INTEGER`,
-  `still_url TEXT` (`db.ImageURL`, so it's served through the remote image
-  cache), `tmdb_id INTEGER`.
-- `metadata.Episode` and `db.EpisodeMeta` carry the four. `tmdbSeason`
-  decodes `overview`, `still_path` (full URL via the image base), `runtime`,
-  `guest_stars` (name, character, profile_path, tmdb person id) and `crew`
-  (filtered by `crewJobs`, so Director and Writer). OMDb keeps what it has.
-- Per-episode credits: `item_credits` gets a nullable `episode_id`
-  (migration 0021; index on it). `SetCredits` for an episode replaces its
-  rows; `ApplyEpisodeMeta` is the caller. People are the same `people` rows,
-  so `/api/people/{id}` and `PersonPage` list the episodes a guest is in
-  (add `episodes` to `PersonDetail`, with the show's title and `S1 · E4`).
-- `GET /api/episodes/{id}`: `{episode: EpisodeRow + plot, runtimeMin,
-  stillUrl, imdbId, tmdbId; series: ItemSummary; files: MediaFile[]
-  (every copy, with the manage fields); cast: CreditRow[] (guest stars);
-  crew: CreditRow[]; prev, next: {id, season, episode, title} | null}`.
-- `EpisodeRow` gains `plot` (so the card can show a tooltip or a two-line
-  clamp later) and `hasProviderStill`.
-- The still: when `still_url` is set, the artwork job for the series
-  downloads it to `$CACHE/files/<id>/still.webp` (same path the frame grab
-  uses; `files.has_still` already flags it) and the frame grab is skipped.
-  A re-match with the same URL doesn't download again (`src` sidecar, as
-  `poster.src` does). Keep the grab as the fallback for files TMDB doesn't
-  know.
-- Existing libraries pick this up on the next match (`Re-match` in
-  Libraries, or the 3-day TMDB TV cache expiring); no backfill job.
+**Done, server.** Migration 0034 adds `episodes.plot`, `runtime_min`,
+`still_url`, `tmdb_id` and an `episode_credits` table (same shape as
+`item_credits`, shared `people`, both pruned together). `metadata.Episode`
+carries them; TMDB's season decoder fills them (guest stars capped like the
+cast, crew filtered by `crewJobs`); OMDb leaves them empty and doesn't wipe
+TMDB's credits. `GET /api/episodes/{id}` returns the episode, its show,
+every copy, guest stars, crew and the episodes either side; `GET
+/api/people/{id}` adds `episodes`. The artwork job downloads each episode's
+TMDB still over the frame grab (`episodeStill`, once per link via
+`still.src`), and the still job keeps a provider still when a file is
+re-scanned. Existing libraries pick it up on the next match (Libraries →
+Re-match).
 
-**Scope, web (P2b)**
-- Route `/episode/{id}` (`stores/router.ts`), `pages/EpisodePage.tsx`.
-  Layout mirrors `ItemPage`: the still as the hero (`.hero-art` +
-  `.hero-fade`, the show's backdrop when there's no still), a back button
-  to the show's page on the right season, then `Show name` as a `title-link`
-  above `S2 · E4 · Title`, date · runtime · rating · the file's quality
-  chip, Play / Resume (`btn-primary`) and Mark watched, the plot,
-  `CrewLine`, `CastRow` labelled "Guest stars", then a `FilesCard` when
-  there's more than one copy, and Previous / Next episode links.
-- The title page's season tabs are reachable from the episode page's back
-  button with `?season=N` so `Seasons` opens on it.
-- `SearchPage` episode hits (`ContinueCard`) get the page as their title
-  link once it exists.
+**Done, web.** `/episode/{id}` (`pages/EpisodePage.tsx`): the still as the
+hero, the show's name linking back to `/item/{id}?season=N` (which
+`Seasons` opens on), `S2 · E4 · Title`, date, runtime, quality and rating,
+Play or Resume, Mark watched and the admin "⋯", the synopsis, Director and
+Writer, "Guest stars", Previous and Next, and the copies table (now
+`components/item/FilesCard.tsx`) when there's more than one. A person's
+page lists the episodes they guest in.
 
-**Done when** an episode of a TMDB-matched show has a plot, TMDB's still,
-guest stars with photos, and Director and Writer, and a guest star's
-person page lists the episode.
+## P3 · Picture plays, everything else opens the page · Done
 
-## P3 · Picture plays, everything else opens the page
+**Why.** The whole episode row was one link to the player. With P2 there
+are two destinations, and `ContinueCard` already drew the line: the
+picture resumes, the title opens the page.
 
-**Why.** Today the whole episode row is one `Link` to the player
-(`StillRow`, `ItemPage.tsx:384`). With P2 there are two destinations, and
-`ContinueCard` already draws the line: the picture resumes, the title opens
-the page.
-
-**Scope**
-- In `EpisodeCard`, the `.still` is a `Link` to `/play/{fileId}` with the
-  hover play button and `aria-label="Play S2 E4 Title"`; the caption block
-  is a `Link` to `/episode/{id}` with `title-link`. Nothing else on the card
-  is clickable, so a mis-click between them does nothing. An episode with a
-  `problem` has no play link; its picture opens the page too, where the
-  problem is explained (`PROBLEM_TEXT`).
-- The same split on `PosterCard`? No: a poster opens the title page, as
-  today. Only 16:9 tiles (episode, extra, Continue Watching) play from the
-  picture. Say so in `docs/style.md` under a short "What a click does" note.
-- Keyboard: both links are in the tab order; the play link's focus ring is
-  the `.still-link` border, the caption's the `title-link` colour.
-
-**Done when** clicking the still plays, clicking the title opens the
-episode page, and Tab reaches both.
+**Done.** In `EpisodeCard` the still is a link to the player (with the
+hover play button and a "Play S2 E4 Title" label) and the caption a
+`title-link` to `/episode/{id}`; nothing in between is clickable. A file
+with a problem has no play link, so its picture opens the page too, where
+the problem is explained. Posters keep opening the title page; only 16:9
+tiles play from the picture, which `docs/style.md` now says under "What a
+click does". Both links are in the tab order.
 
 ## P4 · Rows that scroll: cast, Home, search · Done
 
