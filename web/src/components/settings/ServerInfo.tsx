@@ -18,13 +18,13 @@ export default function ServerInfo() {
               </span>
             )}
           </dd>
-          {status?.transcode?.hwaccel === "vaapi" && (
+          {(status?.transcode?.hwaccel === "vaapi" || status?.transcode?.hwaccel === "nvenc") && (
             <>
               <dt className="text-content-muted">GPU decoding</dt>
               <dd>
                 {status.transcode.gpuDecode
                   ? "Yes: decoding and scaling run on the GPU too"
-                  : "No: the CPU decodes and the GPU only encodes (check the server log for the vaapi decode test)"}
+                  : "No: the CPU decodes and the GPU only encodes (check the server log for the GPU decode test)"}
               </dd>
             </>
           )}
@@ -32,7 +32,9 @@ export default function ServerInfo() {
           <dd>
             {status?.transcode
               ? status.transcode.gpuTonemap
-                ? "On the GPU"
+                ? status.transcode.tonemapFilter === "tonemap_opencl"
+                  ? "On the GPU (OpenCL)"
+                  : "On the GPU"
                 : status.transcode.tonemap
                   ? "On the CPU"
                   : "Unavailable (HDR will look washed out)"

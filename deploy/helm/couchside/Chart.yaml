@@ -2,5 +2,5 @@ apiVersion: v2
 name: couchside
 description: Lightweight self-hosted media server (Go + React) for k3s
 type: application
-version: 0.17.0
-appVersion: "0.17.0"   # the release tag without "v"; the release workflow checks it
+version: 0.18.0
+appVersion: "0.18.0"   # the release tag without "v"; the release workflow checks it
