@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { RotateCw } from "lucide-react";
+import AdvancedArea from "./AdvancedArea";
 import MediaLocations from "./MediaLocations";
 import ServerSettingField from "./ServerSettingField";
 import { Spinner } from "../ui";
@@ -21,6 +22,22 @@ export default function ServerSettings() {
   if (!data) return null;
 
   const groups = [...new Set(data.settings.map((s) => s.group))];
+  // One card per group, for the everyday fields or the advanced ones.
+  const cards = (advanced: boolean) =>
+    groups.map((g) => {
+      const fields = data.settings.filter((s) => s.group === g && !!s.advanced === advanced);
+      if (fields.length === 0) return null;
+      return (
+        <section key={g} className="card p-4">
+          <div className="card-title mb-3">{g}</div>
+          <div className="flex flex-col gap-5">
+            {fields.map((s) => (
+              <ServerSettingField key={s.key} s={s} draft={draft[s.key]} onChange={(v) => edit(s.key, v)} />
+            ))}
+          </div>
+        </section>
+      );
+    });
   const changed = Object.keys(draft).length > 0;
   const edit = (key: string, input: string | null) => {
     setMsg(null);
@@ -71,18 +88,8 @@ export default function ServerSettings() {
         </p>
         <MediaLocations />
       </section>
-      {groups.map((g) => (
-        <section key={g} className="card p-4">
-          <div className="card-title mb-3">{g}</div>
-          <div className="flex flex-col gap-5">
-            {data.settings
-              .filter((s) => s.group === g)
-              .map((s) => (
-                <ServerSettingField key={s.key} s={s} draft={draft[s.key]} onChange={(v) => edit(s.key, v)} />
-              ))}
-          </div>
-        </section>
-      ))}
+      {cards(false)}
+      <AdvancedArea what="ffmpeg and comskip files, VAAPI device, discovery address and trusted proxies">{cards(true)}</AdvancedArea>
       {(changed || msg) && (
         <div className="card sticky bottom-4 z-10 flex flex-wrap items-center gap-3 p-3" style={{ boxShadow: "var(--shadow-md)" }}>
           {changed && (

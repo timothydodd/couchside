@@ -24,6 +24,7 @@ type Setting struct {
 	Options     []string `json:"options,omitempty"`
 	Default     string   `json:"default"` // what an unset value means, in words or as a value
 	Placeholder string   `json:"placeholder,omitempty"`
+	Advanced    bool     `json:"advanced,omitempty"` // folded away under the page's Advanced area
 }
 
 // Editable lists the settings in Settings → Server, in display order. Left
@@ -48,16 +49,16 @@ var Editable = func() []Setting {
 			Help: "Background \"optimize\" and commercial-detection jobs.", Default: "1"},
 		{Key: "COUCHSIDE_OPTIMIZE_HEIGHT", Group: "Encoding", Label: "Optimized copy size", Kind: "choice",
 			Options: []string{"480", "720", "1080"}, Help: "The tallest picture an optimized copy keeps.", Default: "1080"},
-		{Key: "COUCHSIDE_FFMPEG", Group: "Encoding", Label: "ffmpeg", Kind: "file",
+		{Key: "COUCHSIDE_FFMPEG", Advanced: true, Group: "Encoding", Label: "ffmpeg", Kind: "file",
 			Help: "Leave empty for the ffmpeg beside Couchside, else the one on the PATH.", Default: "Bundled or on the PATH"},
-		{Key: "COUCHSIDE_FFPROBE", Group: "Encoding", Label: "ffprobe", Kind: "file",
+		{Key: "COUCHSIDE_FFPROBE", Advanced: true, Group: "Encoding", Label: "ffprobe", Kind: "file",
 			Help: "Leave empty for the ffprobe beside Couchside, else the one on the PATH.", Default: "Bundled or on the PATH"},
 
 		{Key: "COUCHSIDE_HDHOMERUN", Group: "Live TV", Label: "HDHomeRun tuner", Kind: "text",
 			Help: "The tuner's IP address or host name. Empty turns off broadcast TV and recording (your own channels still work).", Default: "None", Placeholder: "192.168.1.50"},
-		{Key: "COUCHSIDE_COMSKIP", Group: "Live TV", Label: "comskip", Kind: "file",
+		{Key: "COUCHSIDE_COMSKIP", Advanced: true, Group: "Live TV", Label: "comskip", Kind: "file",
 			Help: "Commercial detection for recordings. Off when it can't be found.", Default: "comskip on the PATH"},
-		{Key: "COUCHSIDE_COMSKIP_INI", Group: "Live TV", Label: "comskip.ini", Kind: "file",
+		{Key: "COUCHSIDE_COMSKIP_INI", Advanced: true, Group: "Live TV", Label: "comskip.ini", Kind: "file",
 			Help: "Your own comskip settings. Empty uses Couchside's, which find the same breaks as Plex.", Default: "Couchside's own"},
 
 		{Key: "TMDB_API_KEY", Group: "Metadata", Label: "TMDB API key", Kind: "secret",
@@ -69,18 +70,18 @@ var Editable = func() []Setting {
 			Help: "Shown in TV apps' server lists.", Default: "This computer's name"},
 		{Key: "COUCHSIDE_DISCOVERY", Group: "Network", Label: "Let TV apps find this server", Kind: "bool",
 			Help: "Answers TV apps looking for servers on your network (SSDP).", Default: "true"},
-		{Key: "COUCHSIDE_DISCOVERY_URL", Group: "Network", Label: "Address to advertise", Kind: "text",
+		{Key: "COUCHSIDE_DISCOVERY_URL", Advanced: true, Group: "Network", Label: "Address to advertise", Kind: "text",
 			Help: "Only when TV apps reach the server on another address or port than it listens on (Docker -p 8095:8080).", Default: "Worked out automatically", Placeholder: "http://192.168.1.20:8095"},
-		{Key: "COUCHSIDE_DISCOVERY_INTERFACE", Group: "Network", Label: "Discovery network interface", Kind: "text",
+		{Key: "COUCHSIDE_DISCOVERY_INTERFACE", Advanced: true, Group: "Network", Label: "Discovery network interface", Kind: "text",
 			Help: "The network interface to listen on for TV apps.", Default: "The default one", Placeholder: "eth0"},
-		{Key: "COUCHSIDE_TRUSTED_PROXIES", Group: "Network", Label: "Trusted reverse proxies", Kind: "text",
+		{Key: "COUCHSIDE_TRUSTED_PROXIES", Advanced: true, Group: "Network", Label: "Trusted reverse proxies", Kind: "text",
 			Help: "Addresses or CIDRs of proxies whose X-Forwarded-For and X-Forwarded-Proto are believed, separated by commas.", Default: "None", Placeholder: "10.0.0.0/8, 192.168.1.2"},
 	}
 	if runtime.GOOS == "linux" {
 		// After the hardware encoder: only VAAPI uses it.
 		for i, x := range s {
 			if x.Key == "COUCHSIDE_HWACCEL" {
-				s = append(s[:i+1], append([]Setting{{Key: "COUCHSIDE_VAAPI_DEVICE", Group: "Encoding", Label: "VAAPI device", Kind: "text",
+				s = append(s[:i+1], append([]Setting{{Key: "COUCHSIDE_VAAPI_DEVICE", Advanced: true, Group: "Encoding", Label: "VAAPI device", Kind: "text",
 					Help: "The GPU's render node, for vaapi.", Default: "/dev/dri/renderD128"}}, s[i+1:]...)...)
 				break
 			}

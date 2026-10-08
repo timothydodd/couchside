@@ -439,6 +439,7 @@ export interface ServerSetting {
   options?: string[];
   default: string;
   placeholder?: string;
+  advanced?: boolean; // shown under the page's Advanced area
   value: string | null; // saved here (never a secret's)
   env: string; // the variable's value (never a secret's)
   saved: boolean;

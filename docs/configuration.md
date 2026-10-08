@@ -61,7 +61,7 @@ locations too, fixed by the environment.
 | **Live TV & DVR** | | |
 | `COUCHSIDE_HDHOMERUN` | none | HDHomeRun IP or host; enables Live TV and the DVR |
 | `COUCHSIDE_RECORDINGS_DIR` | `$DATA_DIR/recordings` | Default folder for recordings (Settings can pick another) |
-| `COUCHSIDE_DVR_PAD_BEFORE` / `_AFTER` | `10s` / `10s` | Default recording padding (Settings → Advanced overrides) |
+| `COUCHSIDE_DVR_PAD_BEFORE` / `_AFTER` | `10s` / `10s` | Default recording padding (Settings → Live TV → Advanced overrides) |
 | `COUCHSIDE_COMSKIP` | `comskip` | Comskip binary; commercial detection is off when it isn't found |
 | `COUCHSIDE_COMSKIP_INI` | built-in defaults | Your own `comskip.ini`; it must keep `output_edl=1` |
 
@@ -96,7 +96,7 @@ channels and guide listings.
 ## Backups
 
 Couchside copies its database to `backups/` in the data folder once a day and
-keeps the last 7 (Settings → Advanced changes both, makes one on demand, and
+keeps the last 7 (Settings → System → Advanced changes both, makes one on demand, and
 downloads or deletes them). Each is a zip of the database, `auth.key` and
 `server.id`. Before a new version changes the database's tables it also saves
 a copy there (`couchside-upgrade-….db`; the last 3 are kept).
