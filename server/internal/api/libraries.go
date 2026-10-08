@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -234,38 +235,78 @@ func (s *Server) scanAll(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-// browse lists subfolders so the Libraries page can offer a folder picker.
-// Only available when a media root is configured, and never escapes it.
+type folder struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+// browse lists subfolders for the folder pickers (libraries, the DVR and
+// filler folders, and the media folder in Settings → Server). Admins only.
+// Inside the media folder when one is set, unless all=1 (choosing the media
+// folder itself); otherwise anywhere. No path lists the starting points:
+// the media folder, or the drives on Windows and / elsewhere. Paths come
+// back whole, so the client never joins them with the wrong separator.
 func (s *Server) browse(w http.ResponseWriter, r *http.Request) {
-	if s.cfg.MediaRoot == "" {
-		writeErr(w, httpError{http.StatusNotFound, "folder browsing needs COUCHSIDE_MEDIA_ROOT"})
+	root := s.cfg.MediaRoot
+	if r.URL.Query().Get("all") == "1" {
+		root = ""
+	}
+	p := strings.TrimSpace(r.URL.Query().Get("path"))
+	if p == "" && root != "" {
+		p = root
+	}
+	if p == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"path": "", "parent": nil, "dirs": startFolders(s.cfg.MediaRoot)})
 		return
 	}
-	p := r.URL.Query().Get("path")
-	if p == "" {
-		p = s.cfg.MediaRoot
-	}
 	p = filepath.Clean(p)
-	if !filepath.IsAbs(p) || !s.underRoot(p) {
-		writeErr(w, badRequest("path must be inside "+s.cfg.MediaRoot))
+	if !filepath.IsAbs(p) || (root != "" && p != root && !insideDir(p, root)) {
+		writeErr(w, badRequest("path must be inside "+root))
 		return
 	}
 	entries, err := os.ReadDir(p)
 	if err != nil {
-		writeErr(w, badRequest("cannot read "+p))
+		writeErr(w, badRequest("can't open "+p))
 		return
 	}
-	dirs := []string{}
+	dirs := []folder{}
 	for _, e := range entries {
-		if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
-			dirs = append(dirs, e.Name())
+		if strings.HasPrefix(e.Name(), ".") || strings.HasPrefix(e.Name(), "$") {
+			continue
+		}
+		// Follows links, which a NAS share or a mount point may be.
+		if st, err := os.Stat(filepath.Join(p, e.Name())); err == nil && st.IsDir() {
+			dirs = append(dirs, folder{e.Name(), filepath.Join(p, e.Name())})
 		}
 	}
-	sort.Slice(dirs, func(i, j int) bool { return strings.ToLower(dirs[i]) < strings.ToLower(dirs[j]) })
+	sort.Slice(dirs, func(i, j int) bool { return strings.ToLower(dirs[i].Name) < strings.ToLower(dirs[j].Name) })
 	var parent *string
-	if p != s.cfg.MediaRoot {
-		pp := filepath.Dir(p)
-		parent = &pp
+	switch up := filepath.Dir(p); {
+	case p == root:
+	case up != p:
+		parent = &up
+	case root == "":
+		top := "" // a drive or share's own root: back to the starting points
+		parent = &top
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"path": p, "parent": parent, "dirs": dirs})
+}
+
+// startFolders are where browsing starts with no media folder to stay in:
+// the drives on Windows (plus a media folder on a share), / elsewhere.
+func startFolders(mediaRoot string) []folder {
+	if runtime.GOOS != "windows" {
+		return []folder{{"/", "/"}}
+	}
+	var out []folder
+	for c := 'A'; c <= 'Z'; c++ {
+		d := string(c) + `:\`
+		if _, err := os.Stat(d); err == nil {
+			out = append(out, folder{string(c) + ":", d})
+		}
+	}
+	if strings.HasPrefix(mediaRoot, `\\`) {
+		out = append(out, folder{mediaRoot, mediaRoot})
+	}
+	return out
 }

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 /** Settings pages: "you" (/settings) is everyone's own; the rest are admin-only. */
-export const SETTINGS_SECTIONS = ["you", "system", "console", "accounts", "metadata", "livetv", "advanced"] as const;
+export const SETTINGS_SECTIONS = ["you", "system", "server", "console", "accounts", "metadata", "livetv", "advanced"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 export type Route =

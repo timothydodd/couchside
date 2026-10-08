@@ -8,11 +8,22 @@ starts a comment). Couchside reads `COUCHSIDE_CONFIG` if it's set, and on
 Windows `%ProgramData%\Couchside\couchside.env`, which the installer writes.
 A variable set in the environment wins over the file.
 
+Most of them can also be set by an admin in **Settings → Server**: the media
+folder (with a folder browser), rescans and background jobs, the hardware
+encoder and how many streams and optimized copies run at once, ffmpeg and
+comskip, the HDHomeRun, the metadata keys and the network settings. A value
+saved there wins over the variable and the settings file, and takes effect
+when the server restarts, which the page does in place (playback stops;
+recordings carry on in the same file). Clearing a field goes back to the
+variable. If the server can't start with the saved values, it starts without
+them and the page says why. The listen address, the data and cache folders,
+`COUCHSIDE_WEB_DIR` and `COUCHSIDE_AUTH` can only be set in the environment.
+
 ## Environment variables
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `COUCHSIDE_MEDIA_ROOT` | none | Libraries must live under it; enables the folder picker |
+| `COUCHSIDE_MEDIA_ROOT` | none | Libraries must live under it, and the folder picker stays inside it |
 | `COUCHSIDE_ADDR` | `:8080` | Listen address |
 | `COUCHSIDE_DATA_DIR` | `./data` | SQLite database, plus `auth.key` (signs sessions) and `server.id`: back up all three. The Windows service defaults to `%ProgramData%\Couchside\data` |
 | `COUCHSIDE_CONFIG` | see above | Settings file to read |

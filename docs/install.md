@@ -22,8 +22,9 @@ and a port, then:
 - adds a Windows Firewall rule (private and domain networks) so TVs and phones
   can connect and find the server.
 
-Settings are in `%ProgramData%\Couchside\couchside.env` (see
-[configuration.md](configuration.md)); restart the service after editing it.
+The installer's settings are in `%ProgramData%\Couchside\couchside.env` (see
+[configuration.md](configuration.md)). Most of them, and more, can be changed
+in Settings → Server instead, which restarts the server for you.
 The database, artwork and logs (`data\logs\couchside.log`) are in
 `%ProgramData%\Couchside\data` and are kept when you uninstall. Running the
 installer again upgrades in place and keeps your settings.

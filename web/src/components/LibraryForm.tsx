@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, FolderPlus } from "lucide-react";
+import { Check, FolderOpen, FolderPlus } from "lucide-react";
 import FolderPicker from "./FolderPicker";
 import { ErrorNote, Spinner } from "./ui";
 import { api } from "../lib/api";
@@ -15,6 +15,7 @@ export default function LibraryForm({ library, onDone, onCancel }: { library?: L
   const [path, setPath] = useState(library?.path ?? mediaRoot ?? "");
   const [trickplay, setTrickplay] = useState(library?.trickplay ?? false);
   const [intros, setIntros] = useState(library?.intros ?? false);
+  const [browsing, setBrowsing] = useState(!library);
   const moving = !!library && path.trim().replace(/\/+$/, "") !== library.path;
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -68,8 +69,13 @@ export default function LibraryForm({ library, onDone, onCancel }: { library?: L
         <label className="field-label" htmlFor="lib-path">
           Folder
         </label>
-        <input id="lib-path" className="field mono w-full" placeholder="/media/movies" value={path} onChange={(e) => setPath(e.target.value)} />
-        {mediaRoot && <FolderPicker path={path || mediaRoot} onPick={setPath} />}
+        <div className="flex gap-2">
+          <input id="lib-path" className="field mono min-w-0 flex-1" placeholder="/media/movies" value={path} onChange={(e) => setPath(e.target.value)} />
+          <button type="button" className="btn-ghost" onClick={() => setBrowsing((b) => !b)} aria-expanded={browsing}>
+            <FolderOpen size={14} /> Browse
+          </button>
+        </div>
+        {browsing && <FolderPicker path={path} onPick={setPath} />}
         <p className="mt-1.5 text-xs text-content-muted">
           {moving
             ? "Files found at the same place under the new folder keep their watch history and artwork; anything missing is removed on the rescan."

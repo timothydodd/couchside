@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -74,23 +75,77 @@ func main() {
 	}
 }
 
-// run serves until parent is cancelled, Ctrl-C or SIGTERM.
+// run serves until parent is cancelled, Ctrl-C or SIGTERM. Settings →
+// Server's Restart stops everything and starts it again in this process, so
+// saved settings apply the same way under the Windows service, Docker or a
+// terminal.
+//
+// If it can't start with the saved settings (one the server can't use), it
+// starts once more without them, so the web is still there to fix them.
 func run(parent context.Context) error {
+	ignoreSaved := ""
+	for {
+		again, err := serve(parent, ignoreSaved)
+		if errors.Is(err, errSavedSettings) && ignoreSaved == "" && parent.Err() == nil {
+			slog.Error("couldn't start with the saved settings; starting without them (fix them in Settings → Server)", "err", err)
+			ignoreSaved = strings.TrimPrefix(err.Error(), errSavedSettings.Error()+": ")
+			continue
+		}
+		if err != nil || !again || parent.Err() != nil {
+			return err
+		}
+		slog.Info("restarting to apply settings")
+		ignoreSaved = ""
+	}
+}
+
+// errSavedSettings marks a start-up that failed while using saved settings.
+var errSavedSettings = errors.New("with the saved settings")
+
+// serve runs the server once. It returns true when it stopped for a restart.
+// ignoreSaved, when set, is why the saved settings are left out this time.
+func serve(parent context.Context, ignoreSaved string) (again bool, err error) {
 	cfg := config.Load()
 	if cfg.EnvFile != "" {
 		slog.Info("settings file", "path", cfg.EnvFile)
 	}
 	for _, dir := range []string{cfg.DataDir, cfg.CacheDir} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return err
+			return false, err
 		}
 	}
 	cfg.ServerID = serverID(cfg.DataDir)
 	database, err := db.Open(filepath.Join(cfg.DataDir, "couchside.db"))
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer database.Close()
+	// What admins saved in Settings → Server takes the place of those
+	// environment variables.
+	saved, err := database.EnvOverrides(parent)
+	if err != nil {
+		return false, err
+	}
+	if ignoreSaved != "" {
+		saved = nil
+	}
+	if len(saved) > 0 {
+		defer func() {
+			if err != nil && !again {
+				err = fmt.Errorf("%w: %w", errSavedSettings, err)
+			}
+		}()
+	}
+	if len(saved) > 0 {
+		id := cfg.ServerID
+		cfg = config.LoadWith(saved)
+		cfg.ServerID = id
+		keys := make([]string, 0, len(saved))
+		for k := range saved {
+			keys = append(keys, k)
+		}
+		slog.Info("settings from Settings → Server", "keys", strings.Join(keys, ","))
+	}
 
 	// TMDB first (backdrops, no sign-up), OMDb as a fallback when configured.
 	providers := &metadata.Chain{}
@@ -106,11 +161,14 @@ func run(parent context.Context) error {
 
 	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var restart atomic.Bool
 
 	enc := transcode.Detect(ctx, cfg.FFmpeg, cfg.HWAccel, cfg.VAAPIDevice)
 	tc, err := transcode.NewManager(enc, cfg.FFprobe, filepath.Join(cfg.CacheDir, "transcode"), cfg.MaxTranscodes)
 	if err != nil {
-		return err
+		return false, err
 	}
 	slog.Info("transcoding", "hwaccel", enc.HW, "tonemap", enc.Tonemap, "maxSessions", cfg.MaxTranscodes)
 
@@ -131,7 +189,7 @@ func run(parent context.Context) error {
 	tv, err := livetv.New(livetv.Config{Tuner: cfg.HDHomeRun, RecordingsDir: cfg.RecordingsDir, FFmpeg: cfg.FFmpeg,
 		FFprobe: cfg.FFprobe, MaxEncodes: cfg.MaxTranscodes, PadBefore: cfg.PadBefore, PadAfter: cfg.PadAfter, Metadata: providers}, database, enc, w, cfg.CacheDir)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if cfg.HDHomeRun != "" {
 		slog.Info("live tv enabled", "tuner", cfg.HDHomeRun, "recordings", cfg.RecordingsDir)
@@ -144,9 +202,13 @@ func run(parent context.Context) error {
 
 	apiServer, err := api.New(database, cfg, w, providers, tc, tv, version)
 	if err != nil {
-		return err
+		return false, err
 	}
 	apiServer.UseLogs(logs)
+	apiServer.UseRestart(saved, ignoreSaved, func() {
+		restart.Store(true)
+		cancel()
+	})
 	go apiServer.Run(ctx)
 	if cfg.Discovery {
 		go runDiscovery(ctx, cfg, version, apiServer)
@@ -181,7 +243,8 @@ func run(parent context.Context) error {
 	}
 	slog.Info("couchside listening", "addr", cfg.Addr, "version", version, "web", web, "providers", providers.Names())
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return err
+		cancel()
+		return false, err
 	}
 	// ListenAndServe returns as soon as Shutdown starts; requests still
 	// draining need the database, which closes when run returns.
@@ -189,7 +252,7 @@ func run(parent context.Context) error {
 	<-workerDone
 	<-tcDone
 	<-tvDone
-	return nil
+	return restart.Load(), nil
 }
 
 // runDiscovery answers SSDP searches from TV apps on the LAN. A server that

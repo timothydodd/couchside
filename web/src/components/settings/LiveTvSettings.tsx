@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AlertTriangle, FolderOpen, RefreshCw } from "lucide-react";
 import FolderPicker from "../FolderPicker";
+import Link from "../Link";
 import { api, useApi } from "../../lib/api";
 import { fmtAgo, fmtDay, fmtTime } from "../../lib/format";
 import type { LiveTvStatus } from "../../lib/types";
@@ -36,8 +37,11 @@ export default function LiveTvSettings() {
       </div>
       {!st.tuner ? (
         <p className="text-xs text-content-muted">
-          For broadcast channels and recording, set <span className="mono">COUCHSIDE_HDHOMERUN</span> to your HDHomeRun's IP address and a writable{" "}
-          <span className="mono">COUCHSIDE_RECORDINGS_DIR</span>, then restart. Your own channels below work without one.
+          For broadcast channels and recording, enter your HDHomeRun's address in{" "}
+          <Link to="/settings/server" className="text-accent hover:underline">
+            Settings → Server
+          </Link>{" "}
+          and restart. Your own channels below work without one.
         </p>
       ) : (
         <dl className="kv-grid text-sm">
@@ -135,26 +139,24 @@ function RecordingsFolder({ onSaved }: { onSaved: () => void }) {
             </span>
           </label>
         ))}
-        {data.mediaRoot && (
-          <label className={`flex cursor-pointer gap-2.5 rounded-md border px-3 py-2 transition-colors ${isCustom ? "border-accent bg-raised" : "border-border-light hover:border-border"}`}>
-            <input type="radio" name="recdir" className="accent-brand mt-0.5" checked={isCustom} onChange={() => { setChoice("__custom"); setBrowsing(true); }} />
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm text-content">Another folder</span>
-              {isCustom && (
-                <>
-                  <div className="mt-1.5 flex gap-2">
-                    <input className="field mono flex-1" placeholder={`${data.mediaRoot}/DVR`} value={custom} onChange={(e) => setCustom(e.target.value)} />
-                    <button type="button" className="btn-ghost" onClick={() => setBrowsing((b) => !b)}>
-                      <FolderOpen size={14} /> Browse
-                    </button>
-                  </div>
-                  {browsing && <FolderPicker path={custom || data.mediaRoot} onPick={setCustom} />}
-                  <span className="mt-1 block text-xs text-content-muted">A new folder is created if its parent exists. If it's inside a library, recordings show up in that library.</span>
-                </>
-              )}
-            </span>
-          </label>
-        )}
+        <label className={`flex cursor-pointer gap-2.5 rounded-md border px-3 py-2 transition-colors ${isCustom ? "border-accent bg-raised" : "border-border-light hover:border-border"}`}>
+          <input type="radio" name="recdir" className="accent-brand mt-0.5" checked={isCustom} onChange={() => { setChoice("__custom"); setBrowsing(true); }} />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm text-content">Another folder</span>
+            {isCustom && (
+              <>
+                <div className="mt-1.5 flex gap-2">
+                  <input className="field mono flex-1" placeholder={data.mediaRoot ? `${data.mediaRoot}/DVR` : "/media/DVR"} value={custom} onChange={(e) => setCustom(e.target.value)} />
+                  <button type="button" className="btn-ghost" onClick={() => setBrowsing((b) => !b)}>
+                    <FolderOpen size={14} /> Browse
+                  </button>
+                </div>
+                {browsing && <FolderPicker path={custom || data.mediaRoot} onPick={setCustom} />}
+                <span className="mt-1 block text-xs text-content-muted">A new folder is created if its parent exists. If it's inside a library, recordings show up in that library.</span>
+              </>
+            )}
+          </span>
+        </label>
       </div>
       {changed && data.movable > 0 && (
         <label className="mt-3 flex items-center gap-2 text-sm text-content-secondary">

@@ -10,6 +10,7 @@ import ProfileSettings from "../components/settings/ProfileSettings";
 import { SECTIONS } from "../components/settings/sections";
 import ServerInfo from "../components/settings/ServerInfo";
 import ServerNow from "../components/settings/ServerNow";
+import ServerSettings from "../components/settings/ServerSettings";
 import SystemHistory from "../components/settings/SystemHistory";
 import BackupSettings from "../components/settings/Backups";
 import TimingSettings from "../components/settings/TimingSettings";
@@ -64,6 +65,7 @@ export default function SettingsPage() {
             <ServerInfo />
           </>
         )}
+        {id === "server" && <ServerSettings />}
         {id === "console" && <Console />}
         {id === "accounts" && (
           <>
