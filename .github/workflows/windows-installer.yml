@@ -5,6 +5,14 @@ name: windows-installer
 # wizard that installs the "Couchside" service. Called by release.yml and
 # prerelease.yml after their web job has uploaded web-dist; uploads the
 # windows-installer artifact.
+#
+# Signing (Azure Artifact Signing): couchside.exe and the installer are signed
+# when the run is for a tag and these are set. Azure trusts only jobs in the
+# 'release' environment (the federated credential's subject), which admits v*
+# and pre-* tags; manual runs get no environment and stay unsigned.
+#   secrets (release environment): AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
+#   variables: SIGNING_ENDPOINT, SIGNING_ACCOUNT, SIGNING_PROFILE
+# jellyfin's ffmpeg.exe and ffprobe.exe are shipped as they come.
 on:
   workflow_call:
     inputs:
@@ -14,6 +22,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 env:
   # jellyfin-ffmpeg: its NVENC runs on older NVIDIA drivers than upstream
@@ -27,6 +36,9 @@ env:
 jobs:
   installer:
     runs-on: windows-latest
+    environment: ${{ github.ref_type == 'tag' && 'release' || '' }}
+    env:
+      SIGN: ${{ github.ref_type == 'tag' && secrets.AZURE_CLIENT_ID != '' && vars.SIGNING_ACCOUNT != '' && vars.SIGNING_PROFILE != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -46,7 +58,30 @@ jobs:
           TMDB_KEY: ${{ secrets.TMDB_API_KEY }}
         run: |
           go build -trimpath -ldflags "-s -w -X main.version=${VERSION} -X github.com/timothydodd/couchside/internal/config.builtinTMDBKey=${TMDB_KEY}" \
-            -o ../stage/couchside.exe ./cmd/couchside
+            -o ../sign/couchside.exe ./cmd/couchside
+      - name: Azure login (code signing)
+        if: env.SIGN == 'true'
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2.3.1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      # Built into its own folder so only our exe is signed, not ffmpeg's.
+      - name: sign couchside.exe
+        if: env.SIGN == 'true'
+        uses: azure/trusted-signing-action@1d365fec12862c4aa68fcac418143d73f0cea293 # v0.5.11
+        with:
+          endpoint: ${{ vars.SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ vars.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.SIGNING_PROFILE }}
+          files-folder: sign
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: stage couchside.exe
+        shell: bash
+        run: mkdir -p stage && cp sign/couchside.exe stage/
       - name: ffmpeg
         shell: pwsh
         run: |
@@ -85,6 +120,19 @@ jobs:
           ./inno/ISCC.exe /Q "/DAppVersion=$env:VERSION" "/DNumVersion=$num" "/DStage=$PWD\stage" "/DOutputDir=$PWD\out" deploy/windows/couchside.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Get-ChildItem out
+      # After the build, before upload: release.yml hashes what's uploaded.
+      - name: sign the installer
+        if: env.SIGN == 'true'
+        uses: azure/trusted-signing-action@1d365fec12862c4aa68fcac418143d73f0cea293 # v0.5.11
+        with:
+          endpoint: ${{ vars.SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ vars.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.SIGNING_PROFILE }}
+          files-folder: out
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: windows-installer

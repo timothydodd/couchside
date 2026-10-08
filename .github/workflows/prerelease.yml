@@ -57,6 +57,9 @@ jobs:
   installer:
     needs: web
     uses: ./.github/workflows/windows-installer.yml
+    permissions:
+      contents: read
+      id-token: write # Azure sign-in for code signing
     with:
       version: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
     secrets: inherit
