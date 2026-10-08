@@ -46,7 +46,7 @@ export default function ServerNow() {
           />
         </div>
       ) : (
-        <div className="card px-4 py-3 text-xs text-content-muted">CPU and memory readings are only available when the server runs on Linux.</div>
+        <div className="card px-4 py-3 text-xs text-content-muted">CPU and memory readings are only available when the server runs on Linux or Windows.</div>
       )}
 
       <section className="card p-4">

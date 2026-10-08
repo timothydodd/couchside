@@ -44,6 +44,7 @@ type authInfo struct {
 	Profiles           []profileStub `json:"profiles"`           // passwordless: every profile to pick from
 	HideAdmins         bool          `json:"hideAdmins"`         // admins are left out of profiles; ?admin=1 lists them instead
 	SetupRequired      bool          `json:"setupRequired"`
+	FirstRun           bool          `json:"firstRun"` // the first-run setup (your name, your media) isn't done
 	User               *db.Profile   `json:"user"`
 	AccessExpiresAt    int64         `json:"accessExpiresAt,omitempty"`
 	ExpiresIn          int64         `json:"expiresIn,omitempty"` // seconds until then, for clients whose clock is off
@@ -83,6 +84,10 @@ func (s *Server) authStatus(w http.ResponseWriter, r *http.Request) {
 		out.OIDC = c.Label
 	}
 	if out.SetupRequired, err = s.setupNeeded(ctx); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if out.FirstRun, err = s.firstRun(ctx); err != nil {
 		writeErr(w, err)
 		return
 	}

@@ -13,6 +13,7 @@ import EpisodePage from "./pages/EpisodePage";
 import SearchPage from "./pages/SearchPage";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
 import SetupPage from "./pages/SetupPage";
+import WelcomePage from "./pages/WelcomePage";
 import SignInPage from "./pages/SignInPage";
 import { useAuth, useIsAdmin } from "./stores/auth";
 import { useProfile } from "./stores/profile";
@@ -29,6 +30,7 @@ const LiveTvPage = lazyPage(() => import("./pages/LiveTvPage"));
 const LivePlayerPage = lazyPage(() => import("./pages/LivePlayerPage"));
 const RecordingPlayerPage = lazyPage(() => import("./pages/RecordingPlayerPage"));
 const SettingsPage = lazyPage(() => import("./pages/SettingsPage"));
+const FirstRunMediaPage = lazyPage(() => import("./pages/FirstRunMediaPage"));
 
 export default function App() {
   const auth = useAuth();
@@ -41,8 +43,16 @@ export default function App() {
   if (!auth.loaded) return null;
   if (auth.error) return <EmptyState title="Can't reach Couchside">{auth.error}</EmptyState>;
   if (auth.setupRequired) return <SetupPage />;
-  if (!auth.user) return <SignInPage />;
+  // A new server's first run: who you are (passwordless; with accounts the
+  // setup code page above names the admin), then where the media is.
+  if (!auth.user) return auth.firstRun && auth.passwordless ? <WelcomePage /> : <SignInPage />;
   if (auth.user.mustChangePassword) return <ChangePasswordPage />;
+  if (auth.firstRun && auth.user.role === "admin")
+    return (
+      <Suspense fallback={<Loading fill />}>
+        <FirstRunMediaPage />
+      </Suspense>
+    );
   if (route.name === "profiles") return <SignInPage switching />;
   // /admin is where hidden admin accounts sign in. An admin has nothing more
   // to do there; anyone else can switch to an admin account.

@@ -11,18 +11,24 @@ import (
 )
 
 type Config struct {
-	Addr         string        // COUCHSIDE_ADDR, default :8080
-	DataDir      string        // COUCHSIDE_DATA_DIR: SQLite database lives here
-	CacheDir     string        // COUCHSIDE_CACHE_DIR: artwork, stills, subtitles, optimized copies, HLS segments
-	WebDir       string        // COUCHSIDE_WEB_DIR: built frontend to serve; empty = API only
-	MediaRoot    string        // COUCHSIDE_MEDIA_ROOT: libraries must live under it; enables folder browsing
-	OMDbKey      string        // OMDB_API_KEY: optional second metadata source
-	TMDBKey      string        // TMDB_API_KEY: overrides the built-in key; "off" disables TMDB
-	Workers      int           // COUCHSIDE_WORKERS: concurrent background jobs
-	ScanInterval time.Duration // COUCHSIDE_SCAN_INTERVAL: periodic rescan, 0 disables
-	FFmpeg       string        // COUCHSIDE_FFMPEG, default ffmpeg beside the executable, else on the PATH
-	FFprobe      string        // COUCHSIDE_FFPROBE, likewise
-	EnvFile      string        // the settings file that was read (see envFilePath), or ""
+	Addr     string // COUCHSIDE_ADDR, default :8080
+	DataDir  string // COUCHSIDE_DATA_DIR: SQLite database lives here
+	CacheDir string // COUCHSIDE_CACHE_DIR: artwork, stills, subtitles, optimized copies, HLS segments
+	WebDir   string // COUCHSIDE_WEB_DIR: built frontend to serve; empty = API only
+	// COUCHSIDE_MEDIA_ROOT: media locations from the environment (containers),
+	// one or more separated like PATH (";" on Windows, ":" elsewhere). They're
+	// added to the ones saved in Settings → Server. MediaRootsFromFile are
+	// the ones the settings file gave (the Windows installer used to write
+	// it), imported once as saved locations instead.
+	MediaRoots         []string
+	MediaRootsFromFile []string
+	OMDbKey            string        // OMDB_API_KEY: optional second metadata source
+	TMDBKey            string        // TMDB_API_KEY: overrides the built-in key; "off" disables TMDB
+	Workers            int           // COUCHSIDE_WORKERS: concurrent background jobs
+	ScanInterval       time.Duration // COUCHSIDE_SCAN_INTERVAL: periodic rescan, 0 disables
+	FFmpeg             string        // COUCHSIDE_FFMPEG, default ffmpeg beside the executable, else on the PATH
+	FFprobe            string        // COUCHSIDE_FFPROBE, likewise
+	EnvFile            string        // the settings file that was read (see envFilePath), or ""
 
 	HWAccel        string // COUCHSIDE_HWACCEL: auto (default) | none | vaapi | qsv | nvenc (falls back to none if unusable)
 	VAAPIDevice    string // COUCHSIDE_VAAPI_DEVICE, default /dev/dri/renderD128
@@ -87,7 +93,6 @@ func LoadWith(o map[string]string) Config {
 		DataDir:      data,
 		CacheDir:     env("COUCHSIDE_CACHE_DIR", filepath.Join(data, "cache")),
 		WebDir:       getenv("COUCHSIDE_WEB_DIR"),
-		MediaRoot:    getenv("COUCHSIDE_MEDIA_ROOT"),
 		OMDbKey:      getenv("OMDB_API_KEY"),
 		TMDBKey:      tmdbKey(),
 		Workers:      2,
@@ -126,8 +131,11 @@ func LoadWith(o map[string]string) Config {
 			c.ScanInterval = d
 		}
 	}
-	if c.MediaRoot != "" {
-		c.MediaRoot = filepath.Clean(c.MediaRoot)
+	roots := splitPaths(getenv("COUCHSIDE_MEDIA_ROOT"))
+	if FromFile("COUCHSIDE_MEDIA_ROOT") {
+		c.MediaRootsFromFile = roots
+	} else {
+		c.MediaRoots = roots
 	}
 	return c
 }
@@ -210,4 +218,15 @@ func serverName() string {
 		return "Couchside"
 	}
 	return h
+}
+
+// splitPaths splits a PATH-style list into clean, non-empty paths.
+func splitPaths(v string) []string {
+	var out []string
+	for _, p := range filepath.SplitList(v) {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, filepath.Clean(p))
+		}
+	}
+	return out
 }

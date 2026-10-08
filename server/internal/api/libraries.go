@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/timothydodd/couchside/internal/db"
+	"github.com/timothydodd/couchside/internal/netshare"
 	"github.com/timothydodd/couchside/internal/worker"
 )
 
@@ -40,7 +41,7 @@ func (s *Server) createLibrary(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, badRequest("kind must be movies or tv"))
 		return
 	}
-	path, err := s.checkPath(in.Path)
+	path, err := s.checkPath(r.Context(), in.Path)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -98,7 +99,7 @@ func (s *Server) updateLibrary(w http.ResponseWriter, r *http.Request) {
 	}
 	path := old.Path
 	if strings.TrimSpace(in.Path) != "" && filepath.Clean(strings.TrimSpace(in.Path)) != old.Path {
-		if path, err = s.checkPath(in.Path); err != nil {
+		if path, err = s.checkPath(r.Context(), in.Path); err != nil {
 			writeErr(w, err)
 			return
 		}
@@ -170,15 +171,15 @@ func (s *Server) repointRecordings(ctx context.Context, oldDir, newDir string) {
 }
 
 // checkPath cleans a library path and confirms it's a readable folder inside
-// the media root (when one is configured).
-func (s *Server) checkPath(p string) (string, error) {
+// a media location.
+func (s *Server) checkPath(ctx context.Context, p string) (string, error) {
 	p = strings.TrimSpace(p)
 	if p == "" || !filepath.IsAbs(p) {
 		return "", badRequest("path must be an absolute folder path")
 	}
 	p = filepath.Clean(p)
-	if !s.underRoot(p) {
-		return "", badRequest("path must be inside " + s.cfg.MediaRoot)
+	if !s.underRoot(ctx, p) {
+		return "", errOutsideLocations(p)
 	}
 	st, err := os.Stat(p)
 	if err != nil || !st.IsDir() {
@@ -187,16 +188,10 @@ func (s *Server) checkPath(p string) (string, error) {
 	return p, nil
 }
 
-func (s *Server) underRoot(p string) bool {
-	root := s.cfg.MediaRoot
-	if root == "" {
-		return true
-	}
-	// insideDir compares by path element with the platform's separator, so
-	// D:\Media\Movies is inside D:\Media on Windows.
-	within := func(r string) bool { return filepath.Clean(p) == filepath.Clean(r) || insideDir(p, r) }
-	// The DVR's own folder is allowed too: it lives outside the read-only media mount.
-	return within(root) || (s.tv.HasTuner() && within(s.tv.DefaultRecordingsDir()))
+// underRoot says p is in a media location, or the DVR's own folder (which
+// lives outside the read-only media mount).
+func (s *Server) underRoot(ctx context.Context, p string) bool {
+	return within(p, s.mediaRoots(ctx)) || (s.tv != nil && s.tv.HasTuner() && within(p, []string{s.tv.DefaultRecordingsDir()}))
 }
 
 func (s *Server) deleteLibrary(w http.ResponseWriter, r *http.Request) {
@@ -241,27 +236,33 @@ type folder struct {
 }
 
 // browse lists subfolders for the folder pickers (libraries, the DVR and
-// filler folders, and the media folder in Settings → Server). Admins only.
-// Inside the media folder when one is set, unless all=1 (choosing the media
-// folder itself); otherwise anywhere. No path lists the starting points:
-// the media folder, or the drives on Windows and / elsewhere. Paths come
-// back whole, so the client never joins them with the wrong separator.
+// filler folders, and adding a media location). Admins only. Inside the
+// media locations, unless all=1 (adding a location); no path lists the
+// starting points: the locations, or with all=1 the drives on Windows (plus
+// shares already in use) and / elsewhere. Paths come back whole, so the
+// client never joins them with the wrong separator.
 func (s *Server) browse(w http.ResponseWriter, r *http.Request) {
-	root := s.cfg.MediaRoot
-	if r.URL.Query().Get("all") == "1" {
-		root = ""
-	}
+	all := r.URL.Query().Get("all") == "1"
+	roots := s.mediaRoots(r.Context())
 	p := strings.TrimSpace(r.URL.Query().Get("path"))
-	if p == "" && root != "" {
-		p = root
-	}
 	if p == "" {
-		writeJSON(w, http.StatusOK, map[string]any{"path": "", "parent": nil, "dirs": startFolders(s.cfg.MediaRoot)})
+		start := startFolders(roots)
+		if !all {
+			start = make([]folder, 0, len(roots))
+			for _, root := range roots {
+				start = append(start, folder{root, root})
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"path": "", "parent": nil, "dirs": start})
 		return
 	}
 	p = filepath.Clean(p)
-	if !filepath.IsAbs(p) || (root != "" && p != root && !insideDir(p, root)) {
-		writeErr(w, badRequest("path must be inside "+root))
+	if !filepath.IsAbs(p) {
+		writeErr(w, badRequest("enter a full folder path"))
+		return
+	}
+	if !all && !within(p, roots) {
+		writeErr(w, errOutsideLocations(p))
 		return
 	}
 	entries, err := os.ReadDir(p)
@@ -280,21 +281,18 @@ func (s *Server) browse(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	sort.Slice(dirs, func(i, j int) bool { return strings.ToLower(dirs[i].Name) < strings.ToLower(dirs[j].Name) })
-	var parent *string
-	switch up := filepath.Dir(p); {
-	case p == root:
-	case up != p:
-		parent = &up
-	case root == "":
-		top := "" // a drive or share's own root: back to the starting points
-		parent = &top
+	// Up a level, or back to the starting points from a location (or a
+	// drive or share's own root).
+	parent := filepath.Dir(p)
+	if parent == p || (!all && !within(parent, roots)) {
+		parent = ""
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"path": p, "parent": parent, "dirs": dirs})
 }
 
-// startFolders are where browsing starts with no media folder to stay in:
-// the drives on Windows (plus a media folder on a share), / elsewhere.
-func startFolders(mediaRoot string) []folder {
+// startFolders are where browsing for a new location starts: the drives on
+// Windows (plus shares already in use), / elsewhere.
+func startFolders(roots []string) []folder {
 	if runtime.GOOS != "windows" {
 		return []folder{{"/", "/"}}
 	}
@@ -305,8 +303,12 @@ func startFolders(mediaRoot string) []folder {
 			out = append(out, folder{string(c) + ":", d})
 		}
 	}
-	if strings.HasPrefix(mediaRoot, `\\`) {
-		out = append(out, folder{mediaRoot, mediaRoot})
+	seen := map[string]bool{}
+	for _, r := range roots {
+		if root, err := netshare.Root(r); err == nil && !seen[strings.ToLower(root)] {
+			seen[strings.ToLower(root)] = true
+			out = append(out, folder{root, root})
+		}
 	}
 	return out
 }

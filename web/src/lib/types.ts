@@ -393,7 +393,7 @@ export interface Status {
   providers: string[];
   /** Where the TMDB key comes from: this build's own, TMDB_API_KEY, or none. */
   tmdbKey: "builtin" | "custom" | "";
-  mediaRoot: string;
+  mediaRoots: string[]; // media locations: admins only (empty for everyone else)
   counts: { movies: number; series: number; episodes: number; unmatched: number; libraries: number };
   jobs: JobCounts;
   scanEvery: string;
@@ -454,10 +454,22 @@ export interface ServerSettings {
   startFailed: string; // a restart with the saved settings failed: it's running without them
 }
 
-// Settings → Server → Network shares (Windows only).
-export interface NetworkShares {
-  supported: boolean;
-  shares: { path: string; user: string; hasPassword: boolean; error: string }[]; // error "" when signed in
+// Media locations (GET /api/media/locations): where media can be.
+export interface MediaLocation {
+  id: number; // 0 for one from COUCHSIDE_MEDIA_ROOT
+  path: string;
+  share: boolean; // a network share (\\server\share)
+  fromEnv: boolean;
+  user: string;
+  hasPassword: boolean;
+  found: boolean; // the folder can be opened now
+  error: string; // a share's sign-in failed
+}
+
+export interface MediaLocations {
+  locations: MediaLocation[];
+  shares: boolean; // this server signs in to network shares (Windows)
+  envVar: string;
 }
 
 export interface Browse {
@@ -712,6 +724,8 @@ export interface AuthInfo {
   /** Admin accounts are left off the picker and sign in at /admin. */
   hideAdmins?: boolean;
   setupRequired: boolean;
+  /** The first-run setup (your name, your media) isn't done. */
+  firstRun: boolean;
   user: Profile | null;
   accessExpiresAt?: number;
   /** Seconds until the access token runs out. */

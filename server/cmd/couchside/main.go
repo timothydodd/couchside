@@ -26,7 +26,6 @@ import (
 	"github.com/timothydodd/couchside/internal/livetv"
 	"github.com/timothydodd/couchside/internal/logbuf"
 	"github.com/timothydodd/couchside/internal/metadata"
-	"github.com/timothydodd/couchside/internal/netshare"
 	"github.com/timothydodd/couchside/internal/transcode"
 	"github.com/timothydodd/couchside/internal/webui"
 	"github.com/timothydodd/couchside/internal/worker"
@@ -130,22 +129,6 @@ func serve(parent context.Context, ignoreSaved string) (again bool, err error) {
 	if ignoreSaved != "" {
 		saved = nil
 	}
-	// Network shares first: the media folder and libraries may be on them.
-	shareStatus := map[string]string{}
-	if netshare.Supported {
-		if shares, err := database.NetShares(parent); err != nil {
-			slog.Warn("network shares", "err", err)
-		} else if len(shares) > 0 {
-			shareStatus = netshare.ConnectAll(shares)
-			for p, e := range shareStatus {
-				if e != "" {
-					slog.Warn("network share sign-in failed", "share", p, "err", e)
-				} else {
-					slog.Info("network share signed in", "share", p)
-				}
-			}
-		}
-	}
 	if len(saved) > 0 {
 		defer func() {
 			if err != nil && !again {
@@ -163,6 +146,9 @@ func serve(parent context.Context, ignoreSaved string) (again bool, err error) {
 		}
 		slog.Info("settings from Settings → Server", "keys", strings.Join(keys, ","))
 	}
+	// Media locations before anything reads media: libraries may be on
+	// network shares to sign in to.
+	shareStatus := api.PrepareLocations(parent, database, cfg)
 
 	// TMDB first (backdrops, no sign-up), OMDb as a fallback when configured.
 	providers := &metadata.Chain{}
