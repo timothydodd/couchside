@@ -9,7 +9,8 @@ name: windows-installer
 # Signing (Azure Artifact Signing): couchside.exe and the installer are signed
 # when the run is for a tag and these are set. Azure trusts only jobs in the
 # 'release' environment (the federated credential's subject), which admits v*
-# and pre-* tags; manual runs get no environment and stay unsigned.
+# and pre-* tags and waits for timothydodd to approve the run (Actions →
+# Review deployments); manual runs get no environment and stay unsigned.
 #   secrets (release environment): AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
 #   variables: SIGNING_ENDPOINT, SIGNING_ACCOUNT, SIGNING_PROFILE
 # jellyfin's ffmpeg.exe and ffprobe.exe are shipped as they come.
