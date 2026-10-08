@@ -43,6 +43,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 			"tonemap":        s.tc.Encoder().Tonemap || s.tc.Encoder().HWTonemap,
 			"gpuDecode":      s.tc.Encoder().HWDecode,
 			"gpuTonemap":     s.tc.Encoder().HWTonemap,
+			"tonemapFilter":  s.tc.Encoder().TonemapFilter,
 			"maxSessions":    s.tc.Max(),
 			"active":         len(s.tc.Sessions()),
 			"encodeWorkers":  s.cfg.EncodeWorkers,

@@ -38,7 +38,7 @@ type LiveSession struct {
 	// audio, so it's repackaged into HLS instead of re-encoded.
 	CopyVideo bool `json:"copyVideo"`
 	CopyAudio bool `json:"copyAudio"`
-	HWDecode  bool `json:"hwDecode"` // VAAPI decodes and deinterlaces too
+	HWDecode  bool `json:"hwDecode"` // the GPU (VAAPI or CUDA) decodes and deinterlaces too
 	Virtual   bool `json:"virtual"`  // one of Couchside's own channels
 
 	key        string // what's being streamed: "ch:2.1", "rec:42" or "vc:900"

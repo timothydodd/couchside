@@ -90,3 +90,46 @@ func TestFFmpegReason(t *testing.T) {
 		t.Errorf("empty = %q", got)
 	}
 }
+
+func TestNVENCFullPipeline(t *testing.T) {
+	e := Encoder{HW: "nvenc", HWDecode: true, Tonemap: true}
+	o := VideoOpts{MaxHeight: 720, SrcHeight: 2160, BitrateK: 4000, HDR: true, HWDecode: true}
+	in, chain, codec := e.VideoParts(o)
+	if got := strings.Join(in, " "); got != "-init_hw_device cuda=cu -filter_hw_device cu -hwaccel cuda -hwaccel_device cu -hwaccel_output_format cuda" {
+		t.Errorf("input args = %q", got)
+	}
+	// No GPU tone mapper: only the scaled-down frames visit the CPU.
+	if !strings.HasPrefix(chain, "scale_cuda=w=-2:h=720:format=p010,hwdownload,format=p010le,zscale") || !strings.HasSuffix(chain, ",format=nv12") {
+		t.Errorf("CPU tone map chain = %q", chain)
+	}
+	if codec[1] != "h264_nvenc" || !strings.Contains(strings.Join(codec, " "), "-b:v 4000k") {
+		t.Errorf("codec = %v", codec)
+	}
+
+	e.HWTonemap, e.TonemapFilter = true, "tonemap_cuda"
+	_, chain, _ = e.VideoParts(o)
+	if chain != "scale_cuda=w=-2:h=720:format=p010,tonemap_cuda=format=yuv420p:tonemap=hable:desat=0:p=bt709:t=bt709:m=bt709" {
+		t.Errorf("tonemap_cuda chain = %q (nothing should leave the GPU)", chain)
+	}
+
+	e.TonemapFilter = "tonemap_opencl"
+	in, chain, _ = e.VideoParts(o)
+	if got := strings.Join(in, " "); !strings.Contains(got, "-init_hw_device opencl=ocl -filter_hw_device ocl") {
+		t.Errorf("opencl input args = %q", got)
+	}
+	if chain != "scale_cuda=w=-2:h=720:format=p010,hwdownload,format=p010le,hwupload,tonemap_opencl=format=nv12:tonemap=hable:desat=0:p=bt709:t=bt709:m=bt709,hwdownload,format=nv12" {
+		t.Errorf("tonemap_opencl chain = %q", chain)
+	}
+
+	// SDR live TV: deinterlace and scale on the GPU, OpenCL not involved.
+	in, chain, _ = e.VideoParts(VideoOpts{MaxHeight: 720, BitrateK: 4000, Deinterlace: true, Live: true, HWDecode: true})
+	if chain != `yadif_cuda=mode=send_frame:parity=auto:deint=interlaced,scale_cuda=w=-2:h=min(ih\,720):format=nv12` || strings.Contains(strings.Join(in, " "), "opencl") {
+		t.Errorf("live in=%v chain=%q", in, chain)
+	}
+
+	// A session that fell back: CPU decodes, GPU encodes.
+	in, chain, _ = e.VideoParts(VideoOpts{MaxHeight: 720, SrcHeight: 1080, BitrateK: 4000})
+	if len(in) != 0 || chain != "scale=-2:720,format=yuv420p" {
+		t.Errorf("fallback in=%v chain=%q", in, chain)
+	}
+}

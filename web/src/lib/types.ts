@@ -406,6 +406,7 @@ export interface Status {
     tonemap: boolean;
     gpuDecode?: boolean;
     gpuTonemap?: boolean;
+    tonemapFilter?: string;
     maxSessions: number;
     active: number;
     encodeWorkers: number;

@@ -22,12 +22,13 @@ type Encoder struct {
 	HW          string // none | vaapi | qsv | nvenc, after detection
 	VAAPIDevice string
 	Tonemap     bool // zscale available for HDR → SDR
-	// VAAPI only: decode and scale on the GPU too (verified at start-up), and
-	// tone map there (the iHD driver's tonemap_vaapi). Without HWDecode the
-	// CPU decodes and scales and the GPU only encodes, which for 4K HEVC is
-	// most of the work on the CPU.
-	HWDecode  bool
-	HWTonemap bool
+	// VAAPI and NVENC: decode and scale on the GPU too (verified at
+	// start-up), and tone map there (TonemapFilter names the filter). Without
+	// HWDecode the CPU decodes and scales and the GPU only encodes, which for
+	// 4K HEVC is most of the work on the CPU.
+	HWDecode      bool
+	HWTonemap     bool
+	TonemapFilter string // tonemap_vaapi, tonemap_cuda or tonemap_opencl when HWTonemap
 	// Note says why no GPU is used, when one was asked for (or "auto" tried
 	// some): each encoder tried and ffmpeg's reason it failed.
 	Note string
@@ -84,12 +85,48 @@ func Detect(ctx context.Context, ffmpeg, want, vaapiDevice string) Encoder {
 		}
 		return e
 	}
-	if e.HW == "vaapi" {
+	switch e.HW {
+	case "vaapi":
 		e.HWDecode = testHWDecode(ctx, e, string(filters))
-		e.HWTonemap = e.HWDecode && strings.Contains(string(filters), " tonemap_vaapi ")
-		slog.Info("vaapi pipeline", "gpuDecode", e.HWDecode, "gpuTonemap", e.HWTonemap)
+		if e.HWDecode && strings.Contains(string(filters), " tonemap_vaapi ") {
+			e.HWTonemap, e.TonemapFilter = true, "tonemap_vaapi"
+		}
+		slog.Info("vaapi pipeline", "gpuDecode", e.HWDecode, "gpuTonemap", e.TonemapFilter)
+	case "nvenc":
+		e.HWDecode = testHWDecode(ctx, e, string(filters))
+		if e.HWDecode {
+			// tonemap_cuda is jellyfin-ffmpeg's; tonemap_opencl is in stock
+			// ffmpeg and runs on NVIDIA's OpenCL, with a round trip through
+			// memory because OpenCL can't map CUDA frames.
+			for _, f := range []string{"tonemap_cuda", "tonemap_opencl"} {
+				if strings.Contains(string(filters), " "+f+" ") && testCUDATonemap(ctx, e, f) {
+					e.HWTonemap, e.TonemapFilter = true, f
+					break
+				}
+			}
+		}
+		slog.Info("nvenc pipeline", "gpuDecode", e.HWDecode, "gpuTonemap", e.TonemapFilter)
 	}
 	return e
+}
+
+// testCUDATonemap runs a synthetic 10-bit PQ clip through the CUDA pipeline
+// with the given tone mapper, the way an HDR session would.
+func testCUDATonemap(ctx context.Context, e Encoder, filter string) bool {
+	e.HWTonemap, e.TonemapFilter = true, filter
+	o := VideoOpts{MaxHeight: 120, SrcHeight: 240, BitrateK: 300, HDR: true, HWDecode: true}
+	_, chain, codec := e.VideoParts(o)
+	// Only the devices, no -hwaccel: the clip is lavfi, so it's uploaded by hand.
+	args := append([]string{"-hide_banner", "-loglevel", "error"}, e.cudaDevices(o)...)
+	args = append(args, "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=25:duration=0.4")
+	args = append(args, "-vf", "format=p010le,setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc,hwupload_cuda,"+chain)
+	args = append(args, codec...)
+	args = append(args, "-f", "null", "-")
+	if msg, err := exec.CommandContext(ctx, e.FFmpeg, args...).CombinedOutput(); err != nil {
+		slog.Warn("nvenc tone map test failed", "filter", filter, "err", err, "ffmpeg", Tail(string(msg), 300))
+		return false
+	}
+	return true
 }
 
 // autoCandidates are the encoders "auto" tries, best first. A discrete
@@ -166,7 +203,8 @@ func ffmpegReason(out string) string {
 // testHWDecode checks the whole GPU pipeline: it encodes a short clip on the
 // GPU, then decodes, scales and re-encodes it there.
 func testHWDecode(ctx context.Context, e Encoder, filters string) bool {
-	if !strings.Contains(filters, " scale_vaapi ") {
+	scaler := map[string]string{"vaapi": "scale_vaapi", "nvenc": "scale_cuda"}[e.HW]
+	if scaler == "" || !strings.Contains(filters, " "+scaler+" ") {
 		return false
 	}
 	dir, err := os.MkdirTemp("", "couchside-hwtest-")
@@ -181,7 +219,7 @@ func testHWDecode(ctx context.Context, e Encoder, filters string) bool {
 	args = append(args, out...)
 	args = append(args, "-y", clip)
 	if msg, err := exec.CommandContext(ctx, e.FFmpeg, args...).CombinedOutput(); err != nil {
-		slog.Warn("vaapi decode test: couldn't make a test clip", "err", err, "ffmpeg", Tail(string(msg), 300))
+		slog.Warn("GPU decode test: couldn't make a test clip", "hw", e.HW, "err", err, "ffmpeg", Tail(string(msg), 300))
 		return false
 	}
 	full := e
@@ -192,7 +230,7 @@ func testHWDecode(ctx context.Context, e Encoder, filters string) bool {
 	args = append(args, out...)
 	args = append(args, "-f", "null", "-")
 	if msg, err := exec.CommandContext(ctx, e.FFmpeg, args...).CombinedOutput(); err != nil {
-		slog.Warn("vaapi decode test failed: the GPU will only encode", "err", err, "ffmpeg", Tail(string(msg), 300))
+		slog.Warn("GPU decode test failed: the GPU will only encode", "hw", e.HW, "err", err, "ffmpeg", Tail(string(msg), 300))
 		return false
 	}
 	return true
@@ -207,7 +245,7 @@ type VideoOpts struct {
 	File        bool // whole-file encode: slower preset, better compression
 	Deinterlace bool // broadcast TV: deinterlace frames flagged interlaced
 	Live        bool // live TV: steady frame-by-frame output over compression
-	HWDecode    bool // VAAPI: decode, scale and tone map on the GPU (needs Encoder.HWDecode)
+	HWDecode    bool // VAAPI/NVENC: decode, scale and tone map on the GPU (needs Encoder.HWDecode)
 	Exact       bool // scale to MaxHeight exactly, up as well as down: pieces joined into one stream need one size
 }
 
@@ -221,8 +259,13 @@ func (e Encoder) Video(o VideoOpts) (in, out []string) {
 // VideoParts is Video split up, for callers that need the filter chain inside
 // a -filter_complex (e.g. to burn in subtitles first).
 func (e Encoder) VideoParts(o VideoOpts) (in []string, chain string, codec []string) {
-	if e.HW == "vaapi" && o.HWDecode && e.HWDecode {
-		return e.vaapiFull(o)
+	if o.HWDecode && e.HWDecode {
+		switch e.HW {
+		case "vaapi":
+			return e.vaapiFull(o)
+		case "nvenc":
+			return e.nvencFull(o)
+		}
 	}
 	var f []string
 	if o.Deinterlace {
@@ -264,12 +307,7 @@ func (e Encoder) VideoParts(o VideoOpts) (in []string, chain string, codec []str
 		codec = []string{"-c:v", "h264_qsv", "-preset", preset, "-b:v", br, "-maxrate", br, "-bufsize", buf}
 	case "nvenc":
 		f = append(f, "format=yuv420p")
-		preset := "p4"
-		if o.File {
-			preset = "p6"
-		}
-		codec = []string{"-c:v", "h264_nvenc", "-preset", preset, "-rc", "vbr", "-cq", "23",
-			"-b:v", br, "-maxrate", br, "-bufsize", buf, "-profile:v", "high"}
+		codec = nvencCodec(o)
 	default:
 		f = append(f, "format=yuv420p")
 		preset, crf := "veryfast", "22"
@@ -299,15 +337,7 @@ func (e Encoder) vaapiFull(o VideoOpts) (in []string, chain string, codec []stri
 		// auto=1: only frames flagged interlaced, like yadif's deint=interlaced.
 		f = append(f, "deinterlace_vaapi=auto=1")
 	}
-	size := ""
-	switch {
-	case o.MaxHeight > 0 && o.Exact:
-		size = fmt.Sprintf("w=-2:h=%d:", o.MaxHeight)
-	case o.MaxHeight > 0 && o.SrcHeight == 0:
-		size = fmt.Sprintf(`w=-2:h=min(ih\,%d):`, o.MaxHeight) // size unknown: cap it, never scale up
-	case o.MaxHeight > 0 && o.SrcHeight > o.MaxHeight:
-		size = fmt.Sprintf("w=-2:h=%d:", o.MaxHeight)
-	}
+	size := gpuSize(o)
 	switch {
 	case o.HDR && e.HWTonemap:
 		f = append(f, "scale_vaapi="+size+"format=p010", "tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709")
@@ -324,6 +354,69 @@ func (e Encoder) vaapiFull(o VideoOpts) (in []string, chain string, codec []stri
 		codec = append(codec, "-bf", "0") // no B-frames: segments arrive as steadily as the broadcast
 	}
 	return in, strings.Join(f, ","), codec
+}
+
+// gpuSize is the w/h options for scale_vaapi or scale_cuda, ending in ":"
+// when set.
+func gpuSize(o VideoOpts) string {
+	switch {
+	case o.MaxHeight > 0 && o.Exact:
+		return fmt.Sprintf("w=-2:h=%d:", o.MaxHeight)
+	case o.MaxHeight > 0 && o.SrcHeight == 0:
+		return fmt.Sprintf(`w=-2:h=min(ih\,%d):`, o.MaxHeight) // size unknown: cap it, never scale up
+	case o.MaxHeight > 0 && o.SrcHeight > o.MaxHeight:
+		return fmt.Sprintf("w=-2:h=%d:", o.MaxHeight)
+	}
+	return ""
+}
+
+// nvencFull is vaapiFull for NVIDIA: NVDEC decodes into CUDA frames,
+// yadif_cuda deinterlaces, scale_cuda resizes (and converts 10-bit to 8-bit;
+// its format option needs ffmpeg 7) and h264_nvenc encodes them in place. HDR
+// is tone mapped by tonemap_cuda on the GPU, or by tonemap_opencl after a trip
+// through memory, or otherwise by zscale on the CPU; in both of the latter
+// only scaled-down frames move.
+func (e Encoder) nvencFull(o VideoOpts) (in []string, chain string, codec []string) {
+	in = append(e.cudaDevices(o), "-hwaccel", "cuda", "-hwaccel_device", "cu", "-hwaccel_output_format", "cuda")
+	var f []string
+	if o.Deinterlace {
+		f = append(f, "yadif_cuda=mode=send_frame:parity=auto:deint=interlaced")
+	}
+	size := gpuSize(o)
+	const tm = "tonemap=hable:desat=0:p=bt709:t=bt709:m=bt709"
+	switch {
+	case o.HDR && e.HWTonemap && e.TonemapFilter == "tonemap_cuda":
+		f = append(f, "scale_cuda="+size+"format=p010", "tonemap_cuda=format=yuv420p:"+tm)
+	case o.HDR && e.HWTonemap && e.TonemapFilter == "tonemap_opencl":
+		f = append(f, "scale_cuda="+size+"format=p010", "hwdownload", "format=p010le", "hwupload",
+			"tonemap_opencl=format=nv12:"+tm, "hwdownload", "format=nv12")
+	case o.HDR && e.Tonemap:
+		f = append(f, "scale_cuda="+size+"format=p010", "hwdownload", "format=p010le",
+			"zscale=t=linear:npl=100", "format=gbrpf32le", "zscale=p=bt709",
+			"tonemap=tonemap=hable:desat=0", "zscale=t=bt709:m=bt709:r=tv", "format=nv12")
+	default:
+		f = append(f, "scale_cuda="+size+"format=nv12")
+	}
+	return in, strings.Join(f, ","), nvencCodec(o)
+}
+
+// cudaDevices sets up the CUDA device, plus an OpenCL one as the filters'
+// device (for hwupload) when tonemap_opencl does the tone mapping.
+func (e Encoder) cudaDevices(o VideoOpts) []string {
+	if o.HDR && e.HWTonemap && e.TonemapFilter == "tonemap_opencl" {
+		return []string{"-init_hw_device", "cuda=cu", "-init_hw_device", "opencl=ocl", "-filter_hw_device", "ocl"}
+	}
+	return []string{"-init_hw_device", "cuda=cu", "-filter_hw_device", "cu"}
+}
+
+func nvencCodec(o VideoOpts) []string {
+	br := fmt.Sprintf("%dk", o.BitrateK)
+	preset := "p4"
+	if o.File {
+		preset = "p6"
+	}
+	return []string{"-c:v", "h264_nvenc", "-preset", preset, "-rc", "vbr", "-cq", "23",
+		"-b:v", br, "-maxrate", br, "-bufsize", fmt.Sprintf("%dk", o.BitrateK*2), "-profile:v", "high"}
 }
 
 // AudioArgs encodes to stereo AAC, which every browser plays.
