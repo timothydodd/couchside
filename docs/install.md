@@ -22,17 +22,21 @@ and a port, then:
 - adds a Windows Firewall rule (private and domain networks) so TVs and phones
   can connect and find the server.
 
-Settings are in `%ProgramData%\Couchside\couchside.env` (see
-[configuration.md](configuration.md)); restart the service after editing it.
+The installer's settings are in `%ProgramData%\Couchside\couchside.env` (see
+[configuration.md](configuration.md)). Most of them, and more, can be changed
+in Settings → Server instead, which restarts the server for you.
 The database, artwork and logs (`data\logs\couchside.log`) are in
 `%ProgramData%\Couchside\data` and are kept when you uninstall. Running the
 installer again upgrades in place and keeps your settings.
 
 **Media on a NAS.** Use the share's network path (`\\nas\media`), not a mapped
 drive letter: services can't see mapped drives. The service runs as Local
-System, which usually can't read network shares, so in Services
-(`services.msc`) open Couchside → Log On, choose an account that can read the
-share, and restart the service.
+System, which a NAS usually turns away, so add the share's user name and
+password in Settings → Server → Network shares: Couchside signs in to it
+whenever it starts (like `net use`), and the password is kept encrypted for
+this computer (Windows DPAPI). Then pick the media folder and libraries on the
+share. Alternatively, in Services (`services.msc`) open Couchside → Log On,
+choose an account that can read the share, and restart the service.
 
 Test builds of the installer come from `pre-*` tags: the installer is attached to
 that workflow run (Actions → prerelease → windows-installer), not published.

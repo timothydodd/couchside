@@ -1,4 +1,4 @@
-import { Database, Gauge, Radio, SlidersHorizontal, SquareTerminal, UserRound, Users, type LucideIcon } from "lucide-react";
+import { Database, Gauge, Radio, Server, SlidersHorizontal, SquareTerminal, UserRound, Users, type LucideIcon } from "lucide-react";
 import type { SettingsSection } from "../../stores/router";
 
 /**
@@ -9,6 +9,7 @@ import type { SettingsSection } from "../../stores/router";
 export const SECTIONS: { id: SettingsSection; label: string; to: string; Icon: LucideIcon; blurb: string }[] = [
   { id: "you", label: "Your settings", to: "/settings", Icon: UserRound, blurb: "Your preferences and account. Other profiles keep their own." },
   { id: "system", label: "System", to: "/settings/system", Icon: Gauge, blurb: "Load now and over time, who's connected, and how the server encodes." },
+  { id: "server", label: "Server", to: "/settings/server", Icon: Server, blurb: "Media folder, encoding, background jobs, tuner and network: what used to need environment variables." },
   { id: "console", label: "Console", to: "/settings/console", Icon: SquareTerminal, blurb: "The server's log as it happens." },
   { id: "accounts", label: "Accounts", to: "/settings/accounts", Icon: Users, blurb: "Who can sign in, and what they can do." },
   { id: "metadata", label: "Metadata", to: "/settings/metadata", Icon: Database, blurb: "Where titles, plots and artwork come from." },

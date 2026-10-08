@@ -1,4 +1,5 @@
-// Package config reads Couchside's settings from the environment.
+// Package config reads Couchside's settings from the environment, with
+// the ones admins change in Settings → Server (see Editable) on top.
 package config
 
 import (
@@ -54,16 +55,40 @@ type Config struct {
 	ComskipINI string // COUCHSIDE_COMSKIP_INI: your own comskip.ini; empty uses Couchside's defaults
 }
 
-func Load() Config {
+// Load reads the settings from the environment (and the settings file).
+func Load() Config { return LoadWith(nil) }
+
+// overrides are the values set in Settings → Server, which win over the
+// environment for the keys in Editable. Set by LoadWith at start-up.
+var overrides map[string]string
+
+// getenv is the override for key when Settings has one (even an empty one,
+// which means "not set"), else the environment variable.
+func getenv(key string) string {
+	if v, ok := overrides[key]; ok {
+		return v
+	}
+	return os.Getenv(key)
+}
+
+// LoadWith is Load with the values saved in Settings → Server, keyed by
+// environment variable name, taking the place of those variables.
+func LoadWith(o map[string]string) Config {
+	overrides = map[string]string{}
+	for k, v := range o {
+		if _, ok := EditableSetting(k); ok { // nothing else can be overridden
+			overrides[k] = v
+		}
+	}
 	envFile := loadEnvFile()
 	data := env("COUCHSIDE_DATA_DIR", "./data")
 	c := Config{
 		Addr:         env("COUCHSIDE_ADDR", ":8080"),
 		DataDir:      data,
 		CacheDir:     env("COUCHSIDE_CACHE_DIR", filepath.Join(data, "cache")),
-		WebDir:       os.Getenv("COUCHSIDE_WEB_DIR"),
-		MediaRoot:    os.Getenv("COUCHSIDE_MEDIA_ROOT"),
-		OMDbKey:      os.Getenv("OMDB_API_KEY"),
+		WebDir:       getenv("COUCHSIDE_WEB_DIR"),
+		MediaRoot:    getenv("COUCHSIDE_MEDIA_ROOT"),
+		OMDbKey:      getenv("OMDB_API_KEY"),
 		TMDBKey:      tmdbKey(),
 		Workers:      2,
 		ScanInterval: 6 * time.Hour,
@@ -77,26 +102,26 @@ func Load() Config {
 		EncodeWorkers:  envInt("COUCHSIDE_ENCODE_WORKERS", 1),
 		OptimizeHeight: envInt("COUCHSIDE_OPTIMIZE_HEIGHT", 1080),
 
-		HDHomeRun:     os.Getenv("COUCHSIDE_HDHOMERUN"),
+		HDHomeRun:     getenv("COUCHSIDE_HDHOMERUN"),
 		RecordingsDir: filepath.Clean(env("COUCHSIDE_RECORDINGS_DIR", filepath.Join(data, "recordings"))),
 		PadBefore:     envDur("COUCHSIDE_DVR_PAD_BEFORE", 10*time.Second),
 		PadAfter:      envDur("COUCHSIDE_DVR_PAD_AFTER", 10*time.Second),
 
 		Auth:           envBool("COUCHSIDE_AUTH"),
-		TrustedProxies: strings.FieldsFunc(os.Getenv("COUCHSIDE_TRUSTED_PROXIES"), func(r rune) bool { return r == ',' || r == ' ' }),
+		TrustedProxies: strings.FieldsFunc(getenv("COUCHSIDE_TRUSTED_PROXIES"), func(r rune) bool { return r == ',' || r == ' ' }),
 
 		Discovery:          !envFalse("COUCHSIDE_DISCOVERY"),
-		DiscoveryURL:       os.Getenv("COUCHSIDE_DISCOVERY_URL"),
-		DiscoveryInterface: os.Getenv("COUCHSIDE_DISCOVERY_INTERFACE"),
+		DiscoveryURL:       getenv("COUCHSIDE_DISCOVERY_URL"),
+		DiscoveryInterface: getenv("COUCHSIDE_DISCOVERY_INTERFACE"),
 		ServerName:         serverName(),
 
 		Comskip:    env("COUCHSIDE_COMSKIP", "comskip"),
-		ComskipINI: os.Getenv("COUCHSIDE_COMSKIP_INI"),
+		ComskipINI: getenv("COUCHSIDE_COMSKIP_INI"),
 	}
-	if n, err := strconv.Atoi(os.Getenv("COUCHSIDE_WORKERS")); err == nil && n > 0 {
+	if n, err := strconv.Atoi(getenv("COUCHSIDE_WORKERS")); err == nil && n > 0 {
 		c.Workers = n
 	}
-	if v := os.Getenv("COUCHSIDE_SCAN_INTERVAL"); v != "" {
+	if v := getenv("COUCHSIDE_SCAN_INTERVAL"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			c.ScanInterval = d
 		}
@@ -108,21 +133,21 @@ func Load() Config {
 }
 
 func envDur(key string, def time.Duration) time.Duration {
-	if d, err := time.ParseDuration(os.Getenv(key)); err == nil && d >= 0 {
+	if d, err := time.ParseDuration(getenv(key)); err == nil && d >= 0 {
 		return d
 	}
 	return def
 }
 
 func envInt(key string, def int) int {
-	if n, err := strconv.Atoi(os.Getenv(key)); err == nil && n > 0 {
+	if n, err := strconv.Atoi(getenv(key)); err == nil && n > 0 {
 		return n
 	}
 	return def
 }
 
 func env(key, def string) string {
-	if v := os.Getenv(key); v != "" {
+	if v := getenv(key); v != "" {
 		return v
 	}
 	return def
@@ -148,7 +173,7 @@ func (c Config) TMDBKeySource() string {
 }
 
 func tmdbKey() string {
-	switch v := strings.TrimSpace(os.Getenv("TMDB_API_KEY")); strings.ToLower(v) {
+	switch v := strings.TrimSpace(getenv("TMDB_API_KEY")); strings.ToLower(v) {
 	case "":
 		return builtinTMDBKey
 	case "off", "none", "false", "0":
@@ -159,7 +184,7 @@ func tmdbKey() string {
 }
 
 func envBool(key string) bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	switch strings.ToLower(strings.TrimSpace(getenv(key))) {
 	case "1", "true", "yes", "on":
 		return true
 	}
@@ -167,7 +192,7 @@ func envBool(key string) bool {
 }
 
 func envFalse(key string) bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	switch strings.ToLower(strings.TrimSpace(getenv(key))) {
 	case "0", "false", "no", "off":
 		return true
 	}
@@ -177,7 +202,7 @@ func envFalse(key string) bool {
 // serverName is COUCHSIDE_SERVER_NAME, else the host name, unless that's a
 // container's random id (12 hex characters), which says nothing to a person.
 func serverName() string {
-	if v := strings.TrimSpace(os.Getenv("COUCHSIDE_SERVER_NAME")); v != "" {
+	if v := strings.TrimSpace(getenv("COUCHSIDE_SERVER_NAME")); v != "" {
 		return v
 	}
 	h, _ := os.Hostname()

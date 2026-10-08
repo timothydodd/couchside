@@ -429,10 +429,41 @@ export interface Job {
   result: string;
 }
 
+// Settings → Server (GET /api/settings/server): environment variables admins can set here instead.
+export interface ServerSetting {
+  key: string; // the environment variable
+  group: string;
+  label: string;
+  help: string;
+  kind: "text" | "dir" | "file" | "int" | "duration" | "choice" | "bool" | "secret";
+  options?: string[];
+  default: string;
+  placeholder?: string;
+  value: string | null; // saved here (never a secret's)
+  env: string; // the variable's value (never a secret's)
+  saved: boolean;
+  envSet: boolean;
+  pending: boolean; // changed since the server started
+}
+
+export interface ServerSettings {
+  settings: ServerSetting[];
+  pending: boolean;
+  envFile: string;
+  canRestart: boolean;
+  startFailed: string; // a restart with the saved settings failed: it's running without them
+}
+
+// Settings → Server → Network shares (Windows only).
+export interface NetworkShares {
+  supported: boolean;
+  shares: { path: string; user: string; hasPassword: boolean; error: string }[]; // error "" when signed in
+}
+
 export interface Browse {
-  path: string;
-  parent: string | null;
-  dirs: string[];
+  path: string; // "" lists the starting points (drives, or /)
+  parent: string | null; // "" goes back to the starting points
+  dirs: { name: string; path: string }[];
 }
 
 // --- Live TV / DVR ---------------------------------------------------------------
