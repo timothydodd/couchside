@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Check, FolderPlus } from "lucide-react";
+import { Check, FolderOpen, FolderPlus } from "lucide-react";
 import FolderPicker from "./FolderPicker";
+import Link from "./Link";
 import { ErrorNote, Spinner } from "./ui";
 import { api } from "../lib/api";
 import { errText } from "../lib/errors";
@@ -9,12 +10,13 @@ import { useStatus } from "../stores/status";
 
 /** Add a library, or edit one's name and folder (its kind is fixed once added). */
 export default function LibraryForm({ library, onDone, onCancel }: { library?: Library; onDone: () => void; onCancel: () => void }) {
-  const mediaRoot = useStatus((s) => s.status?.mediaRoot);
+  const roots = useStatus((s) => s.status?.mediaRoots) ?? [];
   const [name, setName] = useState(library?.name ?? "");
   const [kind, setKind] = useState<"movies" | "tv">(library?.kind ?? "movies");
-  const [path, setPath] = useState(library?.path ?? mediaRoot ?? "");
+  const [path, setPath] = useState(library?.path ?? (roots.length === 1 ? roots[0] : ""));
   const [trickplay, setTrickplay] = useState(library?.trickplay ?? false);
   const [intros, setIntros] = useState(library?.intros ?? false);
+  const [browsing, setBrowsing] = useState(!library);
   const moving = !!library && path.trim().replace(/\/+$/, "") !== library.path;
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -68,8 +70,22 @@ export default function LibraryForm({ library, onDone, onCancel }: { library?: L
         <label className="field-label" htmlFor="lib-path">
           Folder
         </label>
-        <input id="lib-path" className="field mono w-full" placeholder="/media/movies" value={path} onChange={(e) => setPath(e.target.value)} />
-        {mediaRoot && <FolderPicker path={path || mediaRoot} onPick={setPath} />}
+        <div className="flex gap-2">
+          <input id="lib-path" className="field mono min-w-0 flex-1" placeholder="/media/movies" value={path} onChange={(e) => setPath(e.target.value)} />
+          <button type="button" className="btn-ghost" onClick={() => setBrowsing((b) => !b)} aria-expanded={browsing}>
+            <FolderOpen size={14} /> Browse
+          </button>
+        </div>
+        {browsing && <FolderPicker path={path} onPick={setPath} />}
+        {roots.length === 0 && (
+          <p className="mt-1.5 text-xs text-warning">
+            Libraries go inside a media location, and there's none yet.{" "}
+            <Link to="/settings/server" className="text-accent hover:underline">
+              Add one in Settings → Server
+            </Link>
+            .
+          </p>
+        )}
         <p className="mt-1.5 text-xs text-content-muted">
           {moving
             ? "Files found at the same place under the new folder keep their watch history and artwork; anything missing is removed on the rescan."

@@ -374,8 +374,10 @@ func (s *Service) record(ctx, parent context.Context, r db.Recording, path strin
 	}
 	_ = s.db.FinishRecording(parent, r.ID, "completed", path, size, note)
 	slog.Info("dvr: recording finished", "title", r.Title, "size", size, "parts", len(parts))
-	s.scanRecordings(parent)
+	// Keep-last-N deletes old episodes first, so the scan sees them gone
+	// instead of finding a file that vanishes under it.
 	s.afterRecording(parent, r)
+	s.scanRecordings(parent)
 }
 
 // joinParts renames a single part into place, or concatenates several

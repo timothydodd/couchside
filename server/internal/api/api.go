@@ -57,6 +57,13 @@ type Server struct {
 	remoteSize    atomic.Int64 // bytes in the remote image cache, as of the last prune plus fetches since
 	remotePruning sync.Mutex
 	proxies       []netip.Prefix // COUCHSIDE_TRUSTED_PROXIES
+
+	started     map[string]string // Settings → Server values this run started with
+	startFailed string            // why the saved values were left out at start-up, if they were
+	restart     func()            // restarts the server in process; nil in tests
+
+	sharesMu    sync.Mutex
+	shareStatus map[string]string // network share path → its sign-in error, "" when signed in
 }
 
 func init() {
@@ -156,6 +163,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/refresh", s.refresh)
 		r.Post("/auth/setup", s.setup)
 		r.Post("/auth/pick", s.pick)
+		r.Post("/auth/welcome", s.welcome)
 		r.Get("/auth/oidc/start", s.oidcStart)
 		r.Get("/auth/oidc/callback", s.oidcCallback)
 		r.Post("/auth/device", s.deviceStart)
@@ -291,6 +299,14 @@ func (s *Server) adminRoutes(r chi.Router) {
 	r.Put("/settings/hide-admins", s.setHideAdmins)
 	r.Get("/settings/oidc", s.getOIDC)
 	r.Put("/settings/oidc", s.setOIDC)
+	r.Get("/settings/server", s.serverSettings)
+	r.Put("/settings/server", s.setServerSettings)
+	r.Post("/server/restart", s.restartServer)
+	r.Post("/setup/complete", s.finishSetup)
+	r.Get("/media/locations", s.listLocations)
+	r.Post("/media/locations", s.addLocation)
+	r.Put("/media/locations/{id}", s.setLocationLogin)
+	r.Delete("/media/locations/{id}", s.deleteLocation)
 	r.Post("/accounts", s.createAccount)
 	r.Put("/accounts/{id}", s.updateAccount)
 	r.Post("/accounts/{id}/password", s.resetPassword)

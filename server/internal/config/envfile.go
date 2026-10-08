@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 // envFilePath is the settings file read before the environment:
@@ -22,6 +23,20 @@ func envFilePath() string {
 		}
 	}
 	return ""
+}
+
+// fileKeys are the variables the settings file set (not the environment):
+// kept across loads, since a second load finds them already set.
+var (
+	fileMu   sync.Mutex
+	fileKeys = map[string]bool{}
+)
+
+// FromFile says the variable came from the settings file.
+func FromFile(key string) bool {
+	fileMu.Lock()
+	defer fileMu.Unlock()
+	return fileKeys[key]
 }
 
 // loadEnvFile sets each KEY=VALUE line of the settings file that isn't
@@ -55,6 +70,9 @@ func loadEnvFile() string {
 		}
 		if _, set := os.LookupEnv(k); !set {
 			os.Setenv(k, v)
+			fileMu.Lock()
+			fileKeys[k] = true
+			fileMu.Unlock()
 		}
 	}
 	return p

@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import Link from "../components/Link";
 import AccountManager from "../components/settings/AccountManager";
+import AdvancedArea from "../components/settings/AdvancedArea";
 import SingleSignOn from "../components/settings/SingleSignOn";
 import AccountSettings from "../components/settings/AccountSettings";
 import Console from "../components/settings/Console";
@@ -10,6 +11,7 @@ import ProfileSettings from "../components/settings/ProfileSettings";
 import { SECTIONS } from "../components/settings/sections";
 import ServerInfo from "../components/settings/ServerInfo";
 import ServerNow from "../components/settings/ServerNow";
+import ServerSettings from "../components/settings/ServerSettings";
 import SystemHistory from "../components/settings/SystemHistory";
 import BackupSettings from "../components/settings/Backups";
 import TimingSettings from "../components/settings/TimingSettings";
@@ -62,13 +64,19 @@ export default function SettingsPage() {
             <ServerNow />
             <SystemHistory />
             <ServerInfo />
+            <AdvancedArea what="Backups of the database">
+              <BackupSettings />
+            </AdvancedArea>
           </>
         )}
+        {id === "server" && <ServerSettings />}
         {id === "console" && <Console />}
         {id === "accounts" && (
           <>
             <AccountManager />
-            <SingleSignOn />
+            <AdvancedArea what="Single sign-on through an identity provider">
+              <SingleSignOn />
+            </AdvancedArea>
           </>
         )}
         {id === "metadata" && <MetadataSettings />}
@@ -76,12 +84,9 @@ export default function SettingsPage() {
           <>
             <LiveTvSettings />
             <VirtualChannels />
-          </>
-        )}
-        {id === "advanced" && (
-          <>
-            <TimingSettings />
-            <BackupSettings />
+            <AdvancedArea what="Recording padding and commercial-skip timing">
+              <TimingSettings />
+            </AdvancedArea>
           </>
         )}
         {id === "you" && <About />}

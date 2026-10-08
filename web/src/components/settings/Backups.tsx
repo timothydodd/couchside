@@ -23,7 +23,7 @@ interface Backups {
 const KIND: Record<Backup["kind"], string> = { daily: "Daily", manual: "Made by hand", upgrade: "Before an upgrade" };
 
 /**
- * Settings → Advanced: copies of the database (with the files that belong
+ * Settings → System → Advanced: copies of the database (with the files that belong
  * with it), made daily and before upgrades. Make one now, download or delete
  * them, and choose how many daily ones to keep.
  */

@@ -9,8 +9,7 @@ on the Libraries page. Settings are covered in [configuration.md](configuration.
 
 ## Windows installer
 
-Run `couchside-<version>-windows-amd64-setup.exe`. It asks for your media folder
-and a port, then:
+Run `couchside-<version>-windows-amd64-setup.exe`. It asks for a port, then:
 
 - installs Couchside with ffmpeg beside it (jellyfin-ffmpeg, whose NVENC runs on
   older NVIDIA drivers than upstream builds), so there's nothing else to install;
@@ -22,17 +21,25 @@ and a port, then:
 - adds a Windows Firewall rule (private and domain networks) so TVs and phones
   can connect and find the server.
 
-Settings are in `%ProgramData%\Couchside\couchside.env` (see
-[configuration.md](configuration.md)); restart the service after editing it.
+The first time you open Couchside in the browser, it asks for your name (and a
+password, if you want one), then where your media is: drives, folders or
+network shares.
+
+The installer's settings are in `%ProgramData%\Couchside\couchside.env` (see
+[configuration.md](configuration.md)). Most of them, and more, can be changed
+in Settings → Server instead, which restarts the server for you.
 The database, artwork and logs (`data\logs\couchside.log`) are in
 `%ProgramData%\Couchside\data` and are kept when you uninstall. Running the
 installer again upgrades in place and keeps your settings.
 
-**Media on a NAS.** Use the share's network path (`\\nas\media`), not a mapped
-drive letter: services can't see mapped drives. The service runs as Local
-System, which usually can't read network shares, so in Services
-(`services.msc`) open Couchside → Log On, choose an account that can read the
-share, and restart the service.
+**Media on a NAS.** Add it as a network share location with its network path
+(`\\nas\media`), not a mapped drive letter (services can't see mapped
+drives), and the NAS's user name and password. The service runs as Local
+System, which a NAS usually turns away, so Couchside signs in to the share
+itself whenever it starts (like `net use`); the password is kept encrypted for
+this computer (Windows DPAPI). Alternatively, in Services (`services.msc`) open
+Couchside → Log On, choose an account that can read the share, and restart the
+service.
 
 Test builds of the installer come from `pre-*` tags: the installer is attached to
 that workflow run (Actions → prerelease → windows-installer), not published.
@@ -65,7 +72,8 @@ Each zip holds a single `couchside` binary with the web UI built in. Install
 COUCHSIDE_MEDIA_ROOT=/path/to/media ./couchside
 ```
 
-On Windows, set the variable first and run `couchside.exe` (or use the
+`COUCHSIDE_MEDIA_ROOT` is optional: without it, the first run in the browser
+asks where your media is. On Windows, run `couchside.exe` (or use the
 installer above). An `ffmpeg.exe` next to `couchside.exe` is used before the
 one on the PATH. (On Windows a conversion isn't paused when it gets ahead of the player, so a stream converts its whole file while it's open.) For commercial
 detection, put [Comskip](https://github.com/erikkaashoek/Comskip) on the PATH

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 /** Settings pages: "you" (/settings) is everyone's own; the rest are admin-only. */
-export const SETTINGS_SECTIONS = ["you", "system", "console", "accounts", "metadata", "livetv", "advanced"] as const;
+export const SETTINGS_SECTIONS = ["you", "system", "server", "console", "accounts", "metadata", "livetv"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 export type Route =
@@ -42,6 +42,8 @@ export function parseRoute(path: string): Route {
   if (p === "/profiles") return { name: "profiles" };
   if (p === "/admin") return { name: "admin" };
   if (p === "/link") return { name: "link" };
+  // Each section has its own Advanced area now; the old page's links land on System.
+  if (p === "/settings/advanced") return { name: "settings", section: "system" };
   let m = p.match(/^\/settings\/([a-z]+)$/);
   if (m && (SETTINGS_SECTIONS as readonly string[]).includes(m[1]) && m[1] !== "you") return { name: "settings", section: m[1] as SettingsSection };
   m = p.match(/^\/item\/(\d+)$/);

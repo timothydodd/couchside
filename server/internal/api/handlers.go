@@ -21,21 +21,21 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	if s.tv != nil {
 		tv = s.tv.Summary()
 	}
-	mediaRoot := "" // a server path: admins only, as tvStatus does with folders
+	mediaRoots := []string{} // server paths: admins only, as tvStatus does with folders
 	if currentUser(r.Context()).Admin {
-		mediaRoot = s.cfg.MediaRoot
+		mediaRoots = s.mediaRoots(r.Context())
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"livetv":    tv,
-		"version":   s.version,
-		"providers": s.providers.Names(),
-		"tmdbKey":   s.cfg.TMDBKeySource(),
-		"mediaRoot": mediaRoot,
-		"counts":    counts,
-		"jobs":      jobs,
-		"scanEvery": s.cfg.ScanInterval.String(),
-		"workers":   s.cfg.Workers,
-		"comskip":   s.worker.CommercialsAvailable(),
+		"livetv":     tv,
+		"version":    s.version,
+		"providers":  s.providers.Names(),
+		"tmdbKey":    s.cfg.TMDBKeySource(),
+		"mediaRoots": mediaRoots,
+		"counts":     counts,
+		"jobs":       jobs,
+		"scanEvery":  s.cfg.ScanInterval.String(),
+		"workers":    s.cfg.Workers,
+		"comskip":    s.worker.CommercialsAvailable(),
 		"transcode": map[string]any{
 			"hwaccel":        s.tc.Encoder().HW,
 			"requested":      s.cfg.HWAccel,

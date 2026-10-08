@@ -157,8 +157,11 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 				return err
 			}
 		}
-		videos++
 		info, err := d.Info()
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil // deleted since the folder was listed (keep-last-N, Manage): it's gone, not unreadable
+		}
+		videos++
 		if err != nil {
 			missed(path, err)
 			return nil

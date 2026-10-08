@@ -23,6 +23,8 @@ interface AuthState {
   /** Admin accounts are left off the picker and sign in at /admin. */
   hideAdmins: boolean;
   setupRequired: boolean;
+  /** The first-run setup (your name, your media) isn't done. */
+  firstRun: boolean;
   user: Profile | null;
   signedIn: AuthInfo["signedIn"];
   /** Signing in here sends passwords unencrypted across the internet. */
@@ -35,6 +37,8 @@ interface AuthState {
   /** Passwordless sign-in to a profile without a password. */
   pick: (profileId: number) => Promise<void>;
   setup: (code: string, name: string, password: string) => Promise<void>;
+  /** First run, passwordless: name the admin profile (and maybe give it a password) and sign in. */
+  welcome: (name: string, password: string) => Promise<void>;
   /** Switch to another profile this browser is signed in to. */
   switchTo: (profileId: number) => Promise<void>;
   logout: (everywhere?: boolean) => Promise<void>;
@@ -49,6 +53,7 @@ export const useAuth = create<AuthState>((set, get) => ({
   profiles: [],
   hideAdmins: false,
   setupRequired: false,
+  firstRun: false,
   user: null,
   signedIn: [],
   insecure: false,
@@ -64,6 +69,7 @@ export const useAuth = create<AuthState>((set, get) => ({
         profiles: info.profiles ?? [],
         hideAdmins: !!info.hideAdmins,
         setupRequired: info.setupRequired,
+        firstRun: !!info.firstRun,
         user: info.user,
         signedIn: info.signedIn,
         insecure: !!info.insecure,
@@ -90,6 +96,11 @@ export const useAuth = create<AuthState>((set, get) => ({
   },
   setup: async (code, name, password) => {
     await api<SignedIn>("/api/auth/setup", { method: "POST", json: { code, name, password } });
+    announceProfileChange();
+    location.assign("/");
+  },
+  welcome: async (name, password) => {
+    await api<SignedIn>("/api/auth/welcome", { method: "POST", json: { name, password } });
     announceProfileChange();
     location.assign("/");
   },
