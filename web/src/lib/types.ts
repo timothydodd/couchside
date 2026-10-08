@@ -454,6 +454,12 @@ export interface ServerSettings {
   startFailed: string; // a restart with the saved settings failed: it's running without them
 }
 
+// Settings → Server → Network shares (Windows only).
+export interface NetworkShares {
+  supported: boolean;
+  shares: { path: string; user: string; hasPassword: boolean; error: string }[]; // error "" when signed in
+}
+
 export interface Browse {
   path: string; // "" lists the starting points (drives, or /)
   parent: string | null; // "" goes back to the starting points

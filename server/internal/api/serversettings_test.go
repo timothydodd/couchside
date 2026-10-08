@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/timothydodd/couchside/internal/netshare"
 )
 
 // adminWeb sets the server up and returns the first admin's browser.
@@ -150,5 +152,24 @@ func TestBrowse(t *testing.T) {
 	}
 	if r, c := browse(url.Values{"path": {filepath.Dir(root)}, "all": {"1"}}); c != 200 || r.Path != filepath.Dir(root) {
 		t.Fatalf("all=1 outside = %d %+v", c, r)
+	}
+}
+
+// Off Windows the system mounts shares: the card is hidden and saving is refused.
+func TestSharesUnsupportedHere(t *testing.T) {
+	if netshare.Supported {
+		t.Skip("Windows signs in to shares")
+	}
+	s, ts := authServer(t)
+	web := adminWeb(t, s, ts.URL)
+	var got struct {
+		Supported bool       `json:"supported"`
+		Shares    []shareRow `json:"shares"`
+	}
+	if c := web.do("GET", "/api/settings/shares", nil, &got); c != 200 || got.Supported || got.Shares == nil {
+		t.Fatalf("shares = %d %+v", c, got)
+	}
+	if c := web.do("PUT", "/api/settings/shares", []map[string]string{{"path": `\\nas\media`, "user": "me", "password": "pw"}}, nil); c != 400 {
+		t.Fatalf("save on a platform without shares = %d", c)
 	}
 }

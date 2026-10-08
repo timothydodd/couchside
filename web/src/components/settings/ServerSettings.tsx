@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { RotateCw } from "lucide-react";
+import NetworkShares from "./NetworkShares";
 import ServerSettingField from "./ServerSettingField";
 import { Spinner } from "../ui";
 import { api, useApi } from "../../lib/api";
@@ -63,6 +64,7 @@ export default function ServerSettings() {
         ; empty fields use the variable, or the default. The port, the data folder and requiring passwords (
         <span className="mono">COUCHSIDE_AUTH</span>) are only set in the environment.
       </p>
+      <NetworkShares />
       {groups.map((g) => (
         <section key={g} className="card p-4">
           <div className="card-title mb-3">{g}</div>

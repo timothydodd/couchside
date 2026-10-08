@@ -61,6 +61,9 @@ type Server struct {
 	started     map[string]string // Settings → Server values this run started with
 	startFailed string            // why the saved values were left out at start-up, if they were
 	restart     func()            // restarts the server in process; nil in tests
+
+	sharesMu    sync.Mutex
+	shareStatus map[string]string // network share path → its sign-in error, "" when signed in
 }
 
 func init() {
@@ -298,6 +301,8 @@ func (s *Server) adminRoutes(r chi.Router) {
 	r.Get("/settings/server", s.serverSettings)
 	r.Put("/settings/server", s.setServerSettings)
 	r.Post("/server/restart", s.restartServer)
+	r.Get("/settings/shares", s.listShares)
+	r.Put("/settings/shares", s.setShares)
 	r.Post("/accounts", s.createAccount)
 	r.Put("/accounts/{id}", s.updateAccount)
 	r.Post("/accounts/{id}/password", s.resetPassword)
