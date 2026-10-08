@@ -47,7 +47,7 @@ Broadcast TV needs an [HDHomeRun](https://www.silicondust.com) tuner: set
 - Record any program from the guide, the channel list or the live player.
   Recordings copy the tuner stream with no transcoding.
 - **Padding:** 10 seconds before and after by default
-  (Settings → Advanced, or `COUCHSIDE_DVR_PAD_BEFORE` / `_AFTER`). Changing it
+  (Settings → Live TV → Advanced, or `COUCHSIDE_DVR_PAD_BEFORE` / `_AFTER`). Changing it
   also updates recordings that haven't started.
 - **Names** are Plex-style (`Show/Season 3/Show - S03E15 - Title.ts`, or by
   air date).
@@ -93,7 +93,7 @@ used instead.
   a **Watch it** link to go back. A profile can switch to a skip button (or the
   S key) or turn skipping off.
 - Skipping starts 1 second into a break and stops 1 second before its end, so
-  it never cuts into the show (Settings → Advanced). Breaks less than a minute
+  it never cuts into the show (Settings → Live TV → Advanced). Breaks less than a minute
   apart are treated as one.
 - A break that isn't one: an admin can right-click it on the seek bar and
   choose **Not a commercial**. It stays hidden if detection runs again.

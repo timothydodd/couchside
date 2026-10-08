@@ -16,7 +16,7 @@ import (
 
 // Backups of the database (with auth.key and server.id) in $DATA/backups:
 // one a day by default, the newest few kept, plus any made by hand. See
-// internal/backup. Settings → Advanced lists, makes, downloads and deletes
+// internal/backup. Settings → System → Advanced lists, makes, downloads and deletes
 // them; `couchside restore <file>` puts one back.
 const (
 	settingBackupDaily = "backup.daily" // "0" turns the daily backup off

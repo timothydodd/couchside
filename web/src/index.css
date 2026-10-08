@@ -267,6 +267,11 @@ body {
   .card-title {
     @apply text-xs font-semibold uppercase tracking-wide text-content-muted;
   }
+  /* A settings page's "Advanced" fold-out (components/settings/AdvancedArea.tsx):
+     a quiet row like a card title, under the page's everyday cards. */
+  .advanced-toggle {
+    @apply flex w-full items-center gap-2 rounded-md px-1 py-2 text-left text-xs font-semibold uppercase tracking-wide text-content-muted transition-colors hover:text-content;
+  }
 
   /* Sub-tab / pill navigation item. */
   .navtab {

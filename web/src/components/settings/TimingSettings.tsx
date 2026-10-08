@@ -14,7 +14,7 @@ interface Timing {
 type Field = Exclude<keyof Timing, "dvr">;
 
 /**
- * Settings → Advanced: recording padding and how much of each commercial
+ * Settings → Live TV → Advanced: recording padding and how much of each commercial
  * break skipping leaves in. Shared by every profile.
  */
 export default function TimingSettings() {

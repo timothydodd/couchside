@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import Link from "../components/Link";
 import AccountManager from "../components/settings/AccountManager";
+import AdvancedArea from "../components/settings/AdvancedArea";
 import SingleSignOn from "../components/settings/SingleSignOn";
 import AccountSettings from "../components/settings/AccountSettings";
 import Console from "../components/settings/Console";
@@ -63,6 +64,9 @@ export default function SettingsPage() {
             <ServerNow />
             <SystemHistory />
             <ServerInfo />
+            <AdvancedArea what="Backups of the database">
+              <BackupSettings />
+            </AdvancedArea>
           </>
         )}
         {id === "server" && <ServerSettings />}
@@ -70,7 +74,9 @@ export default function SettingsPage() {
         {id === "accounts" && (
           <>
             <AccountManager />
-            <SingleSignOn />
+            <AdvancedArea what="Single sign-on through an identity provider">
+              <SingleSignOn />
+            </AdvancedArea>
           </>
         )}
         {id === "metadata" && <MetadataSettings />}
@@ -78,12 +84,9 @@ export default function SettingsPage() {
           <>
             <LiveTvSettings />
             <VirtualChannels />
-          </>
-        )}
-        {id === "advanced" && (
-          <>
-            <TimingSettings />
-            <BackupSettings />
+            <AdvancedArea what="Recording padding and commercial-skip timing">
+              <TimingSettings />
+            </AdvancedArea>
           </>
         )}
         {id === "you" && <About />}
