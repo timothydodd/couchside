@@ -218,7 +218,7 @@ func (s *Server) importVirtual(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		v := virtualIn{Number: pc.Number, Name: pc.Name, Config: cfg}
-		if err := s.checkVirtual(&v); err != nil {
+		if err := s.checkVirtual(r.Context(), &v); err != nil {
 			var he httpError
 			if !errors.As(err, &he) {
 				writeErr(w, err)

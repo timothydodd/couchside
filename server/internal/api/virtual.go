@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -50,7 +51,7 @@ type virtualIn struct {
 }
 
 // checkVirtual validates a channel from the wizard.
-func (s *Server) checkVirtual(in *virtualIn) error {
+func (s *Server) checkVirtual(ctx context.Context, in *virtualIn) error {
 	in.Number, in.Name = strings.TrimSpace(in.Number), strings.TrimSpace(in.Name)
 	if !reChannelNumber.MatchString(in.Number) {
 		return badRequest("the channel number is digits, like 900 or 900.1")
@@ -59,7 +60,7 @@ func (s *Server) checkVirtual(in *virtualIn) error {
 		return badRequest("give the channel a name (up to 60 characters)")
 	}
 	if f := strings.TrimSpace(in.Config.Filler.Folder); f != "" {
-		p, err := s.checkPath(f)
+		p, err := s.checkPath(ctx, f)
 		if err != nil {
 			return err
 		}
@@ -88,7 +89,7 @@ func (s *Server) saveVirtual(w http.ResponseWriter, r *http.Request, id int64) {
 		writeErr(w, err)
 		return
 	}
-	if err := s.checkVirtual(&in); err != nil {
+	if err := s.checkVirtual(r.Context(), &in); err != nil {
 		writeErr(w, err)
 		return
 	}
@@ -125,7 +126,7 @@ func (s *Server) previewVirtual(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Number, in.Name = "900", "Preview" // only the config matters here
-	if err := s.checkVirtual(&in); err != nil {
+	if err := s.checkVirtual(r.Context(), &in); err != nil {
 		writeErr(w, err)
 		return
 	}
@@ -193,5 +194,5 @@ func (s *Server) virtualOptions(w http.ResponseWriter, r *http.Request) {
 		next++
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"genres": gs, "titles": ts, "minYear": minYear, "maxYear": maxYear,
-		"nextNumber": strconv.Itoa(next), "mediaRoot": s.cfg.MediaRoot})
+		"nextNumber": strconv.Itoa(next), "mediaRoot": first(s.mediaRoots(r.Context()))})
 }

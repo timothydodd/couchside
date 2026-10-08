@@ -37,10 +37,10 @@ func TestUserFault(t *testing.T) {
 	}
 }
 
-// The media folder is a server path: only admins get it from /api/status.
+// Media locations are server paths: only admins get them from /api/status.
 func TestStatusHidesMediaRootFromUsers(t *testing.T) {
 	s, ts, admin := passwordlessServer(t)
-	s.cfg.MediaRoot = "/srv/media"
+	s.cfg.MediaRoots = []string{"/srv/media"}
 	s.worker = worker.New(s.db, config.Config{}, nil, transcode.Encoder{})
 	s.providers = &metadata.Chain{}
 	tc, err := transcode.NewManager(transcode.Encoder{}, "ffprobe", t.TempDir(), 1)
@@ -55,11 +55,11 @@ func TestStatusHidesMediaRootFromUsers(t *testing.T) {
 	if code := kid.do("POST", "/api/auth/pick", map[string]any{"profileId": 2}, nil); code != 200 {
 		t.Fatalf("pick = %d", code)
 	}
-	var a, k struct{ MediaRoot string }
-	if code := admin.do("GET", "/api/status", nil, &a); code != 200 || a.MediaRoot != "/srv/media" {
+	var a, k struct{ MediaRoots []string }
+	if code := admin.do("GET", "/api/status", nil, &a); code != 200 || len(a.MediaRoots) != 1 || a.MediaRoots[0] != "/srv/media" {
 		t.Fatalf("admin status = %d %+v", code, a)
 	}
-	if code := kid.do("GET", "/api/status", nil, &k); code != 200 || k.MediaRoot != "" {
+	if code := kid.do("GET", "/api/status", nil, &k); code != 200 || len(k.MediaRoots) != 0 {
 		t.Fatalf("user status = %d %+v", code, k)
 	}
 }

@@ -66,7 +66,7 @@ func (s *Server) dvrSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"recordingsDir": current, "default": s.tv.DefaultRecordingsDir(),
-		"options": opts, "movable": movable, "mediaRoot": s.cfg.MediaRoot})
+		"options": opts, "movable": movable, "mediaRoot": first(s.mediaRoots(r.Context()))})
 }
 
 func (s *Server) dvrSaveSettings(w http.ResponseWriter, r *http.Request) {
@@ -87,8 +87,8 @@ func (s *Server) dvrSaveSettings(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, badRequest("choose a folder"))
 		return
 	}
-	if dir != s.tv.DefaultRecordingsDir() && !s.underRoot(dir) {
-		writeErr(w, badRequest("the folder must be inside "+s.cfg.MediaRoot))
+	if dir != s.tv.DefaultRecordingsDir() && !s.underRoot(r.Context(), dir) {
+		writeErr(w, errOutsideLocations(dir))
 		return
 	}
 	if st, err := os.Stat(filepath.Dir(dir)); err != nil || !st.IsDir() {

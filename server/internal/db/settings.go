@@ -3,10 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"strings"
-
-	"github.com/timothydodd/couchside/internal/netshare"
 )
 
 // Setting returns a UI setting, or "" when it was never set.
@@ -59,31 +56,6 @@ func (d *DB) SetEnvOverride(ctx context.Context, name string, value *string) err
 		return d.DeleteSetting(ctx, envPrefix+name)
 	}
 	return d.SetSetting(ctx, envPrefix+name, *value)
-}
-
-// settingShares holds the Windows network share sign-ins (netshare.Share
-// as JSON, passwords sealed with DPAPI).
-const settingShares = "netshares"
-
-// NetShares returns the saved network share sign-ins.
-func (d *DB) NetShares(ctx context.Context) ([]netshare.Share, error) {
-	v, err := d.Setting(ctx, settingShares)
-	if err != nil || v == "" {
-		return nil, err
-	}
-	var out []netshare.Share
-	return out, json.Unmarshal([]byte(v), &out)
-}
-
-func (d *DB) SetNetShares(ctx context.Context, shares []netshare.Share) error {
-	if len(shares) == 0 {
-		return d.DeleteSetting(ctx, settingShares)
-	}
-	b, err := json.Marshal(shares)
-	if err != nil {
-		return err
-	}
-	return d.SetSetting(ctx, settingShares, string(b))
 }
 
 func (d *DB) SetRecordingPath(ctx context.Context, id int64, path string) error {

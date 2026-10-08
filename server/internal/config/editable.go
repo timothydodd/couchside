@@ -29,12 +29,10 @@ type Setting struct {
 // Editable lists the settings in Settings → Server, in display order. Left
 // out on purpose: the port and data/cache folders (needed before the
 // database opens), COUCHSIDE_AUTH (a lock admins mustn't lift from the web),
-// the DVR folder and padding (already in Settings → Live TV / Advanced).
+// the DVR folder and padding (already in Settings → Live TV / Advanced), and
+// COUCHSIDE_MEDIA_ROOT (media locations have their own list).
 var Editable = func() []Setting {
 	s := []Setting{
-		{Key: "COUCHSIDE_MEDIA_ROOT", Group: "Media", Label: "Media folder", Kind: "dir",
-			Help:    `Libraries must be inside this folder. For a NAS on Windows, use its network path (\\nas\media), not a mapped drive letter, and run the service as an account that can read the share.`,
-			Default: "Anywhere on the server"},
 		{Key: "COUCHSIDE_SCAN_INTERVAL", Group: "Media", Label: "Rescan libraries every", Kind: "duration",
 			Help: "How often every library is checked for new and removed files. 0 turns it off; you can still scan by hand.", Default: "6h", Placeholder: "6h"},
 		{Key: "COUCHSIDE_WORKERS", Group: "Media", Label: "Background jobs at once", Kind: "int",
