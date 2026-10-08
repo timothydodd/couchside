@@ -33,9 +33,9 @@ type Setting struct {
 // COUCHSIDE_MEDIA_ROOT (media locations have their own list).
 var Editable = func() []Setting {
 	s := []Setting{
-		{Key: "COUCHSIDE_SCAN_INTERVAL", Group: "Media", Label: "Rescan libraries every", Kind: "duration",
+		{Key: "COUCHSIDE_SCAN_INTERVAL", Group: "Libraries", Label: "Rescan libraries every", Kind: "duration",
 			Help: "How often every library is checked for new and removed files. 0 turns it off; you can still scan by hand.", Default: "6h", Placeholder: "6h"},
-		{Key: "COUCHSIDE_WORKERS", Group: "Media", Label: "Background jobs at once", Kind: "int",
+		{Key: "COUCHSIDE_WORKERS", Group: "Libraries", Label: "Background jobs at once", Kind: "int",
 			Help: "Scans, matching, artwork and thumbnails running side by side.", Default: "2"},
 
 		{Key: "COUCHSIDE_HWACCEL", Group: "Encoding", Label: "Hardware encoder", Kind: "choice",

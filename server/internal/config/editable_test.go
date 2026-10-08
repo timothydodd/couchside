@@ -68,7 +68,7 @@ func TestMediaRoots(t *testing.T) {
 	sep := string(filepath.ListSeparator)
 	t.Setenv("COUCHSIDE_MEDIA_ROOT", "/srv/movies/"+sep+" "+sep+"/srv/tv")
 	c := Load()
-	if len(c.MediaRoots) != 2 || c.MediaRoots[0] != "/srv/movies" || c.MediaRoots[1] != "/srv/tv" || len(c.MediaRootsFromFile) != 0 {
+	if len(c.MediaRoots) != 2 || c.MediaRoots[0] != filepath.Clean("/srv/movies") || c.MediaRoots[1] != filepath.Clean("/srv/tv") || len(c.MediaRootsFromFile) != 0 {
 		t.Fatalf("roots = %q, from file %q", c.MediaRoots, c.MediaRootsFromFile)
 	}
 	if _, ok := EditableSetting("COUCHSIDE_MEDIA_ROOT"); ok {

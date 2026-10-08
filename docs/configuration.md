@@ -8,8 +8,8 @@ starts a comment). Couchside reads `COUCHSIDE_CONFIG` if it's set, and on
 Windows `%ProgramData%\Couchside\couchside.env`, which the installer writes.
 A variable set in the environment wins over the file.
 
-Most of them can also be set by an admin in **Settings → Server**: the media
-folder (with a folder browser), rescans and background jobs, the hardware
+Most of them can also be set by an admin in **Settings → Server**: rescans and
+background jobs, the hardware
 encoder and how many streams and optimized copies run at once, ffmpeg and
 comskip, the HDHomeRun, the metadata keys and the network settings. A value
 saved there wins over the variable and the settings file, and takes effect
@@ -19,11 +19,18 @@ variable. If the server can't start with the saved values, it starts without
 them and the page says why. The listen address, the data and cache folders,
 `COUCHSIDE_WEB_DIR` and `COUCHSIDE_AUTH` can only be set in the environment.
 
+**Media locations** are where libraries can be: drives, folders and network
+shares, added in the first-run setup or Settings → Server (with a folder
+browser). On Windows a network share (`\\nas\media`) can have the NAS's user
+name and password; Couchside signs in to it whenever it starts. In a
+container, mount your media and set `COUCHSIDE_MEDIA_ROOT`: those folders are
+locations too, fixed by the environment.
+
 ## Environment variables
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `COUCHSIDE_MEDIA_ROOT` | none | Libraries must live under it, and the folder picker stays inside it |
+| `COUCHSIDE_MEDIA_ROOT` | none | Media locations from the environment (containers), one or more separated like `PATH` (`:`, or `;` on Windows); more can be added in the web app |
 | `COUCHSIDE_ADDR` | `:8080` | Listen address |
 | `COUCHSIDE_DATA_DIR` | `./data` | SQLite database, plus `auth.key` (signs sessions) and `server.id`: back up all three. The Windows service defaults to `%ProgramData%\Couchside\data` |
 | `COUCHSIDE_CONFIG` | see above | Settings file to read |

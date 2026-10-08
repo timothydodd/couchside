@@ -90,17 +90,12 @@ Type: files; Name: "{app}\Couchside.url"
 
 [Code]
 const
-  DRIVE_REMOTE = 4;
   ERROR_SERVICE_EXISTS = 1073;
   ERROR_SERVICE_ALREADY_RUNNING = 1056;
 
 var
-  MediaPage: TInputDirWizardPage;
   PortPage: TInputQueryWizardPage;
   Gpus: String;
-
-function GetDriveType(lpRootPathName: String): Cardinal;
-  external 'GetDriveTypeW@kernel32.dll stdcall';
 
 function EnvFile: String;
 begin
@@ -237,15 +232,9 @@ end;
 
 procedure InitializeWizard;
 begin
-  MediaPage := CreateInputDirPage(wpSelectDir, 'Media folder', 'Where are your movies and TV shows?',
-    'Pick the folder that holds your media folders (for example D:\Media). When you add a library, Couchside lets you browse inside it.' + #13#10#13#10 +
-    'For a NAS, use its network path (\\nas\media), not a mapped drive letter: the service can''t see mapped drives. ' +
-    'Leave it empty to allow any folder (you''ll type each library''s path).',
-    False, '');
-  MediaPage.Add('');
-  MediaPage.Values[0] := ReadSetting('COUCHSIDE_MEDIA_ROOT', ExpandConstant('{%USERPROFILE}\Videos'));
-
-  PortPage := CreateInputQueryPage(MediaPage.ID, 'Port', 'Which port should Couchside use?',
+  { Media (drives, folders and network shares, with a NAS's sign-in) is
+    set up in the browser the first time Couchside opens. }
+  PortPage := CreateInputQueryPage(wpSelectDir, 'Port', 'Which port should Couchside use?',
     'Browsers and TV apps connect on this port. Keep 8080 unless something else already uses it.');
   PortPage.Add('Port:', False);
   PortPage.Values[0] := PortFromAddr(ReadSetting('COUCHSIDE_ADDR', ':8080'));
@@ -255,25 +244,10 @@ end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
 var
-  Media: String;
   Port: Integer;
 begin
   Result := True;
-  if CurPageID = MediaPage.ID then
-  begin
-    Media := Trim(MediaPage.Values[0]);
-    if Media = '' then
-      Exit;
-    if (Length(Media) >= 2) and (Media[2] = ':') and (GetDriveType(Copy(Media, 1, 2) + '\') = DRIVE_REMOTE) then
-    begin
-      MsgBox(Copy(Media, 1, 2) + ' is a mapped network drive, which the Couchside service can''t see. ' +
-        'Use the share''s network path instead, for example \\nas\media.', mbError, MB_OK);
-      Result := False;
-    end
-    else if not DirExists(Media) then
-      Result := MsgBox(Media + ' doesn''t exist. Use it anyway?', mbConfirmation, MB_YESNO) = IDYES;
-  end
-  else if CurPageID = PortPage.ID then
+  if CurPageID = PortPage.ID then
   begin
     Port := StrToIntDef(Trim(PortPage.Values[0]), 0);
     if (Port < 1) or (Port > 65535) then
@@ -286,14 +260,9 @@ end;
 
 function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo, MemoTypeInfo,
   MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
-var
-  Media: String;
 begin
-  Media := Trim(MediaPage.Values[0]);
-  if Media = '' then
-    Media := '(any folder)';
   Result := MemoDirInfo + NewLine + NewLine +
-    'Media folder:' + NewLine + Space + Media + NewLine + NewLine +
+    'Media:' + NewLine + Space + 'You''ll add your drives, folders or network shares in the browser when Couchside opens.' + NewLine + NewLine +
     'Web address:' + NewLine + Space + 'http://localhost:' + GetPort('') + NewLine + NewLine +
     'Data (database, artwork, logs), kept if you uninstall:' + NewLine + Space + DataDir + NewLine + NewLine +
     'Graphics:' + NewLine + Gpus;
@@ -316,8 +285,10 @@ begin
   Result := '';
 end;
 
-{ WriteSettings keeps everything already in couchside.env and sets the media
-  folder and port. The data folder is only added when the file has none. }
+{ WriteSettings keeps everything already in couchside.env and sets the port.
+  The data folder is only added when the file has none. Media locations are
+  set up in the browser; an older install's COUCHSIDE_MEDIA_ROOT line is left
+  alone, and the server carries it over into its locations once. }
 procedure WriteSettings;
 var
   Lines: TArrayOfString;
@@ -330,7 +301,6 @@ begin
     Lines[2] := '# restart the service: Services (services.msc) -> Couchside -> Restart.';
     Lines[3] := '';
   end;
-  SetSetting(Lines, 'COUCHSIDE_MEDIA_ROOT', Trim(MediaPage.Values[0]));
   SetSetting(Lines, 'COUCHSIDE_ADDR', ':' + GetPort(''));
   if not HasSetting(Lines, 'COUCHSIDE_DATA_DIR') then
     SetSetting(Lines, 'COUCHSIDE_DATA_DIR', DataDir);
@@ -378,7 +348,7 @@ begin
       'Couchside is running as a Windows service and starts with Windows.' + #13#10#13#10 +
       'Open http://localhost:' + GetPort('') + ' here, or http://' + GetComputerNameString + ':' + GetPort('') +
       ' from another device. Your GPU, if Couchside can use it, is shown in Settings -> System.' + #13#10#13#10 +
-      'Media on a NAS: the service runs as Local System, which usually can''t read network shares. ' +
-      'In Services (services.msc), open Couchside -> Log On, pick an account that can read the share, then restart the service.' + #13#10#13#10 +
+      'The first time it opens, Couchside asks for your name and where your media is: drives, folders, ' +
+      'or network shares with the NAS''s user name and password.' + #13#10#13#10 +
       'Settings: ' + EnvFile;
 end;

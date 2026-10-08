@@ -24,6 +24,23 @@ jobs:
       - run: go test -race ./...
       - run: go build ./...
 
+  # The Windows-only code (CPU and memory readings, NAS sign-in, settings
+  # file) runs on GitHub's Windows machine, never anyone's own. Many older
+  # tests assume Linux paths, so only these packages run here for now.
+  server-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.27" # the Dockerfile's
+          cache-dependency-path: server/go.sum
+      - run: go vet ./...
+      - run: go test ./internal/sysstat/... ./internal/netshare/... ./internal/config/...
+
   web:
     runs-on: ubuntu-latest
     defaults:
