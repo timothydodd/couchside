@@ -76,7 +76,7 @@ export default function SystemHistory() {
       )}
       {!data ? null : pts.length < 2 ? (
         <p className="py-6 text-center text-xs text-content-muted">
-          Collecting readings… the first points show up within a few seconds. (CPU and memory are only measured on Linux.)
+          Collecting readings… the first points show up within a few seconds. (CPU and memory are measured on Linux and Windows.)
         </p>
       ) : (
         <div className="flex flex-col gap-6">
