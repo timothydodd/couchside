@@ -56,8 +56,8 @@ export default function ServerInfo() {
         <dl className="kv-grid text-sm">
           <dt className="text-content-muted">Version</dt>
           <dd className="mono">{status?.version ?? "–"}</dd>
-          <dt className="text-content-muted">Media root</dt>
-          <dd className="mono">{status?.mediaRoot || "Not restricted"}</dd>
+          <dt className="text-content-muted">Media locations</dt>
+          <dd className="mono">{status?.mediaRoots?.length ? status.mediaRoots.map((r) => <div key={r}>{r}</div>) : "None yet"}</dd>
           <dt className="text-content-muted">Automatic rescan</dt>
           <dd>{status?.scanEvery === "0s" ? "Off" : `Every ${status?.scanEvery ?? "–"}`}</dd>
           <dt className="text-content-muted">Background workers</dt>

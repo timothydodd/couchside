@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { RotateCw } from "lucide-react";
-import NetworkShares from "./NetworkShares";
+import MediaLocations from "./MediaLocations";
 import ServerSettingField from "./ServerSettingField";
 import { Spinner } from "../ui";
 import { api, useApi } from "../../lib/api";
@@ -64,7 +64,13 @@ export default function ServerSettings() {
         ; empty fields use the variable, or the default. The port, the data folder and requiring passwords (
         <span className="mono">COUCHSIDE_AUTH</span>) are only set in the environment.
       </p>
-      <NetworkShares />
+      <section className="card p-4">
+        <div className="card-title mb-1">Media locations</div>
+        <p className="mb-3 text-xs text-content-muted">
+          The drives, folders and network shares your media is on. Libraries and the DVR folder go inside one. These apply at once, without a restart.
+        </p>
+        <MediaLocations />
+      </section>
       {groups.map((g) => (
         <section key={g} className="card p-4">
           <div className="card-title mb-3">{g}</div>

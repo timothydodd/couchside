@@ -3,9 +3,9 @@ import { useApi } from "../lib/api";
 import type { Browse } from "../lib/types";
 
 /**
- * Browse the server's folders. Inside the media folder when one is set
- * (anywhere with `all`, for choosing the media folder itself); otherwise from
- * the drives on Windows, or /. Picking a folder sets it and opens it.
+ * Browse the server's folders: inside the media locations, starting from
+ * them, or with `all` (adding a location) anywhere, starting from the drives
+ * on Windows or /. Picking a folder sets it and opens it.
  */
 export default function FolderPicker({ path, onPick, all = false }: { path: string; onPick: (p: string) => void; all?: boolean }) {
   const q = `/api/fs?path=${encodeURIComponent(path.trim())}${all ? "&all=1" : ""}`;
@@ -16,11 +16,11 @@ export default function FolderPicker({ path, onPick, all = false }: { path: stri
   const top = data.path === "";
   return (
     <div className="mt-2 overflow-hidden rounded-md border border-border-light bg-input">
-      <div className="mono truncate border-b border-border-light px-3 py-1.5 text-xs text-content-muted">{top ? "This server" : data.path}</div>
+      <div className="mono truncate border-b border-border-light px-3 py-1.5 text-xs text-content-muted">{top ? (all ? "This server" : "Media locations") : data.path}</div>
       <div className="max-h-56 overflow-auto">
         {data.parent !== null && (
           <button className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-content-muted hover:bg-muted hover:text-content" onClick={() => onPick(data.parent!)}>
-            <CornerLeftUp size={14} /> {data.parent === "" ? "All drives" : ".."}
+            <CornerLeftUp size={14} /> {data.parent === "" ? (all ? "All drives" : "All locations") : ".."}
           </button>
         )}
         {data.dirs.map((d) => (
@@ -34,7 +34,9 @@ export default function FolderPicker({ path, onPick, all = false }: { path: stri
             <ChevronRight size={14} className="text-content-muted" />
           </button>
         ))}
-        {data.dirs.length === 0 && <div className="px-3 py-2 text-xs text-content-muted">No subfolders</div>}
+        {data.dirs.length === 0 && (
+          <div className="px-3 py-2 text-xs text-content-muted">{top && !all ? "No media locations yet: add one in Settings → Server" : "No subfolders"}</div>
+        )}
       </div>
     </div>
   );
