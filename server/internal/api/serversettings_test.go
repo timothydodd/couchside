@@ -173,3 +173,39 @@ func TestSharesUnsupportedHere(t *testing.T) {
 		t.Fatalf("save on a platform without shares = %d", c)
 	}
 }
+
+// Browsing the server's folders and its settings are for admins only: the
+// path checks in browse and Setting.Check rely on it.
+func TestServerPagesAreAdminOnly(t *testing.T) {
+	s, ts := authServer(t)
+	admin := adminWeb(t, s, ts.URL)
+	if c := admin.do("POST", "/api/accounts", map[string]any{"name": "Kid", "password": "a long password", "role": "user"}, nil); c != 201 {
+		t.Fatalf("create user = %d", c)
+	}
+	kid := newClient(t, ts.URL)
+	if c := kid.do("POST", "/api/auth/login", map[string]string{"name": "Kid", "password": "a long password"}, nil); c != 200 {
+		t.Fatalf("user sign-in = %d", c)
+	}
+	if c := kid.do("POST", "/api/auth/password", map[string]string{"current": "a long password", "password": "another long password"}, nil); c != 200 && c != 204 {
+		t.Fatalf("change temporary password = %d", c)
+	}
+	if c := kid.do("GET", "/api/home", nil, nil); c != 200 {
+		t.Fatalf("user's home = %d: the 403s below must come from the admin check", c)
+	}
+	for _, r := range []struct{ method, path string }{
+		{"GET", "/api/fs"},
+		{"GET", "/api/fs?path=/&all=1"},
+		{"GET", "/api/settings/server"},
+		{"PUT", "/api/settings/server"},
+		{"POST", "/api/server/restart"},
+		{"GET", "/api/settings/shares"},
+		{"PUT", "/api/settings/shares"},
+	} {
+		if c := kid.do(r.method, r.path, map[string]any{}, nil); c != 403 {
+			t.Errorf("%s %s as a user = %d, want 403", r.method, r.path, c)
+		}
+	}
+	if c := newClient(t, ts.URL).do("GET", "/api/fs", nil, nil); c != 401 {
+		t.Errorf("GET /api/fs signed out = %d, want 401", c)
+	}
+}
