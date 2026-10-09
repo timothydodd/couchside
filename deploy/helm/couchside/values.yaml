@@ -83,21 +83,31 @@ config:
   encodeWorkers: 1      # background "optimize" encodes at once
   optimizeHeight: 1080
 
-# Hardware transcoding. vaapi = Intel/AMD iGPU via /dev/dri (drivers for Intel
-# are in the image); qsv and nvenc need an ffmpeg built with them. Anything
-# unusable falls back to software with a warning in the log.
+# Hardware transcoding. vaapi = an Intel or AMD GPU through /dev/dri (Intel's
+# drivers are in the image). The stock image's ffmpeg has no NVENC or Quick
+# Sync: for those, build an image whose ffmpeg has them and set
+# image.repository; mode is passed straight through as COUCHSIDE_HWACCEL.
+# Anything unusable falls back to software with a warning in the log.
 hwaccel:
-  mode: none            # none | vaapi | qsv | nvenc
+  mode: none            # none | vaapi
   # The VAAPI render node, when the node has more than one GPU
   # (COUCHSIDE_VAAPI_DEVICE); "" uses /dev/dri/renderD128.
   device: ""
   dri:
-    enabled: false      # mount /dev/dri from the node
-    # Host gids owning /dev/dri/renderD128 and card* (ls -ln /dev/dri on the node)
+    # How the pod gets the GPU. Pick one:
+    #  - resource: a device plugin hands it to an unprivileged pod. Intel's
+    #    (github.com/intel/intel-device-plugins-for-kubernetes): gpu.intel.com/i915;
+    #    generic-device-plugin with a "dri" device: squat.ai/dri.
+    #  - enabled + privileged: /dev/dri mounted from the node. containerd only
+    #    lets a privileged container open it, which turns off most of the
+    #    pod's hardening (it still runs as 1000:1000). The last resort.
+    resource: ""        # e.g. gpu.intel.com/i915
+    resourceCount: 1
+    enabled: false      # mount /dev/dri from the node (needs privileged: true)
+    privileged: false
+    # Host gids owning /dev/dri/renderD128 and card* (ls -ln /dev/dri on the
+    # node), so the unprivileged user can open the device either way.
     groups: []
-    # containerd blocks GPU device access for unprivileged pods unless a GPU
-    # device plugin is installed; set false if you use Intel's device plugin.
-    privileged: true
 
 # Where your media lives, mounted at /media; libraries are added in the UI as
 # folders under /media (e.g. /media/Movies).
@@ -175,7 +185,8 @@ podSecurityContext:
   seccompProfile:
     type: RuntimeDefault
 # The container drops every capability and can't gain privileges (the image
-# runs as 1000:1000). With hwaccel.dri.privileged it runs privileged instead.
+# runs as 1000:1000). With hwaccel.dri.privileged it is privileged (to open
+# /dev/dri from the node) but still runs as 1000:1000 with no capabilities asked for.
 
 # Mount the container's root filesystem read-only. /tmp (and /recordings when
 # it isn't persisted) become emptyDir volumes.

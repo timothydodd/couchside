@@ -113,6 +113,13 @@ name and a password.
   `extraEnv`.
 - The memory limit (4Gi) covers the server and every ffmpeg it runs; raise it
   for several software 4K transcodes at once.
+- GPU (Intel or AMD, VAAPI): install a GPU device plugin and set
+  `--set hwaccel.mode=vaapi --set hwaccel.dri.resource=gpu.intel.com/i915
+  --set 'hwaccel.dri.groups={<render gid>}'` (Intel's plugin; `squat.ai/dri`
+  with generic-device-plugin). Without a plugin,
+  `hwaccel.dri.enabled=true hwaccel.dri.privileged=true` mounts `/dev/dri` from
+  the node into a privileged container. The image's ffmpeg has no NVENC or
+  Quick Sync.
 - The chart refuses an Ingress without `auth.enabled=true`. For an ingress
   only your LAN can reach, `auth.allowOpenIngress=true` keeps passwordless
   sign-in.

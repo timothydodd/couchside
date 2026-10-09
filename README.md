@@ -10,8 +10,9 @@ A fast, lightweight media server for your movies, shows and live TV.
 - **Live TV and DVR.** HDHomeRun guide, series recordings, commercial skipping, and your own channels made from your library.
 - **A good UI.** A dark web app that works on phones, a Plex-style player, and a Roku app.
 
-Also: TMDB matching with cast and artwork, GPU transcoding (Intel VAAPI), HDR tone
-mapping, and profiles for the whole household.
+Also: TMDB matching with cast and artwork, GPU transcoding (Intel and AMD VAAPI in
+the container; NVIDIA NVENC and Intel Quick Sync with the Windows installer), HDR
+tone mapping, and profiles for the whole household.
 
 ## Quick start
 
