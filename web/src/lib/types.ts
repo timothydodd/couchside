@@ -407,6 +407,12 @@ export interface Status {
   scanEvery: string;
   workers: number;
   comskip?: boolean; // commercial detection is available
+  /** The server's API version (docs/api-compat.md); absent on servers before 0.19. */
+  apiVersion?: number;
+  /** What the server can do now (docs/api-compat.md); absent on servers before 0.19. */
+  features?: string[];
+  /** Why metadata lookups fail right now (TMDB refusing the key); empty when they don't. */
+  metadataDegraded?: string[];
   transcode?: {
     hwaccel: string;
     requested: string; // COUCHSIDE_HWACCEL: auto, none, vaapi, qsv or nvenc

@@ -100,9 +100,11 @@ export default function SettingsPage() {
 /** Version, license and the third-party notices, at the bottom of Settings. */
 function About() {
   const version = useStatus((s) => s.status?.version);
+  const apiVersion = useStatus((s) => s.status?.apiVersion);
   return (
     <p className="px-1 text-xs text-content-muted">
-      Couchside {version && fmtVersion(version)} &middot; free, open-source software under the{" "}
+      Couchside {version && fmtVersion(version)}
+      {apiVersion ? ` (API ${apiVersion})` : ""} &middot; free, open-source software under the{" "}
       <a href="https://github.com/timothydodd/couchside/blob/main/LICENSE" target="_blank" rel="noreferrer" className="hover:text-accent hover:underline">
         MIT License
       </a>{" "}
