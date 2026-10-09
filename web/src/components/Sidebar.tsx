@@ -126,6 +126,7 @@ export function SearchBox({ hotkey = true, autoFocus = false, className = "mb-4"
     const t = setTimeout(() => submit(q), 200);
     return () => clearTimeout(t);
     // Only typing triggers a search; routeQ changes come from it or from navigation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
   useEffect(() => {

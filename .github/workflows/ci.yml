@@ -90,5 +90,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: known vulnerabilities in what the UI ships
         run: npm audit --omit=dev --audit-level=high
+      - name: lint (oxlint; rules of hooks)
+        run: npm run lint
       - name: type-check and build
         run: npm run build

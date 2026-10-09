@@ -1,0 +1,19 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  // oxlint, not ESLint: typescript-eslint doesn't support TypeScript 7.
+  "plugins": ["typescript", "react", "react-perf", "import"],
+  "categories": { "correctness": "error" },
+  "rules": {
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "warn",
+    "react/react-in-jsx-scope": "off",
+    // The React Compiler's rules: they flag patterns that are fine without the
+    // compiler (refs read during render, setState in an effect), and
+    // Couchside doesn't use it.
+    "react/refs": "off",
+    "react/set-state-in-effect": "off",
+    "react/purity": "off",
+    "react/incompatible-library": "off"
+  },
+  "ignorePatterns": ["dist", "node_modules"]
+}
