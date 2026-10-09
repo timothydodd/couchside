@@ -39,6 +39,7 @@ import (
 )
 
 type Server struct {
+	linkOK linkChecks // files that recently passed checkLink
 	// counts caches db.Counts for /api/status (see cachedCounts).
 	countsMu sync.Mutex
 	counts   db.Counts

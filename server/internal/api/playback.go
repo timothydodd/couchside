@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/fsx"
@@ -147,6 +149,9 @@ func (s *Server) checkMedia(ctx context.Context, f db.File) error {
 // checkLink is checkMedia without the playability check, for routes that
 // read a file's tracks or sidecars.
 func (s *Server) checkLink(ctx context.Context, f db.File) error {
+	if s.linkOK.recent(f.ID, f.Path) {
+		return nil
+	}
 	lib, err := s.db.Library(ctx, f.LibraryID)
 	if err != nil {
 		return err
@@ -157,5 +162,37 @@ func (s *Server) checkLink(ctx context.Context, f db.File) error {
 		}
 		return errMissing
 	}
+	s.linkOK.remember(f.ID, f.Path)
 	return nil
+}
+
+// linkChecks remembers files that passed checkLink for a minute. A player
+// sends hundreds of range requests for one film, and resolving the path
+// through links costs several round trips on a network share.
+type linkChecks struct {
+	mu   sync.Mutex
+	seen map[int64]linkCheck
+}
+
+type linkCheck struct {
+	path string
+	at   time.Time
+}
+
+const linkCheckTTL = time.Minute
+
+func (c *linkChecks) recent(id int64, path string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := c.seen[id]
+	return ok && e.path == path && time.Since(e.at) < linkCheckTTL
+}
+
+func (c *linkChecks) remember(id int64, path string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.seen == nil || len(c.seen) > 1000 {
+		c.seen = map[int64]linkCheck{} // a handful are playing at any time
+	}
+	c.seen[id] = linkCheck{path, time.Now()}
 }
