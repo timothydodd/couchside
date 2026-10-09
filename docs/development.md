@@ -36,6 +36,11 @@ cd web && npx tsc --noEmit && npx vite build
 
 CI (`.github/workflows/ci.yml`) runs both on pushes and pull requests.
 
+The UI runs under a strict Content-Security-Policy (`uiCSP` in
+`server/internal/api/api.go`): no inline scripts and nothing loaded from other
+sites. Inline `style={}` attributes, `blob:` media and hls.js's `blob:` worker
+are allowed. A new kind of resource needs a matching directive there.
+
 Dependabot (`.github/dependabot.yml`) opens weekly update pull requests for Go,
 npm, GitHub Actions and the Dockerfile's base images. When a push to main
 changes `go.sum` or `package-lock.json`, `notices.yml` regenerates

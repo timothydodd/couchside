@@ -151,10 +151,27 @@ func (s *Server) pruneTables(ctx context.Context) {
 // framed by another site.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Referrer-Policy", "same-origin")
+		h.Set("X-Frame-Options", "SAMEORIGIN") // older browsers; the UI's CSP frame-ancestors is the rule
+		// Only once the browser reached us over HTTPS (directly, or through a
+		// trusted proxy), and never for the whole domain: a home server on
+		// media.example.com mustn't lock the rest of example.com to HTTPS.
+		if isHTTPS(r) {
+			h.Set("Strict-Transport-Security", "max-age=31536000")
+		}
 		next.ServeHTTP(w, r)
 	})
 }
+
+// uiCSP is the web UI's Content-Security-Policy. It has no inline scripts and
+// loads nothing from other sites; inline style attributes (React style={})
+// need 'unsafe-inline' for styles, and hls.js plays through blob: media and
+// runs its demuxer in a blob: worker.
+const uiCSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
+	"media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; " +
+	"base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
 
 func (s *Server) Handler() http.Handler {
 	r := chi.NewRouter()
@@ -475,7 +492,7 @@ func spa(fsys fs.FS) http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Content-Security-Policy", "frame-ancestors 'self'")
+		w.Header().Set("Content-Security-Policy", uiCSP)
 		http.ServeFileFS(w, r, fsys, "index.html")
 	}
 }
