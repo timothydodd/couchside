@@ -62,6 +62,10 @@ amd64/arm64, Windows amd64), publishes the container to
 creates a GitHub Release with checksums. Tags with a hyphen, such as
 `v0.2.0-rc1`, become pre-releases and don't move `:latest`.
 
+Before tagging, rename `## Unreleased` in `CHANGELOG.md` to `## <version>`
+(without the `v`; the release fails without it) and set the chart's `version`
+and `appVersion` to the same version.
+
 ```bash
 git tag -a v0.2.0 -m "v0.2.0: …" && git push origin v0.2.0
 ```

@@ -60,6 +60,12 @@ jobs:
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
+      - name: CHANGELOG has this release
+        if: github.event_name == 'push'
+        working-directory: .
+        run: |
+          v="${VERSION#v}"
+          grep -q "^## ${v}\b" CHANGELOG.md || { echo "::error file=CHANGELOG.md::add a '## ${v}' section (rename Unreleased) before tagging"; exit 1; }
       - run: go vet ./...
       - run: go test -race ./...
       - name: govulncheck
@@ -266,6 +272,8 @@ jobs:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
+            **Breaking changes and upgrade notes** for this release are at the top of its section in [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md).
+
             **Container:** `docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}`
 
             **Helm chart:** `helm install couchside oci://ghcr.io/${{ github.repository_owner }}/charts/couchside --version <this release without the v>` (docs/install.md has the values).
