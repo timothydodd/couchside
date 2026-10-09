@@ -195,6 +195,8 @@ jobs:
 
   release:
     if: github.event_name == 'push'
+    # installer fails on a v* tag that can't be signed (windows-installer.yml),
+    # so nothing unsigned is published.
     needs: [binaries, installer, container]
     runs-on: ubuntu-latest
     permissions:
@@ -207,6 +209,19 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: windows-installer
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: windows-exe
+          path: signed
+      # The Windows zip was cross-built on Linux, unsigned: put the installer
+      # job's signed couchside.exe in its place before anything is hashed.
+      - name: signed exe in the Windows zip
+        run: |
+          zip=$(ls couchside-*-windows-amd64.zip)
+          dir=${zip%.zip}
+          mkdir -p "swap/$dir" && cp signed/couchside.exe "swap/$dir/couchside.exe"
+          (cd swap && zip -q "../$zip" "$dir/couchside.exe")
+          unzip -l "$zip" | grep -q "$dir/couchside.exe"
       - name: checksums
         run: sha256sum couchside-*.zip couchside-*.exe > SHA256SUMS.txt
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
@@ -220,6 +235,6 @@ jobs:
           body: |
             **Container:** `docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}`
 
-            **Windows installer** (`couchside-*-windows-amd64-setup.exe`) installs Couchside as a Windows service with ffmpeg included and picks your GPU encoder (NVIDIA or Intel) by itself.
+            **Windows installer** (`couchside-*-windows-amd64-setup.exe`) installs Couchside as a Windows service with ffmpeg included and picks your GPU encoder (NVIDIA or Intel) by itself. The installer and every `couchside.exe` (the installer's and the Windows zip's) are code-signed.
 
             **Zips** hold a single `couchside` binary with the web UI built in. It needs `ffmpeg` and `ffprobe` installed; see QUICKSTART.txt inside.

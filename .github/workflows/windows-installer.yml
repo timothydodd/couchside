@@ -11,6 +11,10 @@ name: windows-installer
 # 'release' environment (the federated credential's subject), which admits v*
 # and pre-* tags and waits for timothydodd to approve the run (Actions →
 # Review deployments); manual runs get no environment and stay unsigned.
+# A v* tag fails here when signing isn't configured, so release.yml can't
+# publish an unsigned exe; pre-* tags and manual runs build unsigned with a
+# warning. The signed couchside.exe is also uploaded (windows-exe) for the
+# release's Windows zip.
 #   secrets (release environment): AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
 #   variables: SIGNING_ENDPOINT, SIGNING_ACCOUNT, SIGNING_PROFILE
 # jellyfin's ffmpeg.exe and ffprobe.exe are shipped as they come.
@@ -60,6 +64,16 @@ jobs:
         run: |
           go build -trimpath -ldflags "-s -w -X main.version=${VERSION} -X github.com/timothydodd/couchside/internal/config.builtinTMDBKey=${TMDB_KEY}" \
             -o ../sign/couchside.exe ./cmd/couchside
+      - name: a v* release must be signed
+        if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v') && env.SIGN != 'true'
+        shell: bash
+        run: |
+          echo "::error::${{ github.ref_name }} is a release tag but code signing isn't configured (the AZURE_CLIENT_ID secret and the SIGNING_ACCOUNT / SIGNING_PROFILE variables on the release environment). Releases never ship unsigned exes."
+          exit 1
+      - name: unsigned build (not a v* tag)
+        if: env.SIGN != 'true'
+        shell: bash
+        run: echo "::warning::Signing is off for this run, so couchside.exe and the installer are unsigned. That's fine for pre-* tags and manual runs only."
       - name: Azure login (code signing)
         if: env.SIGN == 'true'
         uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2.3.1
@@ -80,6 +94,19 @@ jobs:
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
+      - name: verify couchside.exe signature
+        if: env.SIGN == 'true'
+        shell: pwsh
+        run: |
+          $sig = Get-AuthenticodeSignature sign/couchside.exe
+          if ($sig.Status -ne 'Valid') { throw "couchside.exe signature is $($sig.Status): $($sig.StatusMessage)" }
+          if (-not $sig.TimeStamperCertificate) { throw "couchside.exe signature has no timestamp" }
+          Write-Host "couchside.exe signed by $($sig.SignerCertificate.Subject), timestamped by $($sig.TimeStamperCertificate.Subject)"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: windows-exe
+          path: sign/couchside.exe
+          retention-days: 14
       - name: stage couchside.exe
         shell: bash
         run: mkdir -p stage && cp sign/couchside.exe stage/
@@ -134,6 +161,16 @@ jobs:
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
+      - name: verify installer signature
+        if: env.SIGN == 'true'
+        shell: pwsh
+        run: |
+          $exe = @(Get-ChildItem out/*.exe)
+          if ($exe.Count -ne 1) { throw "expected one installer in out/, found $($exe.Count)" }
+          $sig = Get-AuthenticodeSignature $exe[0].FullName
+          if ($sig.Status -ne 'Valid') { throw "$($exe[0].Name) signature is $($sig.Status): $($sig.StatusMessage)" }
+          if (-not $sig.TimeStamperCertificate) { throw "$($exe[0].Name) signature has no timestamp" }
+          Write-Host "$($exe[0].Name) signed by $($sig.SignerCertificate.Subject)"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: windows-installer
