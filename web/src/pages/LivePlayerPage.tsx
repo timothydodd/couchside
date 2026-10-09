@@ -33,6 +33,8 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
   const [recBusy, setRecBusy] = useState(false);
   const [nonce, setNonce] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(noticeTimer.current), []);
   const holding = useLiveCushion(videoRef, `${channel}:${height}:${nonce}`);
   // How fast the server adds video to the playlist, per second of wall time.
   // Below 1× it can't keep up and the stream will keep buffering whatever the player does.
@@ -199,7 +201,8 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
       // stream that can't be played and replaces the picture.
       const msg = `Couldn't ${now.recordingStatus === "recording" ? "stop the recording" : "record this"}: ${errText(e)}`;
       setNotice(msg);
-      setTimeout(() => setNotice((n) => (n === msg ? null : n)), 8000);
+      clearTimeout(noticeTimer.current);
+      noticeTimer.current = setTimeout(() => setNotice((n) => (n === msg ? null : n)), 8000);
     } finally {
       setRecBusy(false);
     }

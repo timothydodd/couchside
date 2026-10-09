@@ -44,6 +44,9 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
     if (!v) return;
     let cancelled = false;
     let hls: HlsType | null = null;
+    const onMeta = () => {
+      v.currentTime = resumeAt.current;
+    };
     let sid: string | null = null;
     setError(null);
     setStarting(true);
@@ -70,7 +73,7 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
       if ("error" in engine) return setError(engine.error);
       if ("native" in engine) {
         v.src = s.playlist;
-        v.addEventListener("loadedmetadata", () => (v.currentTime = resumeAt.current), { once: true });
+        v.addEventListener("loadedmetadata", onMeta, { once: true });
         void v.play().catch(() => {});
         return;
       }
@@ -97,6 +100,7 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
       hls?.destroy();
       hlsRef.current = null;
       leave();
+      v.removeEventListener("loadedmetadata", onMeta);
       v.removeAttribute("src");
       v.load();
     };

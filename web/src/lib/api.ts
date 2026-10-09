@@ -155,6 +155,8 @@ export function useApi<T>(url: string | null, opts: { pollMs?: number; fresh?: b
 
 export const posterUrl = (i: { id: number; updatedAt: number }, size: "thumb" | "full" = "thumb") =>
   `/api/artwork/items/${i.id}/${size === "thumb" ? "poster-thumb" : "poster"}?v=${i.updatedAt}`;
+/** Both poster renditions for srcSet: the 360px-wide thumb and the 780px full one. */
+export const posterSrcSet = (i: { id: number; updatedAt: number }) => `${posterUrl(i, "thumb")} 360w, ${posterUrl(i, "full")} 780w`;
 export const backdropUrl = (i: { id: number; updatedAt: number }) => `/api/artwork/items/${i.id}/backdrop?v=${i.updatedAt}`;
 export const stillUrl = (fileId: number) => `/api/artwork/files/${fileId}/still`;
 export const personPhotoUrl = (personId: number) => `/api/artwork/people/${personId}`;

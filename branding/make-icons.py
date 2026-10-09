@@ -65,6 +65,9 @@ def main():
 
     # iOS masks the icon itself and shows transparency as black: full square.
     large.resize((180, 180), Image.LANCZOS).save(OUT / "apple-touch-icon.png", optimize=True)
+    # A maskable icon for installed web apps: full-bleed navy (Android crops
+    # it to its own shape), the C at 60% so it stays inside the 80% safe zone.
+    square(im, bg, box, 0.60).resize((512, 512), Image.LANCZOS).save(icons / "maskable-512.png", optimize=True)
 
     ico = [rounded(small, s, 0.18) for s in SMALL]
     ico[-1].save(OUT / "favicon.ico", sizes=[(s, s) for s in SMALL], append_images=ico[:-1])

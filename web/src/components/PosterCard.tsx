@@ -3,7 +3,7 @@ import { Check, Star } from "lucide-react";
 import Link from "./Link";
 import FadeImg from "./FadeImg";
 import { useQueue } from "../stores/queue";
-import { posterUrl } from "../lib/api";
+import { posterSrcSet, posterUrl } from "../lib/api";
 import { placeholderAngle } from "../lib/format";
 import { rangeLabel, rangeShort } from "../lib/quality";
 import type { ItemSummary } from "../lib/types";
@@ -23,6 +23,9 @@ export function PosterArt({
     return (
       <FadeImg
         src={posterUrl(item, size)}
+        // A grid or row card: three across on a phone, about 200px wide on a
+        // bigger screen. A 2-3x phone screen then gets the full poster.
+        {...(size === "thumb" && !bare ? { srcSet: posterSrcSet(item), sizes: "(min-width: 768px) 200px, 33vw" } : {})}
         alt=""
         loading="lazy"
         decoding="async"

@@ -118,6 +118,12 @@ body {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
   }
+  /* index.html's note for browsers with JavaScript off. */
+  .noscript {
+    padding: 2rem;
+    font-family: system-ui, sans-serif;
+    color: var(--text-primary);
+  }
 }
 
 /* Themed, unobtrusive scrollbars. */

@@ -163,10 +163,13 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
     if (pick) setSub({ kind: "text", track: pick });
   }, [streams, subtitleLang]);
 
+  const noticeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(noticeTimer.current), []);
   const flash = (msg: string, action: { label: string; onClick: () => void } | null = null) => {
     setNotice(msg);
     setNoticeAction(() => action);
-    setTimeout(() => setNotice((n) => (n === msg ? null : n)), 7000);
+    clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice((n) => (n === msg ? null : n)), 7000);
   };
 
   const switchTo = useCallback((apply: () => void) => {
