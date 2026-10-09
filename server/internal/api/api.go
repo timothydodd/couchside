@@ -161,6 +161,7 @@ func (s *Server) Handler() http.Handler {
 	r.Use(s.realIP, middleware.Recoverer, securityHeaders)
 
 	r.Get("/healthz", s.health)
+	r.Get("/livez", s.live)
 	r.Get("/api/discovery", s.discovery)
 	r.Route("/api", func(r chi.Router) {
 		r.Use(middleware.NoCache)
@@ -372,8 +373,19 @@ func (s *Server) adminRoutes(r chi.Router) {
 	r.Post("/jobs/clear", s.clearJobs)
 }
 
+// live says the process is up and serving HTTP: the liveness probe. It
+// never touches the database, so a busy SQLite pool (a scan, a backup) can't
+// get the pod killed mid-recording.
+func (s *Server) live(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write([]byte("ok"))
+}
+
+// health says the database answers: the readiness and startup probe.
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
-	if err := s.db.Ping(r.Context()); err != nil {
+	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
+	defer cancel()
+	if err := s.db.Ping(ctx); err != nil {
 		slog.Error("health check", "err", err)
 		http.Error(w, "database unavailable", http.StatusServiceUnavailable)
 		return

@@ -103,8 +103,10 @@ ENV COUCHSIDE_ADDR=:8080 \
 USER 1000:1000
 EXPOSE 8080 1900/udp
 VOLUME ["/data", "/cache", "/recordings"]
-# For Docker and compose (Kubernetes uses the chart's probes). The port is
+# For Docker and compose (Kubernetes uses the chart's probes, with the
+# database-free /livez for liveness). Marks the container unhealthy when the
+# database can't be reached; Docker doesn't restart it for that. The port is
 # whatever COUCHSIDE_ADDR ends in.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=5 \
     CMD wget -qO /dev/null "http://127.0.0.1:${COUCHSIDE_ADDR##*:}/healthz" || exit 1
 ENTRYPOINT ["couchside"]

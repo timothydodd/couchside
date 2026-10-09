@@ -75,7 +75,8 @@ rules and server settings are shared. Switch profiles from the sidebar.
   a name can keep that account locked by failing on purpose; that's the price
   of stopping password guessing from many addresses. Passwordless picks are
   limited to 20 per address per 10 minutes.
-- **Open without a session:** `/healthz`, `/api/discovery` (name, version and
+- **Open without a session:** `/healthz` (the database answers), `/livez`
+  (the process is up), `/api/discovery` (name, version and
   sign-in mode, for TV apps finding the server), the sign-in endpoints, and
   artwork (posters, backdrops, episode stills, cast photos and
   `/api/artwork/remote`, the cache of guide and provider images), so TV apps

@@ -233,9 +233,13 @@ func serve(parent context.Context, ignoreSaved string) (again bool, err error) {
 		<-ctx.Done()
 		// A second Ctrl-C or SIGTERM now exits at once.
 		stop()
-		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		// Kubernetes allows 60s (the chart's terminationGracePeriodSeconds):
+		// 20 for requests to finish, then cut the rest (a long direct-play
+		// download) so the worker and the database close before the kill.
+		shutdown, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(shutdown)
+		_ = srv.Close()
 	}()
 
 	web := cfg.WebDir
