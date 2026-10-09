@@ -74,6 +74,7 @@ func (s *Server) createHLS(w http.ResponseWriter, r *http.Request) {
 		FileID: id, Title: title, Path: f.Path, Duration: dur,
 		Height: in.Height, BitrateK: in.BitrateK, AllowCopyVideo: in.CopyVideo, AllowCopyAudio: in.CopyAudio,
 		AudioIndex: max(0, in.AudioIndex), BurnSubtitle: burn, VideoCodecs: in.VideoCodecs, AudioCodecs: in.AudioCodecs,
+		Owner: currentUser(r.Context()).ID,
 	})
 	if err != nil {
 		if errors.Is(err, transcode.ErrBusy) {
@@ -99,8 +100,23 @@ func (s *Server) createHLS(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// hlsSession is the session sid names, when it belongs to the signed-in
+// profile (or the profile is an admin). Another profile's session answers as
+// missing: its id leaking (a shared screen, a log line) shouldn't let anyone
+// watch or stop it.
+func (s *Server) hlsSession(r *http.Request, sid string) *transcode.Session {
+	sess := s.tc.Get(sid)
+	if sess == nil {
+		return nil
+	}
+	if u := currentUser(r.Context()); !u.Admin && sess.Owner != u.ID {
+		return nil
+	}
+	return sess
+}
+
 func (s *Server) hlsPlaylist(w http.ResponseWriter, r *http.Request) {
-	sess := s.tc.Get(chi.URLParam(r, "sid"))
+	sess := s.hlsSession(r, chi.URLParam(r, "sid"))
 	if sess == nil {
 		writeErr(w, httpError{http.StatusNotFound, transcode.ErrNoSession.Error()})
 		return
@@ -118,6 +134,10 @@ func (s *Server) hlsSegment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	n, _ := strconv.Atoi(m[1])
+	if s.hlsSession(r, chi.URLParam(r, "sid")) == nil {
+		writeErr(w, httpError{http.StatusNotFound, transcode.ErrNoSession.Error()})
+		return
+	}
 	path, err := s.tc.Segment(r.Context(), chi.URLParam(r, "sid"), n)
 	switch {
 	case errors.Is(err, transcode.ErrNoSession), errors.Is(err, transcode.ErrBadSegment):
@@ -141,6 +161,10 @@ func (s *Server) hlsSegment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) closeHLS(w http.ResponseWriter, r *http.Request) {
+	if s.hlsSession(r, chi.URLParam(r, "sid")) == nil {
+		w.WriteHeader(http.StatusNoContent) // gone or someone else's: either way, nothing to close here
+		return
+	}
 	s.tc.Close(chi.URLParam(r, "sid"))
 	w.WriteHeader(http.StatusNoContent)
 }

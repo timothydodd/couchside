@@ -69,8 +69,9 @@ type Request struct {
 	// track with more than two channels is converted to one, 5.1, instead of
 	// being mixed down to stereo AAC.
 	AudioCodecs  []string
-	AudioIndex   int // which audio track (0:a:N)
-	BurnSubtitle int // image subtitle track to burn into the video, -1 for none
+	AudioIndex   int   // which audio track (0:a:N)
+	BurnSubtitle int   // image subtitle track to burn into the video, -1 for none
+	Owner        int64 // the profile that asked; only it (or an admin) uses the session
 }
 
 // Session is one live stream of one file at one quality.
@@ -90,6 +91,7 @@ type Session struct {
 	HW        string    `json:"hw"`
 	HWDecode  bool      `json:"hwDecode"` // VAAPI: decoding and scaling on the GPU too
 	Created   time.Time `json:"created"`
+	Owner     int64     `json:"-"` // the profile that made it (Request.Owner)
 
 	src       string
 	dir       string
@@ -236,7 +238,7 @@ func (m *Manager) Create(ctx context.Context, r Request) (*Session, error) {
 		Audio: r.AudioIndex, BurnSub: r.BurnSubtitle,
 		HDR: info.HDR() && !copyVideo, HW: m.enc.HW, Created: time.Now(),
 		src: r.Path, duration: r.Duration, srcHeight: srcH, enc: m.enc,
-		lastAccess: time.Now(), hi: -1, ahead: aheadLimit,
+		lastAccess: time.Now(), hi: -1, ahead: aheadLimit, Owner: r.Owner,
 	}
 	if copyVideo {
 		s.ahead = remuxAhead
