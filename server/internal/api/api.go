@@ -3,6 +3,8 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -175,14 +177,16 @@ const uiCSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-i
 
 func (s *Server) Handler() http.Handler {
 	r := chi.NewRouter()
-	r.Use(s.realIP, middleware.Recoverer, securityHeaders)
+	r.Use(s.realIP, middleware.Recoverer, securityHeaders, keepConditional)
 
 	r.Get("/healthz", s.health)
 	r.Get("/livez", s.live)
 	r.Get("/api/discovery", s.discovery)
 	r.With(middleware.NoCache).Get("/api/server", s.serverInfo)
 	r.Route("/api", func(r chi.Router) {
-		r.Use(middleware.NoCache)
+		// JSON and playlists are gzipped when the client asks; segments
+		// (video/mp2t) pass through untouched.
+		r.Use(middleware.NoCache, middleware.Compress(5, "application/json", "application/vnd.apple.mpegurl"))
 		// Open: how to sign in, and signing in.
 		r.Get("/auth", s.authStatus)
 		r.Post("/auth/login", s.login)
@@ -235,7 +239,7 @@ func (s *Server) Handler() http.Handler {
 	r.Group(func(r chi.Router) {
 		r.Use(s.authenticate, s.passwordCurrent)
 		r.Get("/api/files/{id}/stream", s.stream)
-		r.Get("/api/files/{id}/subtitles/{key}", s.subtitleVTT)
+		r.With(middleware.Compress(5, "text/vtt")).Get("/api/files/{id}/subtitles/{key}", s.subtitleVTT)
 	})
 
 	switch {
@@ -413,6 +417,57 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- helpers -----------------------------------------------------------------
+
+type inmKey struct{}
+
+// keepConditional keeps If-None-Match for the handlers that answer 304:
+// middleware.NoCache deletes it from the request.
+func keepConditional(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if v := r.Header.Get("If-None-Match"); v != "" {
+			r = r.WithContext(context.WithValue(r.Context(), inmKey{}, v))
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// writeJSONRevalidated answers v with an ETag of its own bytes, and a 304
+// with no body when the client already has them. The browser keeps a copy
+// but asks every time (private, no-cache), so a poll that changed nothing
+// costs a hash instead of the whole list over the network and through
+// JSON.parse. Hashing the answer itself means no change can be missed.
+func writeJSONRevalidated(w http.ResponseWriter, r *http.Request, v any) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	sum := sha256.Sum256(b)
+	tag := `W/"` + hex.EncodeToString(sum[:12]) + `"`
+	h := w.Header()
+	h.Set("ETag", tag)
+	h.Set("Cache-Control", "private, no-cache")
+	h.Del("Expires")
+	h.Del("Pragma")
+	if inm, _ := r.Context().Value(inmKey{}).(string); etagMatches(inm, tag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	h.Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(append(b, '\n'))
+}
+
+// etagMatches: any entry of an If-None-Match list is tag, weak or not.
+func etagMatches(inm, tag string) bool {
+	tag = strings.TrimPrefix(tag, "W/")
+	for _, t := range strings.Split(inm, ",") {
+		if t = strings.TrimPrefix(strings.TrimSpace(t), "W/"); t == tag || t == "*" {
+			return true
+		}
+	}
+	return false
+}
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")

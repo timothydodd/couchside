@@ -62,6 +62,33 @@ func summaryCols(ctx context.Context) string {
 		FROM files f WHERE f.media_item_id = m.id AND f.role <> 'extra'), 0)`
 }
 
+// summaryListCols and summaryListFrom are summaryCols for whole-kind lists:
+// the per-title subqueries (five index probes per title) become one pass
+// over files grouped by title. Same columns in the same order, so
+// scanSummary reads both. Use them together; callers add WHERE and ORDER BY
+// on m. Single titles and short IN lists stay on summaryCols, which SQLite
+// answers faster there.
+func summaryListCols() string {
+	return `m.id, m.kind, m.title, m.sort_title, m.year, m.genres, m.rating, m.runtime_min,
+	m.has_poster, m.has_backdrop, m.match_status, m.added_at, m.updated_at,
+	COALESCE(fs.file_count, 0), COALESCE(fs.watched_count, 0),
+	pi.item_id IS NOT NULL,
+	COALESCE(fs.last_added, m.added_at) AS last_added,
+	COALESCE(fs.range_rank, 0)`
+}
+
+func summaryListFrom(ctx context.Context) string {
+	return ` FROM media_items m
+	LEFT JOIN (SELECT f.media_item_id AS item_id,
+		SUM(CASE WHEN f.role <> 'extra' THEN 1 ELSE 0 END) AS file_count,
+		SUM(CASE WHEN f.role <> 'extra' AND w.watched = 1 THEN 1 ELSE 0 END) AS watched_count,
+		MAX(f.added_at) AS last_added,
+		MAX(CASE WHEN f.role = 'extra' THEN 0 WHEN f.dynamic_range = 'dv' THEN 3 WHEN f.dynamic_range = 'hdr10' THEN 2
+			WHEN f.dynamic_range = 'hlg' THEN 1 ELSE 0 END) AS range_rank
+		FROM files f ` + watchJoin(ctx) + ` GROUP BY f.media_item_id) fs ON fs.item_id = m.id
+	LEFT JOIN profile_items pi ON pi.item_id = m.id AND pi.profile_id = ` + strconv.FormatInt(ProfileID(ctx), 10)
+}
+
 func scanSummary(dest *ItemSummary, extra ...any) []any {
 	return append([]any{&dest.ID, &dest.Kind, &dest.Title, &dest.SortTitle, &dest.Year, &genreScanner{&dest.Genres}, &dest.Rating,
 		&dest.RuntimeMin, &dest.HasPoster, &dest.HasBackdrop, &dest.MatchStatus, &dest.AddedAt, &dest.UpdatedAt,
@@ -123,12 +150,12 @@ func SplitGenres(s string) []string {
 // Items lists every item of a kind. The client filters and sorts: a home
 // library is a few thousand rows, and doing it client-side keeps the grid instant.
 func (d *DB) Items(ctx context.Context, kind string) ([]ItemSummary, error) {
-	return d.querySummaries(ctx, `SELECT `+summaryCols(ctx)+` FROM media_items m WHERE m.kind = ?`+visible(ctx, "m")+` ORDER BY m.sort_title`, kind)
+	return d.querySummaries(ctx, `SELECT `+summaryListCols()+summaryListFrom(ctx)+` WHERE m.kind = ?`+visible(ctx, "m")+` ORDER BY m.sort_title`, kind)
 }
 
 // RecentItems returns items of a kind ordered by newest file.
 func (d *DB) RecentItems(ctx context.Context, kind string, limit int) ([]ItemSummary, error) {
-	return d.querySummaries(ctx, `SELECT `+summaryCols(ctx)+` FROM media_items m WHERE m.kind = ?`+visible(ctx, "m")+`
+	return d.querySummaries(ctx, `SELECT `+summaryListCols()+summaryListFrom(ctx)+` WHERE m.kind = ?`+visible(ctx, "m")+`
 		ORDER BY last_added DESC, m.id DESC LIMIT ?`, kind, limit)
 }
 
