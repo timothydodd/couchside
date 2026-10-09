@@ -12,6 +12,7 @@ import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
 import { attempt, notify } from "../lib/notices";
 import { confirmDialog } from "../lib/ask";
+import { useTitle } from "../lib/title";
 
 type Filter = "all" | "duplicates" | "unmatched" | "low";
 type SortKey = "title" | "quality" | "files" | "size" | "added";
@@ -65,6 +66,7 @@ export default function LibraryManagePage({ id }: { id: number }) {
   const { data, error, reload } = useApi<{ library: Library; items: ManageRow[] }>(`/api/libraries/${id}/manage`, {
     pollMs: anyPending ? 3000 : undefined,
   });
+  useTitle(data ? `Manage ${data.library.name}` : "Manage library");
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "title", desc: false });

@@ -6,6 +6,7 @@ import SetupCodeField from "../components/auth/SetupCodeField";
 import { ErrorNote, Spinner } from "../components/ui";
 import { authError, useAuth } from "../stores/auth";
 import SignInPage from "./SignInPage";
+import { useTitle } from "../lib/title";
 
 /**
  * First run, step 1 of 2: who you are. Names the server's admin profile and
@@ -15,6 +16,7 @@ import SignInPage from "./SignInPage";
  * Step 2 is FirstRunMediaPage.
  */
 export default function WelcomePage() {
+  useTitle("Welcome");
   const welcome = useAuth((s) => s.welcome);
   const profiles = useAuth((s) => s.profiles);
   const remote = useAuth((s) => s.remoteFirstRun);

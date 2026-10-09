@@ -5,9 +5,11 @@ import NewPassword from "../components/auth/NewPassword";
 import SetupCodeField from "../components/auth/SetupCodeField";
 import { ErrorNote } from "../components/ui";
 import { authError, useAuth } from "../stores/auth";
+import { useTitle } from "../lib/title";
 
 /** First run with accounts on: the setup code from the server log creates the first admin. */
 export default function SetupPage() {
+  useTitle("Set up Couchside");
   const setup = useAuth((s) => s.setup);
   const [code, setCode] = useState("");
   const [name, setName] = useState("");

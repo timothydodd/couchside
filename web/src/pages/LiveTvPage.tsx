@@ -8,6 +8,7 @@ import { EmptyState, PageHeader, WarningNote } from "../components/ui";
 import { useApi } from "../lib/api";
 import { useIsAdmin } from "../stores/auth";
 import type { LiveTvStatus } from "../lib/types";
+import { useTitle } from "../lib/title";
 
 const TABS = [
   { tab: "guide", to: "/livetv", label: "Guide" },
@@ -17,6 +18,7 @@ const TABS = [
 
 export default function LiveTvPage({ tab }: { tab: "guide" | "channels" | "recordings" }) {
   const { data: st } = useApi<LiveTvStatus>("/api/livetv/status", { pollMs: 15000 });
+  useTitle(tab === "guide" ? "Live TV" : tab === "channels" ? "Channels" : "Recordings");
   const [filters, setFilters] = useTvFilters();
   const admin = useIsAdmin();
 

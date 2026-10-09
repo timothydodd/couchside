@@ -17,6 +17,7 @@ import { BREAK_MODES, sameLanguage } from "../lib/prefs";
 import { useIsAdmin } from "../stores/auth";
 import { usePrefs, useProfile } from "../stores/profile";
 import { useRouter } from "../stores/router";
+import { useTitle } from "../lib/title";
 
 const STALL_MIN_MS = 1500;
 const STALL_WINDOW_MS = 60_000;
@@ -41,6 +42,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
   const { data: loaded, error: infoError, reload: reloadInfo } = useApi<PlayInfo>(`/api/files/${fileId}`, { fresh: true });
   // useApi hands back the previous file's info for a render after fileId changes.
   const info = loaded?.fileId === fileId ? loaded : undefined;
+  useTitle(info && [info.title, info.subtitle].filter(Boolean).join(" · "));
   const { data: streams, error: streamsError } = useApi<{ audio: AudioTrack[]; subtitles: SubtitleTrack[] }>(`/api/files/${fileId}/streams`);
   const { data: marks, reload: reloadMarks } = useApi<{ segments: MarkedSegment[] }>(`/api/files/${fileId}/segments`);
   // Seek-bar thumbnails, when this file's library makes them (404 otherwise).

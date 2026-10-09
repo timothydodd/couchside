@@ -20,9 +20,11 @@ import { featureFiles, nextEpisode } from "../lib/items";
 import { attempt } from "../lib/notices";
 import RangeChip from "../components/RangeChip";
 import { rangeLabel } from "../lib/quality";
+import { useTitle } from "../lib/title";
 
 export default function ItemPage({ id, season, edit }: { id: number; season?: number; edit?: boolean }) {
   const { data, error, loading, reload } = useApi<ItemDetail>(`/api/items/${id}`);
+  useTitle(data && (season !== undefined && data.item.kind === "series" ? `${data.item.title} · Season ${season}` : data.item.title));
   const admin = useIsAdmin();
   // The Edit panel: open from the button, from "Fix match", or by ?edit=1 (the library table links here).
   const [editing, setEditing] = useState<PanelSection | null>(edit ? "details" : null);

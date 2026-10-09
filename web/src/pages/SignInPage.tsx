@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Lock, LogIn } from "lucide-react";
 import AuthShell from "../components/auth/AuthShell";
 import ProfileAvatar from "../components/ProfileAvatar";
@@ -7,6 +7,8 @@ import type { ProfileStub } from "../lib/types";
 import { ApiError } from "../lib/api";
 import { authError, useAuth } from "../stores/auth";
 import { useRouter } from "../stores/router";
+import { useTitle } from "../lib/title";
+import { rememberReturnTo } from "../lib/returnTo";
 
 /**
  * Who's watching. With passwordless sign-in every profile is listed and a
@@ -16,6 +18,11 @@ import { useRouter } from "../stores/router";
  * sidebar.
  */
 export default function SignInPage({ switching = false }: { switching?: boolean }) {
+  useTitle(switching ? "Switch profile" : "Sign in");
+  // Signed out on a page someone linked to: come back to it after signing in.
+  useEffect(() => {
+    if (!switching) rememberReturnTo();
+  }, [switching]);
   const { passwordless, profiles, signedIn, user, insecure, oidc, login, pick, switchTo } = useAuth();
   // What the provider's sign-in came back with, when it failed (shown once).
   const [ssoError] = useState(() => {

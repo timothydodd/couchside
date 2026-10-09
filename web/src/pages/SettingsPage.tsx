@@ -24,6 +24,7 @@ import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
 import { fmtVersion } from "../lib/format";
+import { useTitle } from "../lib/title";
 
 /**
  * Settings. /settings is your own preferences and account, for every profile;
@@ -37,6 +38,7 @@ export default function SettingsPage() {
   // Users only have their own settings; any other section shows those.
   const id = admin && route.name === "settings" ? route.section : "you";
   const section = SECTIONS.find((s) => s.id === id)!;
+  useTitle(id === "you" ? "Settings" : `${section.label} · Settings`);
   const wide = id === "system" || id === "console";
   const tabs = useRef<HTMLElement>(null);
   useScrollEdges(tabs); // fades the end of the phone tab bar that has more

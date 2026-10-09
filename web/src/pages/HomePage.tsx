@@ -12,9 +12,11 @@ import type { Home, ItemDetail, ItemSummary } from "../lib/types";
 import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
+import { useTitle } from "../lib/title";
 
 export default function HomePage() {
   const { data, error, loading, reload } = useApi<Home>("/api/home", { pollMs: 15000 });
+  useTitle("Home");
   const remove = attempt("Couldn't remove it", async (itemId: number) => {
     await api(`/api/home/continue/${itemId}`, { method: "DELETE" });
     await reload();

@@ -4,6 +4,7 @@ import { ApiError, api, setAuthHooks } from "../lib/api";
 import type { AuthInfo, Profile, SignedIn } from "../lib/types";
 import { stopStatus } from "./status";
 import { errText } from "../lib/errors";
+import { forgetReturnTo, takeReturnTo } from "../lib/returnTo";
 
 /**
  * Accounts are always on. Signing in is by name and password, or with
@@ -91,17 +92,17 @@ export const useAuth = create<AuthState>((set, get) => ({
   login: async (name, password, code) => {
     await api<SignedIn>("/api/auth/login", { method: "POST", json: { name, password, code, client: "web" } });
     announceProfileChange();
-    location.assign("/");
+    location.assign(takeReturnTo());
   },
   pick: async (profileId) => {
     await api<SignedIn>("/api/auth/pick", { method: "POST", json: { profileId, client: "web" } });
     announceProfileChange();
-    location.assign("/");
+    location.assign(takeReturnTo());
   },
   setup: async (code, name, password) => {
     await api<SignedIn>("/api/auth/setup", { method: "POST", json: { code, name, password } });
     announceProfileChange();
-    location.assign("/");
+    location.assign(takeReturnTo());
   },
   welcome: async (name, password, code) => {
     await api<SignedIn>("/api/auth/welcome", { method: "POST", json: { name, password, code } });
@@ -120,6 +121,7 @@ export const useAuth = create<AuthState>((set, get) => ({
   logout: async (everywhere = false) => {
     await api("/api/auth/logout", { method: "POST", json: { everywhere } });
     announceProfileChange();
+    forgetReturnTo();
     location.assign("/");
   },
   changePassword: async (current, password) => {

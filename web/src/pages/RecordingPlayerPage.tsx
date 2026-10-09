@@ -9,6 +9,7 @@ import { hlsEngine } from "../lib/hls";
 import type { Recording } from "../lib/types";
 import { useProfile } from "../stores/profile";
 import { useRouter } from "../stores/router";
+import { useTitle } from "../lib/title";
 
 
 interface Session {
@@ -102,6 +103,7 @@ export default function RecordingPlayerPage({ id }: { id: number }) {
   }, [id, height, nonce]);
 
   const rec = session?.recording;
+  useTitle(rec?.title);
   const startAt = rec ? rec.startedAt ?? rec.startAt - rec.padBefore : 0;
   const endAt = rec ? rec.endAt + rec.padAfter : 0;
 

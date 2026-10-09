@@ -5,6 +5,7 @@ import { MIN_PASSWORD } from "../auth/NewPassword";
 import SessionList from "./SessionList";
 import { ErrorNote, Segmented, Spinner } from "../ui";
 import { api, useApi } from "../../lib/api";
+import { confirmDialog } from "../../lib/ask";
 import { RATING_LIMITS, type Library, type Profile, type ProfileColor } from "../../lib/types";
 import { authError, useAuth } from "../../stores/auth";
 
@@ -327,7 +328,17 @@ function AccountForm({ account, onDone, onChanged }: { account?: Profile; onDone
                 className="btn-ghost"
                 disabled={busy}
                 title="For someone who has lost their authenticator and recovery codes"
-                onClick={() => void run(() => api(`/api/accounts/${account.id}/totp/reset`, { method: "POST" }), "Two-step sign-in is off for this account.", false)}
+                onClick={() =>
+                  void (async () => {
+                    const ok = await confirmDialog({
+                      title: `Turn off two-step sign-in for ${account.name}?`,
+                      body: "Their authenticator and recovery codes stop working, and anyone with the password can sign in until they set it up again.",
+                      action: "Turn off",
+                      danger: true,
+                    });
+                    if (ok) await run(() => api(`/api/accounts/${account.id}/totp/reset`, { method: "POST" }), "Two-step sign-in is off for this account.", false);
+                  })()
+                }
               >
                 Turn off two-step sign-in
               </button>

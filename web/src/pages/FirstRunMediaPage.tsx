@@ -6,6 +6,7 @@ import { ErrorNote, Spinner } from "../components/ui";
 import { api, useApi } from "../lib/api";
 import { errText } from "../lib/errors";
 import type { MediaLocations as Data } from "../lib/types";
+import { useTitle } from "../lib/title";
 
 /**
  * First run, step 2 of 2 (admins): where the media is. Drives, folders and
@@ -13,6 +14,7 @@ import type { MediaLocations as Data } from "../lib/types";
  * done and goes on to add the first library.
  */
 export default function FirstRunMediaPage() {
+  useTitle("Your media");
   const { data } = useApi<Data>("/api/media/locations");
   const [count, setCount] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);

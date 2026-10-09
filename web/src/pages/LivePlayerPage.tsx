@@ -13,6 +13,7 @@ import { useRouter } from "../stores/router";
 import { useCanRecord } from "../stores/auth";
 import { errText } from "../lib/errors";
 import { confirmDialog } from "../lib/ask";
+import { useTitle } from "../lib/title";
 
 /** Quality choices: 0 is the broadcast's own size. A chosen height is a cap; the server never scales a picture up. */
 export const LIVE_QUALITIES = [0, 1080, 720, 480] as const;
@@ -40,6 +41,7 @@ export default function LivePlayerPage({ channel }: { channel: string }) {
   const playable = (channels ?? []).filter((c) => !c.drm);
   const idx = playable.findIndex((c) => c.number === channel);
   const current = channels?.find((c) => c.number === channel);
+  useTitle(current ? `${current.number} ${current.name}` : "Live TV");
   const now: Program | null | undefined = current?.now ?? session?.now;
 
   // Programs seen on this channel this session, so the timeline can span

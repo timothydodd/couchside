@@ -5,9 +5,12 @@ import NewPassword from "../components/auth/NewPassword";
 import { ErrorNote } from "../components/ui";
 import { authError, useAuth } from "../stores/auth";
 import { attempt } from "../lib/notices";
+import { useTitle } from "../lib/title";
+import { takeReturnTo } from "../lib/returnTo";
 
 /** After an admin sets a temporary password, the user picks their own before anything else. */
 export default function ChangePasswordPage() {
+  useTitle("Change password");
   const { user, changePassword, logout } = useAuth();
   const [current, setCurrent] = useState("");
   const [password, setPassword] = useState<string | null>(null);
@@ -20,7 +23,7 @@ export default function ChangePasswordPage() {
     setErr(null);
     try {
       await changePassword(current, password);
-      location.assign("/");
+      location.assign(takeReturnTo());
     } catch (e) {
       setErr(authError(e));
       setBusy(false);

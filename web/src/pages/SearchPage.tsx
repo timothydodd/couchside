@@ -10,6 +10,7 @@ import { SearchBox } from "../components/Sidebar";
 import { useApi } from "../lib/api";
 import { fmtSlot } from "../lib/format";
 import type { Program, SearchResult, TvChannel } from "../lib/types";
+import { useTitle } from "../lib/title";
 
 /** The most each group shows (the server caps at 50); a full group means there may be more. */
 const LIMIT = 50;
@@ -17,6 +18,7 @@ const LIMIT = 50;
 /** Results for the sidebar search box, grouped by kind. */
 export default function SearchPage({ q }: { q: string }) {
   const term = q.trim();
+  useTitle(term ? `Search: ${term}` : "Search");
   const { data, error, loading, reload } = useApi<SearchResult>(term ? `/api/search?q=${encodeURIComponent(term)}&limit=${LIMIT}` : null);
   // Keep the last results up while the next query loads, so typing doesn't flash.
   const last = useRef<SearchResult | undefined>(undefined);

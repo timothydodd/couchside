@@ -9,9 +9,11 @@ import type { Library } from "../lib/types";
 import { useStatus } from "../stores/status";
 import { attempt, notify } from "../lib/notices";
 import { confirmDialog } from "../lib/ask";
+import { useTitle } from "../lib/title";
 
 export default function LibrariesPage() {
   const { data, error, reload } = useApi<Library[]>("/api/libraries", { pollMs: 5000 });
+  useTitle("Libraries");
   const [adding, setAdding] = useState(false);
 
   const scan = attempt("Couldn't start the scan", async (id: number) => {

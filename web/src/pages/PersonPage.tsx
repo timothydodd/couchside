@@ -6,10 +6,12 @@ import { BackButton, EmptyState, ErrorNote, Loading, Section } from "../componen
 import { personPhotoUrl, useApi } from "../lib/api";
 import { usePhone } from "../lib/media";
 import type { PersonDetail } from "../lib/types";
+import { useTitle } from "../lib/title";
 
 /** Everything in the library a cast or crew member is in, newest first. */
 export default function PersonPage({ id }: { id: number }) {
   const { data, error, loading, reload } = useApi<PersonDetail>(`/api/people/${id}`);
+  useTitle(data?.person.name);
   const phone = usePhone();
 
   if (loading && !data)
