@@ -1,13 +1,46 @@
 package api
 
 import (
+	"context"
 	"net/http"
+	"time"
+
+	"github.com/timothydodd/couchside/internal/db"
 )
 
 // --- status & home -----------------------------------------------------------
 
+// countsTTL is how stale the library counts in /api/status may be. Every
+// open tab polls status every few seconds, and counting episodes walks the
+// whole table; nobody needs the movie count to the second.
+var countsTTL = 10 * time.Second
+
+// cachedCounts is db.Counts at most countsTTL old. Pollers arriving together
+// wait for one query instead of each running it.
+func (s *Server) cachedCounts(ctx context.Context) (db.Counts, error) {
+	s.countsMu.Lock()
+	defer s.countsMu.Unlock()
+	if !s.countsAt.IsZero() && time.Since(s.countsAt) < countsTTL {
+		return s.counts, nil
+	}
+	c, err := s.db.Counts(ctx)
+	if err != nil {
+		return c, err
+	}
+	s.counts, s.countsAt = c, time.Now()
+	return c, nil
+}
+
+// dropCounts makes the next status poll count again, after a change Home
+// shows straight away (a library added or removed).
+func (s *Server) dropCounts() {
+	s.countsMu.Lock()
+	s.countsAt = time.Time{}
+	s.countsMu.Unlock()
+}
+
 func (s *Server) status(w http.ResponseWriter, r *http.Request) {
-	counts, err := s.db.Counts(r.Context())
+	counts, err := s.cachedCounts(r.Context())
 	if err != nil {
 		writeErr(w, err)
 		return

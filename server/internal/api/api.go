@@ -39,6 +39,11 @@ import (
 )
 
 type Server struct {
+	// counts caches db.Counts for /api/status (see cachedCounts).
+	countsMu sync.Mutex
+	counts   db.Counts
+	countsAt time.Time
+
 	db        *db.DB
 	cfg       config.Config
 	worker    *worker.Worker
