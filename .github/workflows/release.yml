@@ -246,13 +246,17 @@ jobs:
           mkdir -p "swap/$dir" && cp signed/couchside.exe "swap/$dir/couchside.exe"
           (cd swap && zip -q "../$zip" "$dir/couchside.exe")
           unzip -l "$zip" | grep -q "$dir/couchside.exe"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ffmpeg-source
       - name: checksums
-        run: sha256sum couchside-*.zip couchside-*.exe > SHA256SUMS.txt
+        run: sha256sum couchside-*.zip couchside-*.exe jellyfin-ffmpeg-*-src.tar.gz > SHA256SUMS.txt
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: |
             couchside-*.zip
             couchside-*.exe
+            jellyfin-ffmpeg-*-src.tar.gz
             SHA256SUMS.txt
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
@@ -262,5 +266,7 @@ jobs:
             **Helm chart:** `helm install couchside oci://ghcr.io/${{ github.repository_owner }}/charts/couchside --version <this release without the v>` (docs/install.md has the values).
 
             **Windows installer** (`couchside-*-windows-amd64-setup.exe`) installs Couchside as a Windows service with ffmpeg included and picks your GPU encoder (NVIDIA or Intel) by itself. The installer and every `couchside.exe` (the installer's and the Windows zip's) are code-signed.
+
+            **ffmpeg source** (`jellyfin-ffmpeg-*-src.tar.gz`): the complete GPL source of the ffmpeg in the Windows installer.
 
             **Zips** hold a single `couchside` binary with the web UI built in. It needs `ffmpeg` and `ffprobe` installed; see QUICKSTART.txt inside.

@@ -45,8 +45,10 @@ them as separate processes; it doesn't link them.
 
 - FFmpeg (Alpine package "ffmpeg"): transcoding, probing and recording.
   GPL v2 or later as built by Alpine; see https://ffmpeg.org/legal.html.
-  Source: https://ffmpeg.org and the Alpine aports tree,
-  https://gitlab.alpinelinux.org/alpine/aports (community/ffmpeg).
+  The build's version and configure flags are recorded in the image at
+  /usr/share/licenses/couchside/ffmpeg-configuration.txt. Source:
+  https://ffmpeg.org and the Alpine aports tree at the package version named
+  there, https://gitlab.alpinelinux.org/alpine/aports (community/ffmpeg).
 
 - Comskip V0.83 (https://github.com/erikkaashoek/Comskip): commercial
   detection. GPL v2. Built from source, statically linked with argtable2 13
@@ -123,12 +125,29 @@ def npm_packages():
     return sorted(entries)
 
 
+# Programs the Windows installer adds beside couchside.exe.
+WINDOWS = """Windows installer (couchside-<version>-windows-amd64-setup.exe)
+-----------------------------------------------------------------
+
+- jellyfin-ffmpeg (ffmpeg.exe and ffprobe.exe, the portable win64 "gpl"
+  build; https://github.com/jellyfin/jellyfin-ffmpeg): transcoding, probing
+  and recording. GNU General Public License v3. Couchside runs it as a
+  separate process. FFMPEG.txt beside the exe names the version. Its complete
+  source (the FFmpeg tree with Jellyfin's patches and the scripts that build
+  the portable package) is attached to the matching Couchside release as
+  jellyfin-ffmpeg-<version>-src.tar.gz
+  (https://github.com/timothydodd/couchside/releases), and is also at
+  https://github.com/jellyfin/jellyfin-ffmpeg/releases.
+"""
+
+
 def build():
     return "\n".join(
         [
             HEADER,
             section("Go modules compiled into the couchside binary", go_modules()),
             section("npm packages bundled into the web UI", npm_packages()),
+            WINDOWS,
             CONTAINER,
         ]
     ).rstrip() + "\n"
