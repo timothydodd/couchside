@@ -47,7 +47,7 @@ media from `./media`. Zips for Linux, macOS and Windows are on the
 <a href="https://www.themoviedb.org"><img src="web/public/brand/tmdb.svg" alt="TMDB" height="16"></a>
 This product uses the TMDB API but is not endorsed or certified by TMDB.
 
-Fallback metadata from [OMDb](https://www.omdbapi.com) ([CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)).
+Fallback metadata from [OMDb](https://www.omdbapi.com) ([CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)), optional: its data is for non-commercial use, so leave `OMDB_API_KEY` unset where Couchside is used commercially.
 Video by [FFmpeg](https://ffmpeg.org) and commercial detection by
 [Comskip](https://github.com/erikkaashoek/Comskip) (both GPL, shipped in the image).
 HDHomeRun is a trademark of SiliconDust USA Inc.; Couchside isn't affiliated with them.

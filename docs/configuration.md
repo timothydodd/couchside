@@ -45,7 +45,7 @@ locations too, fixed by the environment.
 | `TZ` | UTC | Time zone for guide times and recording names |
 | **Metadata** | | |
 | `TMDB_API_KEY` | built in | Your own TMDB key (v3 key or v4 read token) instead of Couchside's shared one; `off` disables TMDB. If TMDB refuses a key, Couchside waits before asking again (10 minutes, doubling to 6 hours), and Activity says to set your own |
-| `OMDB_API_KEY` | none | Optional fallback metadata source; free keys at omdbapi.com |
+| `OMDB_API_KEY` | none | Optional fallback metadata source; free keys at omdbapi.com. OMDb's data is CC BY-NC (non-commercial): leave it unset for commercial use |
 | **Accounts** | | |
 | `COUCHSIDE_AUTH` | `false` | Require passwords: no passwordless sign-in. Set it for a server on the internet |
 | `COUCHSIDE_TRUSTED_PROXIES` | none | Reverse proxies (CIDRs or addresses, comma-separated) whose `X-Forwarded-For` and `X-Forwarded-Proto` are believed. See [install.md](install.md#putting-it-on-the-internet) |

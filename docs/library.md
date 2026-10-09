@@ -21,9 +21,12 @@ Libraries page; Couchside scans it, matches every title, and fetches artwork.
 ## Metadata
 
 - **[TMDB](https://www.themoviedb.org)** with no setup: release builds carry
-  Couchside's own key (`TMDB_API_KEY` uses yours). Title, year, plot, genres,
+  Couchside's own key (`TMDB_API_KEY` uses yours). Every Couchside without its
+  own key shares it, so TMDB sees your server's address under it; if TMDB ever
+  refuses it, Settings → Metadata says so and your own key fixes it. Title, year, plot, genres,
   rating, posters, backdrops, per-season episode titles, and cast and crew.
-- **OMDb** is an optional fallback (`OMDB_API_KEY`).
+- **OMDb** is an optional fallback (`OMDB_API_KEY`). Its data is CC BY-NC:
+  leave it unset for commercial use.
 - **Caching.** Provider answers are cached in the database: movie lookups count
   as fresh for 30 days, TV for 3 (shows gain episodes). Once a title is matched
   its details are stored with it, so the cache only matters when a match runs.

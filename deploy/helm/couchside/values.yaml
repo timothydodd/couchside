@@ -15,7 +15,8 @@ tmdb:
   existingSecretKey: tmdb-api-key
 
 # OMDb API key (free at https://www.omdbapi.com/apikey.aspx): an optional
-# second source for titles TMDB can't place.
+# second source for titles TMDB can't place. Its data is CC BY-NC: not for
+# commercial use.
 # Prefer existingSecret so the key never lands in a values file.
 omdb:
   apiKey: ""

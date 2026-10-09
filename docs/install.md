@@ -7,6 +7,34 @@ container image (amd64 and arm64) at `ghcr.io/timothydodd/couchside`.
 Once it's running, open http://localhost:8080 (or your host) and add a library
 on the Libraries page. Settings are covered in [configuration.md](configuration.md).
 
+## Requirements and formats
+
+- **Server:** Linux (amd64 or arm64), macOS, or Windows 10/11 x64. Two cores
+  and 1 GB of memory cover direct play and one 1080p software transcode; a 4K
+  software transcode alone can take 1 to 2 GB, so plan more for several at
+  once, or use a GPU. A small arm64 box plays files directly well but is slow
+  to transcode in software.
+- **Storage:** the database is small (tens of MB for thousands of titles). The
+  cache (artwork, stills, subtitles, preview thumbnails, optimized copies,
+  live TV segments) grows with the library: plan 20 GB, and more if you make
+  optimized copies. Media can stay read-only.
+- **Programs:** the container and the Windows installer include ffmpeg (and
+  the container comskip). The zips need `ffmpeg` and `ffprobe` on the PATH, and
+  `comskip` for commercial detection.
+- **Video files** scanned: `.mkv .mp4 .m4v .avi .mov .wmv .webm .ts .m2ts .mpg
+  .mpeg .flv`. Whatever ffmpeg can decode inside them plays: the browser or TV
+  plays a file directly when it can, and otherwise the server remuxes or
+  converts it ([playback.md](playback.md)), tone mapping HDR to SDR.
+- **Subtitles:** text tracks inside the file and sidecar `.srt .vtt .ass .ssa`
+  files next to it (`Movie.en.srt`) show as captions; picture subtitles (PGS,
+  DVD) are burned in by the server.
+- **Naming:** `Movies/Title (Year)/Title (Year).mkv`,
+  `TV/Show/Season 01/Show S01E01.mkv` and the common variants, including
+  editions and extras ([library.md](library.md)).
+- **Live TV:** an HDHomeRun tuner on the same network.
+- **Players:** current Chrome, Edge, Firefox and Safari, and the Couchside Roku
+  channel. The web UI can be installed as an app but needs the server to work.
+
 ## Windows installer
 
 Run `couchside-<version>-windows-amd64-setup.exe`. It asks for a port, then:
@@ -162,6 +190,31 @@ name and a password.
   (release builds have one built in) and `omdb.existingSecret` for the OMDb
   fallback. See `deploy/helm/couchside/values.yaml` for everything else,
   including `auth.enabled` and GPU settings.
+
+## Upgrading
+
+A new version that changes the database saves
+`backups/couchside-upgrade-<time>.db` in the data folder before it does. For
+an extra copy, Settings → System → Advanced → Back up now first.
+
+- **Windows installer:** run the new installer. It stops the service, replaces
+  the program, keeps `couchside.env` and the data folder, and starts it again.
+- **Container:** `docker pull` the new tag and recreate the container with the
+  same volumes (`docker compose pull && docker compose up -d`). Set
+  `COUCHSIDE_VERSION` in `.env` to choose when to move instead of following
+  `latest`.
+- **Helm:** `helm upgrade couchside oci://ghcr.io/timothydodd/charts/couchside
+  --version <version> --reuse-values -n media`. The old pod stops before the
+  new one starts, so a recording in progress is cut (and resumed as the new
+  pod starts); upgrade between recordings.
+- **Zip:** stop Couchside, replace the binary, start it.
+
+Read the release notes first for anything that needs doing by hand.
+
+**Going back.** An older version refuses to open a database a newer one has
+upgraded. Stop Couchside, run `couchside restore couchside-upgrade-<time>.db`
+with the older version ([configuration.md](configuration.md#backups)), then
+start it. Anything changed since that copy is lost.
 
 ## Putting it on the internet
 
