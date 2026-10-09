@@ -390,6 +390,7 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 	} else {
 		f.DurationSec, f.Container, f.VideoCodec, f.AudioCodec = p.DurationSec, p.Container, p.VideoCodec, p.AudioCodec
 		f.Width, f.Height, f.AudioTracks, f.SubtitleTracks = p.Width, p.Height, p.AudioTracks, p.SubtitleTracks
+		f.DynamicRange, f.DVProfile = p.DynamicRange(), p.DVProfile
 		if p.VideoCodec == "" {
 			// Usually DRM-protected iTunes purchases: the video stream has no codec ffmpeg can decode.
 			slog.Warn("scan: file has no decodable video (DRM-protected?)", "path", path)

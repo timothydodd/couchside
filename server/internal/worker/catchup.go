@@ -49,9 +49,19 @@ func (w *Worker) catchUp(ctx context.Context, lib db.Library) error {
 			return err
 		}
 	}
-	if len(stills)+commercials+previews+intros > 0 {
+	// Files indexed before the dynamic range was recorded: one job reads them all.
+	ranges, err := w.db.FilesNeedingDynamicRange(ctx, lib.ID)
+	if err != nil {
+		return err
+	}
+	if len(ranges) > 0 {
+		if err := w.db.Enqueue(ctx, KindDynamicRange, lib.ID, "Read HDR info "+lib.Name); err != nil {
+			return err
+		}
+	}
+	if len(stills)+commercials+previews+intros+len(ranges) > 0 {
 		slog.Info("catching up existing files", "library", lib.Name, "stills", len(stills), "commercials", commercials,
-			"previews", previews, "intros", intros)
+			"previews", previews, "intros", intros, "dynamicRange", len(ranges))
 		w.Wake()
 	}
 	return nil

@@ -405,6 +405,11 @@ body {
   .chip {
     @apply inline-flex items-center gap-1 rounded border border-border-light px-2 py-0.5 text-xs text-content-secondary;
   }
+
+  /* Dolby Vision / HDR10 / HLG: a chip in the sky state colour, so it reads as a property of the picture. */
+  .chip-hdr {
+    @apply border-info/50 font-semibold text-info;
+  }
 }
 
 /* Artwork placeholder when there is no poster: a brand gradient seeded per

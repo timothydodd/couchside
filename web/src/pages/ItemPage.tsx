@@ -18,6 +18,8 @@ import { useIsAdmin } from "../stores/auth";
 import { useStatus } from "../stores/status";
 import { featureFiles, nextEpisode } from "../lib/items";
 import { attempt } from "../lib/notices";
+import RangeChip from "../components/RangeChip";
+import { rangeLabel } from "../lib/quality";
 
 export default function ItemPage({ id, season, edit }: { id: number; season?: number; edit?: boolean }) {
   const { data, error, loading, reload } = useApi<ItemDetail>(`/api/items/${id}`);
@@ -103,6 +105,7 @@ export default function ItemPage({ id, season, edit }: { id: number; season?: nu
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-content-secondary">
             {item.year && <span>{item.year}</span>}
             {item.rated && <span className="chip">{item.rated}</span>}
+            <RangeChip range={item.dynamicRange} />
             {!isSeries && runtime && <span>{runtime}</span>}
             {feature.length > 1 && <span>{feature.length} parts</span>}
             {isSeries && seasons && (
@@ -204,9 +207,9 @@ export default function ItemPage({ id, season, edit }: { id: number; season?: nu
   );
 }
 
-/** A copy of a movie, as the version chooser names it: "4K · HEVC · Extended · 54 GB". */
+/** A copy of a movie, as the version chooser names it: "4K · Dolby Vision · HEVC · Extended · 54 GB". */
 function versionLabel(f: MediaFile): string {
-  return [fmtResolution(f.width, f.height), f.videoCodec.toUpperCase(), f.edition, fmtBytes(f.size)].filter(Boolean).join(" · ");
+  return [fmtResolution(f.width, f.height), rangeLabel(f.dynamicRange), f.videoCodec.toUpperCase(), f.edition, fmtBytes(f.size)].filter(Boolean).join(" · ");
 }
 
 /** For admins: where the match stands, with "Fix match" opening the Edit panel on it. Polls while a match is pending. */
