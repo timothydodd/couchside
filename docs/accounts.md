@@ -118,7 +118,10 @@ or a hosted one), Couchside can use it for signing in on the web.
    address is shown in Settings → Accounts → Single sign-on; it's
    `https://<your couchside>/api/auth/oidc/callback`.
 2. In that card, enter the provider's address, the client id and the secret.
-   Saving checks the provider can be reached.
+   Saving checks the provider can be reached. The provider (and its token
+   endpoint) must use https unless it's on your own network (a private
+   address, `localhost`, or a name like `auth.lan` or `sso.home.arpa`):
+   Couchside trusts the identity it gets back because of that connection.
 3. Choose which claim holds the profile name (`preferred_username` by
    default; `email` or `name` also work). Someone is signed in to the profile
    with that name. Tick "Make a profile…" to create one for people who don't
