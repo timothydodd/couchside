@@ -128,3 +128,29 @@ func TestOpenRestrictsFileModes(t *testing.T) {
 		}
 	}
 }
+
+// The indexes large libraries rely on are there after Open.
+func TestOpenCreatesIndexes(t *testing.T) {
+	p := newDBFile(t)
+	d, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	have := map[string]bool{}
+	rows, err := d.sql.Query(`SELECT name FROM sqlite_master WHERE type = 'index'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var n string
+		rows.Scan(&n)
+		have[n] = true
+	}
+	rows.Close()
+	for _, want := range []string{"recordings_path", "media_items_group", "media_items_imdb", "media_items_match", "media_items_sort", "jobs_queued"} {
+		if !have[want] {
+			t.Errorf("no index %s", want)
+		}
+	}
+}
