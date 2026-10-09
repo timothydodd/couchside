@@ -26,8 +26,5 @@ server/internal/webui/dist/*
 __pycache__/
 *.pyc
 
-# The full demo media list stays local; reviewers get scripts/fetch-reviewer-media.py
-scripts/fetch-demo-media.py
-
 # Scratch space for local builds, tests and smoke runs
 .tmp/

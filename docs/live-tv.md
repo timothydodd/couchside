@@ -123,8 +123,9 @@ on the web and the Roku. No tuner is needed.
   trailers, bumpers). It needn't be a library. Programs can start on the hour,
   half hour or quarter hour, padded with clips (never more than 10 minutes),
   and have breaks every 8, 12 or 20 minutes. A guide entry covers its program's
-  commercials, as on real TV. `scripts/fetch-reviewer-media.py` downloads
-  a few public-domain 1950s and 60s commercials to try it with.
+  commercials, as on real TV. The
+  [Prelinger Archives](https://archive.org/details/prelinger) have
+  public-domain 1950s and 60s commercials to try it with.
 - **Stream channels:** in **New channel**, choose **A stream address** to make
   a channel from a live stream somewhere else: an HLS playlist (`.m3u8`) or an
   MPEG-TS stream over http or https that the server can reach, such as an IPTV

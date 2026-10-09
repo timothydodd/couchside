@@ -8,4 +8,3 @@
 - [Profiles and accounts](accounts.md): profiles, sign-in, roles and sessions.
 - [Development](development.md): running locally, checks, icons, releasing.
 - [Style guide](style.md): colours, tokens and contrast.
-- [Server stories](stories.md): planned work.
