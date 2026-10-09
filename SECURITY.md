@@ -23,6 +23,15 @@ Only the latest release gets fixes. Update with
 - **Windows:** the installer and every `couchside.exe` are code-signed.
   Properties → Digital Signatures, or `Get-AuthenticodeSignature couchside.exe`,
   should say `Valid`. An unsigned Couchside exe didn't come from a release.
+- **Container image:** signed with cosign by the release workflow (keyless),
+  and carries an SBOM and build provenance:
+
+  ```
+  cosign verify ghcr.io/timothydodd/couchside:<version> \
+    --certificate-identity-regexp '^https://github.com/timothydodd/couchside/\.github/workflows/release\.yml@refs/tags/v' \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com
+  docker buildx imagetools inspect ghcr.io/timothydodd/couchside:<version> --format '{{json .SBOM}}'
+  ```
 
 ## Running it safely
 
