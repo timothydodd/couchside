@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 type Job struct {
@@ -38,21 +39,34 @@ func (d *DB) Enqueue(ctx context.Context, kind string, refID int64, label string
 // hour-long encodes and commercial detection never block scans and metadata.
 const encodeKinds = "'optimize', 'commercials', 'trickplay', 'intros'"
 
-// ClaimJob atomically moves the oldest queued job to running. Scans go first
-// so new files are discovered before we spend time on thumbnails, and quick
-// commercial detection goes ahead of long encodes, with preview thumbnails
-// (nobody is waiting for those) last. encode
-// selects between the encode pool and the general pool.
+// ClaimJob atomically moves the next queued job to running. Scans go first
+// so new files are discovered before we spend time on thumbnails, then
+// matches and artwork, then the rest oldest first. In the encode pool quick
+// commercial detection goes ahead of long encodes, with intros and preview
+// thumbnails (nobody is waiting for those) last. encode selects the pool.
+//
+// It asks kind by kind (an indexed probe each, jobs_queued) instead of
+// sorting every queued job: a first scan can queue 100k stills.
 func (d *DB) ClaimJob(ctx context.Context, encode bool) (*Job, error) {
-	cond := "kind NOT IN (" + encodeKinds + ")"
+	first, rest := []string{"scan", "match", "artwork"}, "kind NOT IN ("+encodeKinds+")"
 	if encode {
-		cond = "kind IN (" + encodeKinds + ")"
+		first, rest = []string{"commercials", "optimize", "intros", "trickplay"}, "kind IN ("+encodeKinds+")"
 	}
+	for _, kind := range first {
+		if j, err := d.claim(ctx, `kind = ?`, kind); err != nil || j != nil {
+			return j, err
+		}
+	}
+	// Everything else in the pool, oldest first (still, dynamicrange, and
+	// any kind added later).
+	return d.claim(ctx, rest+` AND kind NOT IN ('`+strings.Join(first, "', '")+`')`)
+}
+
+func (d *DB) claim(ctx context.Context, where string, args ...any) (*Job, error) {
 	j, err := scanJob(d.sql.QueryRowContext(ctx, `UPDATE jobs SET status = 'running', attempts = attempts + 1,
 		started_at = unixepoch(), error = '', progress = NULL, result = ''
-		WHERE id = (SELECT id FROM jobs WHERE status = 'queued' AND `+cond+`
-		  ORDER BY CASE kind WHEN 'scan' THEN 0 WHEN 'match' THEN 1 WHEN 'artwork' THEN 2 WHEN 'commercials' THEN 3 WHEN 'intros' THEN 5 WHEN 'trickplay' THEN 6 ELSE 4 END, id LIMIT 1)
-		RETURNING `+jobCols))
+		WHERE id = (SELECT id FROM jobs WHERE status = 'queued' AND `+where+` ORDER BY id LIMIT 1)
+		RETURNING `+jobCols, args...))
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}

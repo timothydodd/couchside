@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -153,5 +154,49 @@ func TestTouchFilesAndStamps(t *testing.T) {
 	one, _ := d.FileStamp(ctx, "/a/7.mkv")
 	if len(stamps) != 1201 || stamps["/b/x.mkv"] != nil || !reflect.DeepEqual(stamps["/a/7.mkv"], one) {
 		t.Fatalf("stamps: %d, other library's %v, /a/7 %+v vs %+v", len(stamps), stamps["/b/x.mkv"], stamps["/a/7.mkv"], one)
+	}
+}
+
+// Jobs come out in the same order as before claims went kind by kind: scan,
+// match, artwork, then the rest oldest first; commercials, optimize,
+// intros, trickplay in the encode pool. A kind added later isn't stranded.
+func TestClaimJobOrder(t *testing.T) {
+	d := openTest(t)
+	ctx := context.Background()
+	for i, k := range []string{"still", "trickplay", "match", "optimize", "scan", "commercials", "dynamicrange", "still", "intros", "zzz", "artwork"} {
+		if err := d.Enqueue(ctx, k, int64(i), k); err != nil {
+			t.Fatal(err)
+		}
+	}
+	claim := func(encode bool) []string {
+		var out []string
+		for {
+			j, err := d.ClaimJob(ctx, encode)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if j == nil {
+				return out
+			}
+			out = append(out, j.Kind)
+		}
+	}
+	if got, want := claim(false), []string{"scan", "match", "artwork", "still", "dynamicrange", "still", "zzz"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("general = %v, want %v", got, want)
+	}
+	if got, want := claim(true), []string{"commercials", "optimize", "intros", "trickplay"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("encode = %v, want %v", got, want)
+	}
+	var plan string
+	rows, _ := d.sql.Query(`EXPLAIN QUERY PLAN SELECT id FROM jobs WHERE status = 'queued' AND kind = ? ORDER BY id LIMIT 1`, "still")
+	for rows.Next() {
+		var a, b, c int
+		var detail string
+		rows.Scan(&a, &b, &c, &detail)
+		plan += detail
+	}
+	rows.Close()
+	if !strings.Contains(plan, "jobs_queued") {
+		t.Errorf("claim doesn't use jobs_queued: %s", plan)
 	}
 }
