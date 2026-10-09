@@ -45,7 +45,7 @@ are allowed. A new kind of resource needs a matching directive there.
 Dependabot (`.github/dependabot.yml`) opens weekly update pull requests for Go,
 npm, GitHub Actions and the Dockerfile's base images. When a push to main
 changes `go.sum` or `package-lock.json`, `notices.yml` regenerates
-`THIRD_PARTY_NOTICES.txt` and commits it. To do it by hand:
+`THIRD_PARTY_NOTICES.txt` and opens a pull request with it. To do it by hand:
 `python3 scripts/third-party-notices.py` (with `web/node_modules` installed).
 
 ## Icons
