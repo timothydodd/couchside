@@ -317,10 +317,22 @@ func (d *DB) queryRecordings(ctx context.Context, where string, args ...any) ([]
 	return out, rows.Err()
 }
 
-func (d *DB) Recordings(ctx context.Context) ([]Recording, error) {
+// Recordings lists recordings (not cancelled ones): in progress, then
+// scheduled soonest first, then the rest newest first. limit <= 0 means 500.
+func (d *DB) Recordings(ctx context.Context, limit, offset int) ([]Recording, error) {
+	if limit <= 0 {
+		limit = 500
+	}
 	return d.queryRecordings(ctx, `WHERE r.status <> 'cancelled' ORDER BY
 		CASE r.status WHEN 'recording' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END,
-		CASE WHEN r.status = 'scheduled' THEN r.start_at ELSE -r.start_at END LIMIT 500`)
+		CASE WHEN r.status = 'scheduled' THEN r.start_at ELSE -r.start_at END, r.id LIMIT ? OFFSET ?`, limit, max(offset, 0))
+}
+
+// RecordingsCount is how many recordings Recordings can list in all.
+func (d *DB) RecordingsCount(ctx context.Context) (int, error) {
+	var n int
+	err := d.sql.QueryRowContext(ctx, `SELECT COUNT(*) FROM recordings WHERE status <> 'cancelled'`).Scan(&n)
+	return n, err
 }
 
 func (d *DB) Recording(ctx context.Context, id int64) (Recording, error) {

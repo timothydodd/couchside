@@ -84,7 +84,7 @@ func TestRuleMissingEpisodes(t *testing.T) {
 	if sum != want {
 		t.Errorf("summary\n got %+v\nwant %+v", sum, want)
 	}
-	recs, _ := d.Recordings(ctx)
+	recs, _ := d.Recordings(ctx, 0, 0)
 	eps := map[string]bool{}
 	for _, r := range recs {
 		eps[r.EpisodeNum] = true
@@ -140,7 +140,7 @@ func TestRuleModesAndChannel(t *testing.T) {
 	if err := s.DeleteRule(ctx, r.ID); err != nil {
 		t.Fatal(err)
 	}
-	if recs, _ := d.Recordings(ctx); len(recs) != 0 {
+	if recs, _ := d.Recordings(ctx, 0, 0); len(recs) != 0 {
 		t.Errorf("upcoming recordings should be gone, got %d", len(recs))
 	}
 }

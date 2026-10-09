@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -222,13 +223,32 @@ func (s *Server) dvrList(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, errNoTuner)
 		return
 	}
-	recs, err := s.db.Recordings(r.Context())
+	// ?limit= (at most 1000; 500 by default) and ?offset= page through a
+	// long history. The body stays a bare array (docs/api-compat.md); the
+	// total is in X-Total-Count, and a Link header names the next page.
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit <= 0 {
+		limit = 500
+	}
+	limit = min(limit, 1000)
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	offset = max(offset, 0)
+	recs, err := s.db.Recordings(r.Context(), limit, offset)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	total, err := s.db.RecordingsCount(r.Context())
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
 	for i := range recs {
 		recs[i].Recoverable = s.tv.Recoverable(recs[i])
+	}
+	w.Header().Set("X-Total-Count", strconv.Itoa(total))
+	if next := offset + len(recs); next < total {
+		w.Header().Set("Link", fmt.Sprintf(`</api/dvr/recordings?offset=%d&limit=%d>; rel="next"`, next, limit))
 	}
 	writeJSON(w, http.StatusOK, recs)
 }

@@ -83,7 +83,7 @@ func TestRuleRetriesFailedAiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	recs, _ := d.Recordings(ctx)
+	recs, _ := d.Recordings(ctx, 0, 0)
 	failed := recs[0]
 	if err := d.FinishRecording(ctx, failed.ID, "failed", "", 0, "all tuners were busy"); err != nil {
 		t.Fatal(err)

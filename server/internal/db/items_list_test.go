@@ -227,3 +227,36 @@ func TestRetryJobLater(t *testing.T) {
 		t.Fatalf("after its time: %+v", again)
 	}
 }
+
+// Recordings pages through the whole list in a stable order, and
+// RecordingsCount counts what it can list.
+func TestRecordingsPaging(t *testing.T) {
+	d := openTest(t)
+	ctx := context.Background()
+	for i := 0; i < 7; i++ {
+		if _, err := d.sql.Exec(`INSERT INTO recordings (channel, title, start_at, end_at, status) VALUES ('2.1', ?, ?, ?, 'completed')`,
+			fmt.Sprintf("Show %d", i), 1000+i, 2000+i); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d.sql.Exec(`INSERT INTO recordings (channel, title, start_at, end_at, status) VALUES ('2.1', 'Cancelled', 1, 2, 'cancelled')`)
+	if n, _ := d.RecordingsCount(ctx); n != 7 {
+		t.Fatalf("count = %d, want 7 (cancelled left out)", n)
+	}
+	seen := map[int64]bool{}
+	for off := 0; off < 7; off += 3 {
+		page, err := d.Recordings(ctx, 3, off)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range page {
+			if seen[r.ID] {
+				t.Fatalf("recording %d on two pages", r.ID)
+			}
+			seen[r.ID] = true
+		}
+	}
+	if len(seen) != 7 {
+		t.Fatalf("pages covered %d recordings, want 7", len(seen))
+	}
+}
