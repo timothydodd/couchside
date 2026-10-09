@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"errors"
 	"io/fs"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -91,5 +93,38 @@ func TestOpenAppliesANewMigration(t *testing.T) {
 	defer d.Close()
 	if _, err := d.sql.Exec(`INSERT INTO next_release (x) VALUES (1)`); err != nil {
 		t.Fatalf("new migration wasn't applied: %v", err)
+	}
+}
+
+// The database and its journal are readable by the server's user only.
+func TestOpenRestrictsFileModes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no POSIX modes")
+	}
+	dir := t.TempDir()
+	probe := filepath.Join(dir, "probe")
+	if err := os.WriteFile(probe, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if os.Chmod(probe, 0o600) != nil {
+		t.Skip("chmod unsupported here")
+	}
+	if st, _ := os.Stat(probe); st.Mode().Perm() != 0o600 {
+		t.Skip("this file system ignores chmod")
+	}
+	p := filepath.Join(dir, "t.db")
+	d, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	for _, f := range []string{p, p + "-wal"} {
+		st, err := os.Stat(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.Mode().Perm() != 0o600 {
+			t.Errorf("%s mode = %o, want 600", filepath.Base(f), st.Mode().Perm())
+		}
 	}
 }

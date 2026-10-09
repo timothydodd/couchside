@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -109,10 +110,14 @@ func serve(parent context.Context, ignoreSaved string) (again bool, err error) {
 	if cfg.EnvFile != "" {
 		slog.Info("settings file", "path", cfg.EnvFile)
 	}
-	for _, dir := range []string{cfg.DataDir, cfg.CacheDir} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return false, err
-		}
+	// The data folder holds the session key, password hashes and API keys:
+	// only the server's own user may read it. The cache holds nothing secret.
+	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
+		return false, err
+	}
+	tightenDir(cfg.DataDir)
+	if err := os.MkdirAll(cfg.CacheDir, 0o755); err != nil {
+		return false, err
 	}
 	cfg.ServerID = serverID(cfg.DataDir)
 	database, err := db.Open(filepath.Join(cfg.DataDir, "couchside.db"))
@@ -300,8 +305,23 @@ func serverID(dataDir string) string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
 	id := fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
-	if err := os.WriteFile(p, []byte(id+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(p, []byte(id+"\n"), 0o600); err != nil {
 		slog.Warn("couldn't save the server id", "err", err)
 	}
 	return id
+}
+
+// tightenDir takes group and other access off a folder that holds secrets,
+// for data folders made by older versions (MkdirAll doesn't change an
+// existing folder). Windows has no POSIX modes; the installer's ACLs cover
+// it. A volume that refuses (some NFS mounts) only gets a warning.
+func tightenDir(p string) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	if st, err := os.Stat(p); err == nil && st.Mode().Perm()&0o077 != 0 {
+		if err := os.Chmod(p, 0o700); err != nil {
+			slog.Warn("couldn't restrict the data folder to Couchside's user", "path", p, "err", err)
+		}
+	}
 }

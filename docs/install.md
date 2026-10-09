@@ -62,6 +62,9 @@ docker run -d --name couchside -p 8080:8080 \
   on Docker's bridge network. Otherwise type the address into the TV app.
 - For GPU transcoding, pass the GPU in (`--device /dev/dri`) and set
   `-e COUCHSIDE_HWACCEL=vaapi`. See [playback.md](playback.md#hardware).
+- The container runs as user 1000. A bind-mounted `/data` must belong to it:
+  Couchside keeps the folder and its database readable by that user only,
+  since they hold password hashes and the session key.
 
 ## Zip
 

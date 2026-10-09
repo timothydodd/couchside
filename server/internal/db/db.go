@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -51,7 +52,25 @@ func Open(path string) (*DB, error) {
 		s.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
+	tightenFiles(path, path+"-wal", path+"-shm")
 	return &DB{sql: s}, nil
+}
+
+// tightenFiles makes database files readable by the server's user only: they
+// hold password hashes, session hashes and API keys. SQLite creates the
+// -wal and -shm files with the main file's mode, so once is enough. Windows
+// has no POSIX modes.
+func tightenFiles(paths ...string) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	for _, p := range paths {
+		if st, err := os.Stat(p); err == nil && st.Mode().Perm() != 0o600 {
+			if err := os.Chmod(p, 0o600); err != nil {
+				slog.Warn("couldn't restrict a database file to Couchside's user", "file", p, "err", err)
+			}
+		}
+	}
 }
 
 func (d *DB) Close() error { return d.sql.Close() }
@@ -104,6 +123,7 @@ func backupBeforeUpgrade(s *sql.DB, path string) {
 		slog.Warn("no backup before upgrading the database", "err", err)
 		return
 	}
+	tightenFiles(dst)
 	slog.Info("backed up the database before upgrading it", "file", dst)
 }
 
