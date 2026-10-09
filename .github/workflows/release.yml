@@ -5,6 +5,8 @@ name: release
 #  - the Windows installer (windows-installer.yml: service, ffmpeg included)
 #  - a GitHub Release with those and SHA-256 checksums
 #  - a multi-arch container: ghcr.io/<owner>/couchside:v<version>, :<version>, :<major>.<minor>, :latest
+#  - the Helm chart: oci://ghcr.io/<owner>/charts/couchside, version <version> (the
+#    package must be made public once on GitHub, or installing it needs a login)
 on:
   push:
     tags: ["v*"]
@@ -195,11 +197,31 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # The chart is pushed only once the image it installs is published.
+  chart:
+    if: github.event_name == 'push'
+    needs: [chart-version, verify, container]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - name: package and push
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          helm lint deploy/helm/couchside --set media.type=hostPath --set media.hostPath.path=/media
+          helm package deploy/helm/couchside --destination chart-out
+          echo "$GH_TOKEN" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+          helm push "chart-out/couchside-${VERSION#v}.tgz" "oci://ghcr.io/${{ github.repository_owner }}/charts"
+
   release:
     if: github.event_name == 'push'
     # installer fails on a v* tag that can't be signed (windows-installer.yml),
     # so nothing unsigned is published.
-    needs: [binaries, installer, container]
+    needs: [binaries, installer, container, chart]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -236,6 +258,8 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
             **Container:** `docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}`
+
+            **Helm chart:** `helm install couchside oci://ghcr.io/${{ github.repository_owner }}/charts/couchside --version <this release without the v>` (docs/install.md has the values).
 
             **Windows installer** (`couchside-*-windows-amd64-setup.exe`) installs Couchside as a Windows service with ffmpeg included and picks your GPU encoder (NVIDIA or Intel) by itself. The installer and every `couchside.exe` (the installer's and the Windows zip's) are code-signed.
 

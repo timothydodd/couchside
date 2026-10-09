@@ -106,11 +106,15 @@ To build from a checkout instead, add `-f docker-compose.dev.yml` and `--build`
 ```bash
 kubectl create namespace media
 
-helm install couchside deploy/helm/couchside -n media \
+helm install couchside oci://ghcr.io/timothydodd/charts/couchside --version <version> -n media \
   --set media.type=nfs --set media.nfs.server=192.168.1.10 --set media.nfs.path=/volume1/media \
   --set ingress.enabled=true --set ingress.host=couchside.home.lan \
   --set auth.enabled=true
 ```
+
+`<version>` is a release without the `v` (`0.19.0`); upgrade with
+`helm upgrade couchside oci://ghcr.io/timothydodd/charts/couchside --version <new> --reuse-values -n media`.
+From a checkout, `deploy/helm/couchside` works in place of the `oci://` address.
 
 The pod log prints a one-time setup code; open the UI and enter it with your
 name and a password.
