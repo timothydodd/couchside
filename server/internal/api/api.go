@@ -163,6 +163,7 @@ func (s *Server) Handler() http.Handler {
 	r.Get("/healthz", s.health)
 	r.Get("/livez", s.live)
 	r.Get("/api/discovery", s.discovery)
+	r.With(middleware.NoCache).Get("/api/server", s.serverInfo)
 	r.Route("/api", func(r chi.Router) {
 		r.Use(middleware.NoCache)
 		// Open: how to sign in, and signing in.

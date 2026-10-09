@@ -36,6 +36,8 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		"scanEvery":  s.cfg.ScanInterval.String(),
 		"workers":    s.cfg.Workers,
 		"comskip":    s.worker.CommercialsAvailable(),
+		"apiVersion": APIVersion,
+		"features":   s.features(r.Context()),
 		"transcode": map[string]any{
 			"hwaccel":        s.tc.Encoder().HW,
 			"requested":      s.cfg.HWAccel,

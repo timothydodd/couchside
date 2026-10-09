@@ -76,7 +76,8 @@ rules and server settings are shared. Switch profiles from the sidebar.
   of stopping password guessing from many addresses. Passwordless picks are
   limited to 20 per address per 10 minutes.
 - **Open without a session:** `/healthz` (the database answers), `/livez`
-  (the process is up), `/api/discovery` (name, version and
+  (the process is up), `/api/server` (version, API version and features),
+  `/api/discovery` (name, version and
   sign-in mode, for TV apps finding the server), the sign-in endpoints, and
   artwork (posters, backdrops, episode stills, cast photos and
   `/api/artwork/remote`, the cache of guide and provider images), so TV apps
