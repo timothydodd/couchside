@@ -24,6 +24,34 @@ jobs:
       - run: go test -race ./...
       - run: go build ./...
 
+  # Known vulnerabilities in the code's dependencies and the Go standard
+  # library, counted only when the code can reach them.
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
+        with:
+          go-version-input: "1.27" # the Dockerfile's
+          work-dir: server
+          cache-dependency-path: server/go.sum
+
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - name: lint and render
+        run: |
+          set -e
+          m="--set media.type=hostPath --set media.hostPath.path=/media"
+          helm lint deploy/helm/couchside $m
+          helm template t deploy/helm/couchside $m > /dev/null
+          helm template t deploy/helm/couchside $m --set ingress.enabled=true --set ingress.host=x --set auth.enabled=true > /dev/null
+          helm template t deploy/helm/couchside $m --set hwaccel.dri.resource=gpu.intel.com/i915 > /dev/null
+          # Guards that must refuse to render.
+          ! helm template t deploy/helm/couchside $m --set ingress.enabled=true --set ingress.host=x > /dev/null 2>&1
+          ! helm template t deploy/helm/couchside $m --set hwaccel.dri.enabled=true > /dev/null 2>&1
+
   # The Windows-only code (CPU and memory readings, NAS sign-in, settings
   # file) runs on GitHub's Windows machine, never anyone's own. Many older
   # tests assume Linux paths, so only these packages run here for now.
@@ -54,5 +82,7 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci --no-audit --no-fund
+      - name: known vulnerabilities in what the UI ships
+        run: npm audit --omit=dev --audit-level=high
       - name: type-check and build
         run: npm run build
