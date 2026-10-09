@@ -5,6 +5,14 @@ image:
 
 imagePullSecrets: []
 
+# Extra pod metadata (a log agent, a backup operator). Don't set
+# app.kubernetes.io/name or /instance in podLabels: the selector uses them.
+podAnnotations: {}
+podLabels: {}
+# Keeps the server (and its recordings) ahead of batch pods when the node is
+# short of resources; "" uses the cluster's default.
+priorityClassName: ""
+
 # TMDB (The Movie Database) is the main metadata source: titles, plots,
 # posters, backdrops and episode names. Release images carry Couchside's own
 # key, so it works with nothing set. To use your own key instead, put it in a
@@ -133,7 +141,9 @@ persistence:
     size: 1Gi
     storageClass: ""    # "" = cluster default (local-path on k3s)
     existingClaim: ""
-  # Artwork, stills, subtitles, optimized copies and live TV segments.
+  # Artwork, stills, subtitles, preview thumbnails, optimized copies and
+  # live TV segments. 20Gi suits a mid-size library; optimized copies are
+  # full MP4s (a few GB each), so size it for how much you optimize.
   cache:
     size: 20Gi
     storageClass: ""
@@ -148,8 +158,11 @@ persistence:
     existingClaim: ""
 
 service:
-  type: ClusterIP
+  type: ClusterIP        # ClusterIP | NodePort | LoadBalancer
   port: 8080
+  # With type NodePort: a fixed port (30000-32767), so TV apps keep the same
+  # address; "" lets Kubernetes pick.
+  nodePort: ""
 
 ingress:
   enabled: false

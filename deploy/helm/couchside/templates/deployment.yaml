@@ -18,13 +18,23 @@ spec:
     matchLabels: {{- include "couchside.selector" . | nindent 6 }}
   template:
     metadata:
-      labels: {{- include "couchside.selector" . | nindent 8 }}
+      labels:
+        {{- include "couchside.selector" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       annotations:
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       # Couchside never talks to the Kubernetes API.
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
       {{- if .Values.discovery.hostNetwork }}
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
