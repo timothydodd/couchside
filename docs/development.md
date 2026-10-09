@@ -1,8 +1,9 @@
 # Development
 
 - **Backend:** one static Go binary (`server/`), pure-Go SQLite (no CGO), and
-  ffmpeg/ffprobe for probing, stills and transcoding. Go 1.26; the `go`
-  command fetches it automatically.
+  ffmpeg/ffprobe for probing, stills and transcoding. Go as pinned in
+  `server/go.mod` (1.27; CI, the Dockerfile and the release follow it); the
+  `go` command fetches it automatically.
 - **Frontend:** React 19, Vite and Tailwind v4 (`web/`). Colours and component
   styles are in [style.md](style.md).
 - **Deploy:** a Helm chart in `deploy/helm/couchside`.
