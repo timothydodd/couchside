@@ -57,6 +57,9 @@ docker run -d --name couchside -p 8080:8080 \
   to record into a library folder, or want to delete files from the Manage view.
 - Add `-e COUCHSIDE_HDHOMERUN=<tuner IP>` for [Live TV](live-tv.md).
 - Add `-e TZ=America/New_York` (your zone) so guide times and recording names are local.
+- For the DVR add `-v couchside-recordings:/recordings` (or record into a
+  writable `/media` folder chosen in Settings → Live TV): without a volume,
+  recordings go with the container.
 - For TV apps to find the server on their own (LAN discovery), run it with
   `--network host` instead of `-p`: SSDP's multicast doesn't reach a container
   on Docker's bridge network. Otherwise type the address into the TV app.
@@ -82,12 +85,21 @@ one on the PATH. (On Windows a conversion isn't paused when it gets ahead of the
 detection, put [Comskip](https://github.com/erikkaashoek/Comskip) on the PATH
 or set `COUCHSIDE_COMSKIP` (the container image has it built in).
 
-## Docker Compose against a NAS share
+## Docker Compose
 
-Copy `.env.example` to `.env`, fill it in, and run `docker compose up -d`. That runs the published image; to build from a checkout instead, add `-f docker-compose.yml -f docker-compose.dev.yml` and `--build` (a local build has no built-in TMDB key, so set `TMDB_API_KEY`).
-Docker Desktop can't see mapped network drives, so the compose file mounts the
-SMB share directly. It mounts the share writable so the DVR can record into
-your TV library.
+`docker-compose.yml` runs the published image with your media from `./media`
+next to it (create the folder first, or set `MEDIA_PATH` in `.env`), and named
+volumes for the database, cache and recordings. Copy `.env.example` to `.env`
+for the time zone, HDHomeRun and keys, and `COUCHSIDE_VERSION` to pin a
+release; then `docker compose up -d`.
+
+**Media on a NAS share:** `docker compose -f docker-compose.smb.yml up -d`
+mounts an SMB share directly (Docker Desktop can't see mapped network drives),
+using the `NAS_*` lines in `.env`. It mounts the share writable so the DVR can
+record into your TV library.
+
+To build from a checkout instead, add `-f docker-compose.dev.yml` and `--build`
+(a local build has no built-in TMDB key, so set `TMDB_API_KEY`).
 
 ## Kubernetes / k3s (Helm)
 

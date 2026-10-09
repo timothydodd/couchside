@@ -126,7 +126,7 @@ jobs:
         run: |
           name="couchside-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}"
           mkdir -p "pkg/${name}"
-          cp dist/* README.md LICENSE THIRD_PARTY_NOTICES.txt .env.example docker-compose.yml "pkg/${name}/"
+          cp dist/* README.md LICENSE THIRD_PARTY_NOTICES.txt "pkg/${name}/"
           mkdir -p "pkg/${name}/docs" && cp docs/install.md docs/configuration.md "pkg/${name}/docs/"
           cat > "pkg/${name}/QUICKSTART.txt" <<'TXT'
           Couchside needs ffmpeg and ffprobe on the PATH (or set COUCHSIDE_FFMPEG / COUCHSIDE_FFPROBE).

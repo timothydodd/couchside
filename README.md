@@ -24,7 +24,9 @@ docker run -d --name couchside -p 8080:8080 \
 ```
 
 Open http://localhost:8080 and add a library. For live TV, add
-`-e COUCHSIDE_HDHOMERUN=<tuner IP>`. Zips for Linux, macOS and Windows are on the
+`-e COUCHSIDE_HDHOMERUN=<tuner IP>` and `-v couchside-recordings:/recordings`.
+`docker compose up -d` with this repo's `docker-compose.yml` does the same with
+media from `./media`. Zips for Linux, macOS and Windows are on the
 [Releases page](https://github.com/timothydodd/couchside/releases).
 
 ## Docs

@@ -103,7 +103,11 @@ ENV COUCHSIDE_ADDR=:8080 \
 
 USER 1000:1000
 EXPOSE 8080 1900/udp
-VOLUME ["/data", "/cache", "/recordings"]
+# /recordings isn't a VOLUME: an anonymous volume per container would collect
+# orphaned recordings for anyone running the quick start. Mount one
+# (-v couchside-recordings:/recordings) for the DVR, or record into a writable
+# /media folder chosen in Settings.
+VOLUME ["/data", "/cache"]
 # For Docker and compose (Kubernetes uses the chart's probes, with the
 # database-free /livez for liveness). Marks the container unhealthy when the
 # database can't be reached; Docker doesn't restart it for that. The port is

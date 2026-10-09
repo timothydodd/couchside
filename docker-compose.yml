@@ -1,16 +1,16 @@
-# Run Couchside against media on a NAS SMB share.
-#   1. copy .env.example to .env and fill it in (.env is gitignored)
-#   2. docker compose up -d
-#   3. open http://localhost:8080 -> Libraries -> add /media/Movies and "/media/TV Shows"
+# Couchside with media on this machine's disk.
+#   1. put your media in ./media next to this file (create the folder first,
+#      or Docker makes it as root), or set MEDIA_PATH in .env
+#   2. optional: copy .env.example to .env for the time zone, HDHomeRun, keys
+#   3. docker compose up -d
+#   4. open http://localhost:8080 and add a library (/media/Movies, "/media/TV Shows")
 #
-# Docker Desktop can't see mapped drive letters, so the share is mounted
-# directly over SMB. It's writable so recordings can go into TV Shows.
-#
-# This runs the published image. To build your own from a checkout, add the
-# dev file: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+# Media on a NAS share instead: docker-compose.smb.yml.
+# To build from this checkout: add -f docker-compose.dev.yml and --build.
 services:
   couchside:
-    image: ghcr.io/timothydodd/couchside:latest
+    # A release (COUCHSIDE_VERSION=0.19.0 in .env) pins the version; latest follows releases.
+    image: ghcr.io/timothydodd/couchside:${COUCHSIDE_VERSION:-latest}
     container_name: couchside
     ports:
       - "8080:8080"
@@ -21,37 +21,27 @@ services:
       # use your own ("off" disables TMDB); OMDB_API_KEY adds a fallback.
       TMDB_API_KEY: ${TMDB_API_KEY:-}
       OMDB_API_KEY: ${OMDB_API_KEY:-}
-      # Docker Desktop on Windows can't reach the GPU, so this stays software
-      # locally. On a Linux host with an Intel iGPU use vaapi and uncomment devices.
+      # Intel/AMD GPU on a Linux host: vaapi, and uncomment devices below.
       COUCHSIDE_HWACCEL: ${COUCHSIDE_HWACCEL:-none}
-      # Live TV + DVR: your HDHomeRun's IP. Leave empty to turn Live TV off.
+      # Live TV + DVR: your HDHomeRun's IP. Empty turns Live TV off.
       COUCHSIDE_HDHOMERUN: ${HDHOMERUN:-}
       # "true" requires passwords (no passwordless sign-in): for a server on the
       # internet. The first start then prints a setup code (docker compose logs).
       COUCHSIDE_AUTH: ${COUCHSIDE_AUTH:-false}
-      # Guide times and recording file names use this time zone.
-      TZ: ${TZ:-America/New_York}
+      # Guide times and recording file names use this time zone; empty = UTC.
+      TZ: ${TZ:-}
     # devices:
     #   - /dev/dri:/dev/dri
     volumes:
       - data:/data
       - cache:/cache
-      # Writable so the DVR can record into a library folder (e.g. TV Shows).
-      # Couchside only writes to the recordings folder chosen in Settings.
-      - media:/media
       - recordings:/recordings
+      # Your media. Add :ro to keep Couchside from writing to it (the DVR then
+      # records to /recordings only, and deleting from Manage is off).
+      - ${MEDIA_PATH:-./media}:/media
     restart: unless-stopped
 
 volumes:
   data:
   cache:
-  # DVR recordings. A local Docker volume by default; to record onto the NAS,
-  # replace it with a writable SMB volume like the media one below (without
-  # "ro"), pointed at an existing folder, e.g. //nas.local/Video/DVR.
   recordings:
-  media:
-    driver: local
-    driver_opts:
-      type: cifs
-      device: "//${NAS_HOST:?set NAS_HOST in .env}/${NAS_SHARE:-Video}"
-      o: "username=${NAS_USER},password=${NAS_PASSWORD},rw,vers=3.0,uid=1000,gid=1000,file_mode=0664,dir_mode=0775"

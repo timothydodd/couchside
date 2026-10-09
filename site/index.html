@@ -94,7 +94,7 @@
   -v couchside-data:/data -v couchside-cache:/cache \
   -v /path/to/media:/media \
   ghcr.io/timothydodd/couchside:latest</pre>
-    <p>Open <code>http://localhost:8080</code> and add a library. Zips, Helm and more in the <a href="https://github.com/timothydodd/couchside/blob/main/docs/install.md">install guide</a>.</p>
+    <p>Open <code>http://localhost:8080</code> and add a library. For live TV, add <code>-e COUCHSIDE_HDHOMERUN=&lt;tuner IP&gt;</code> and <code>-v couchside-recordings:/recordings</code>. Docker Compose, zips, Helm and more in the <a href="https://github.com/timothydodd/couchside/blob/main/docs/install.md">install guide</a>.</p>
   </section>
 </main>
 
