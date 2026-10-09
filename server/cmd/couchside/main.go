@@ -126,6 +126,15 @@ func serve(parent context.Context, ignoreSaved string) (again bool, err error) {
 	if err != nil {
 		return false, err
 	}
+	// Settings an older version let admins save from the web that can only
+	// come from the environment now (the ffmpeg and comskip programs).
+	for k := range saved {
+		if _, ok := config.EditableSetting(k); !ok {
+			slog.Warn("ignoring a saved setting that can no longer be set from the web; set it in the environment or the settings file instead", "key", k)
+			_ = database.SetEnvOverride(parent, k, nil)
+			delete(saved, k)
+		}
+	}
 	if ignoreSaved != "" {
 		saved = nil
 	}

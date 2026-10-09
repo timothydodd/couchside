@@ -10,14 +10,17 @@ A variable set in the environment wins over the file.
 
 Most of them can also be set by an admin in **Settings → Server**: rescans and
 background jobs, the hardware
-encoder and how many streams and optimized copies run at once, ffmpeg and
-comskip, the HDHomeRun, the metadata keys and the network settings. A value
+encoder and how many streams and optimized copies run at once, the HDHomeRun, the metadata keys and the network settings. A value
 saved there wins over the variable and the settings file, and takes effect
 when the server restarts, which the page does in place (playback stops;
 recordings carry on in the same file). Clearing a field goes back to the
 variable. If the server can't start with the saved values, it starts without
 them and the page says why. The listen address, the data and cache folders,
-`COUCHSIDE_WEB_DIR` and `COUCHSIDE_AUTH` can only be set in the environment.
+`COUCHSIDE_WEB_DIR`, `COUCHSIDE_AUTH` and the programs Couchside runs
+(`COUCHSIDE_FFMPEG`, `COUCHSIDE_FFPROBE`, `COUCHSIDE_COMSKIP`,
+`COUCHSIDE_COMSKIP_INI`) can only be set in the environment or the settings
+file (`couchside.env` on Windows), so a browser session can't choose what the
+server runs.
 
 **Media locations** are where libraries can be: drives, folders and network
 shares, added in the first-run setup or Settings → Server (with a folder

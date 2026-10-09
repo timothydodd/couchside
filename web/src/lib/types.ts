@@ -444,7 +444,7 @@ export interface ServerSetting {
   group: string;
   label: string;
   help: string;
-  kind: "text" | "dir" | "file" | "int" | "duration" | "choice" | "bool" | "secret";
+  kind: "text" | "dir" | "int" | "duration" | "choice" | "bool" | "secret";
   options?: string[];
   default: string;
   placeholder?: string;

@@ -52,10 +52,9 @@ func TestCheck(t *testing.T) {
 		{"COUCHSIDE_HWACCEL", "nvenc", "nvenc", true},
 		{"COUCHSIDE_HWACCEL", "cuda", "", false},
 		{"COUCHSIDE_DISCOVERY", "off", "false", true},
-		{"COUCHSIDE_COMSKIP_INI", "", "", true}, // empty: not set
+		{"COUCHSIDE_SERVER_NAME", "", "", true}, // empty: not set
 		{"COUCHSIDE_TRUSTED_PROXIES", "10.0.0.0/8, 192.168.1.2", "10.0.0.0/8, 192.168.1.2", true},
 		{"COUCHSIDE_TRUSTED_PROXIES", "10.0.0.0/8, proxy", "", false},
-		{"COUCHSIDE_FFMPEG", "/no/such/ffmpeg", "", false},
 	} {
 		got, err := get(c.key).Check(c.in)
 		if (err == nil) != c.ok || got != c.want {
@@ -73,5 +72,20 @@ func TestMediaRoots(t *testing.T) {
 	}
 	if _, ok := EditableSetting("COUCHSIDE_MEDIA_ROOT"); ok {
 		t.Fatal("media locations have their own list, not a Settings → Server field")
+	}
+}
+
+// The programs the server runs can't be chosen from the web: an admin's
+// browser session mustn't decide what the server executes.
+func TestProgramsNotEditable(t *testing.T) {
+	for _, k := range []string{"COUCHSIDE_FFMPEG", "COUCHSIDE_FFPROBE", "COUCHSIDE_COMSKIP", "COUCHSIDE_COMSKIP_INI", "COUCHSIDE_AUTH"} {
+		if _, ok := EditableSetting(k); ok {
+			t.Errorf("%s is editable from the web", k)
+		}
+	}
+	for _, s := range Editable {
+		if s.Kind == "file" {
+			t.Errorf("%s has kind file", s.Key)
+		}
 	}
 }
