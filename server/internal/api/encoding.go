@@ -225,7 +225,7 @@ func (s *Server) deleteOptimized(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if p != "" {
-		_ = os.Remove(p)
+		_ = os.Remove(worker.ResolveCache(s.cfg.CacheDir, p))
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

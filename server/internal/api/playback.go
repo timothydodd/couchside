@@ -12,6 +12,7 @@ import (
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/fsx"
 	"github.com/timothydodd/couchside/internal/parse"
+	"github.com/timothydodd/couchside/internal/worker"
 )
 
 // --- files & playback --------------------------------------------------------
@@ -107,7 +108,7 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, httpError{http.StatusNotFound, "no optimized version"})
 			return
 		}
-		f.Path = p
+		f.Path = worker.ResolveCache(s.cfg.CacheDir, p)
 	} else if err := s.checkMedia(r.Context(), f); err != nil {
 		writeErr(w, err)
 		return

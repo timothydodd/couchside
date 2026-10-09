@@ -2,6 +2,8 @@ package db
 
 import "context"
 
+// SetOptimized records a file's optimized copy. path is relative to the cache
+// folder (worker.OptimizedRel), so moving the cache doesn't lose it.
 func (d *DB) SetOptimized(ctx context.Context, fileID int64, path string, size int64, height int) error {
 	_, err := d.sql.ExecContext(ctx, `INSERT INTO optimized (file_id, path, size, height) VALUES (?, ?, ?, ?)
 		ON CONFLICT (file_id) DO UPDATE SET path = excluded.path, size = excluded.size, height = excluded.height,
@@ -9,7 +11,9 @@ func (d *DB) SetOptimized(ctx context.Context, fileID int64, path string, size i
 	return err
 }
 
-// OptimizedPath returns the optimized copy for a file, or "" when there is none.
+// OptimizedPath returns the stored path of a file's optimized copy (relative
+// to the cache folder; worker.ResolveCache makes it whole), or "" when there
+// is none.
 func (d *DB) OptimizedPath(ctx context.Context, fileID int64) (string, error) {
 	var p string
 	err := d.sql.QueryRowContext(ctx, `SELECT path FROM optimized WHERE file_id = ?`, fileID).Scan(&p)
@@ -28,22 +32,30 @@ func (d *DB) DeleteOptimized(ctx context.Context, fileID int64) (string, error) 
 	return p, err
 }
 
-// OptimizedPaths lists every optimized file on record, for orphan cleanup.
-func (d *DB) OptimizedPaths(ctx context.Context) (map[string]bool, error) {
-	rows, err := d.sql.QueryContext(ctx, `SELECT path FROM optimized`)
+// OptimizedPaths lists every optimized copy on record, file id to stored
+// path, for orphan cleanup.
+func (d *DB) OptimizedPaths(ctx context.Context) (map[int64]string, error) {
+	rows, err := d.sql.QueryContext(ctx, `SELECT file_id, path FROM optimized`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := map[string]bool{}
+	out := map[int64]string{}
 	for rows.Next() {
+		var id int64
 		var p string
-		if err := rows.Scan(&p); err != nil {
+		if err := rows.Scan(&id, &p); err != nil {
 			return nil, err
 		}
-		out[p] = true
+		out[id] = p
 	}
 	return out, rows.Err()
+}
+
+// SetOptimizedPath changes where a file's optimized copy is recorded.
+func (d *DB) SetOptimizedPath(ctx context.Context, fileID int64, path string) error {
+	_, err := d.sql.ExecContext(ctx, `UPDATE optimized SET path = ? WHERE file_id = ?`, path, fileID)
+	return err
 }
 
 // OptimizeCandidates returns file ids (of an item or a library) that aren't

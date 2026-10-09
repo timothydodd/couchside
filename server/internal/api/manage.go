@@ -228,7 +228,7 @@ func (s *Server) deleteFiles(ctx context.Context, lib db.Library, files []db.Fil
 			_ = os.Remove(sc)
 		}
 		if old, _ := s.db.DeleteOptimized(ctx, f.ID); old != "" {
-			_ = os.Remove(old)
+			_ = os.Remove(worker.ResolveCache(s.cfg.CacheDir, old))
 		}
 		_ = os.RemoveAll(filepath.Dir(worker.FileStillPath(s.cfg.CacheDir, f.ID)))
 		_ = s.db.DeleteRecordingsAt(ctx, f.Path)

@@ -464,7 +464,7 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 	// because its name parses differently, or re-scanned by hand, keeps it.
 	if prev == nil || prev.Size != f.Size || prev.Mtime != f.Mtime {
 		if old, err := w.db.DeleteOptimized(ctx, fileID); err == nil && old != "" {
-			_ = os.Remove(old)
+			_ = os.Remove(ResolveCache(w.cfg.CacheDir, old))
 		}
 	}
 	if created {
