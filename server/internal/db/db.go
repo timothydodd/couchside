@@ -18,6 +18,8 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/timothydodd/couchside/internal/diskfree"
 )
 
 //go:embed migrations/*.sql
@@ -123,6 +125,12 @@ func backupBeforeUpgrade(s *sql.DB, path string) {
 		return
 	}
 	dst := filepath.Join(dir, fmt.Sprintf("couchside-%s-%s.db", UpgradeBackup, time.Now().Format("20060102-150405")))
+	need := diskfree.FileSizes(path, path+"-wal")
+	if sp, err := diskfree.Of(dir); err == nil && sp.Free < need {
+		slog.Warn("not enough free space for a copy of the database; upgrading it without one",
+			"dir", dir, "free", diskfree.Human(sp.Free), "needed", diskfree.Human(need))
+		return
+	}
 	if _, err := s.Exec(`VACUUM INTO ?`, dst); err != nil {
 		slog.Warn("no backup before upgrading the database", "err", err)
 		return
