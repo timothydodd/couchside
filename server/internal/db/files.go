@@ -32,13 +32,17 @@ type File struct {
 	ExtraTitle     string   `json:"extraTitle"`
 	RolePinned     bool     `json:"rolePinned"`
 	Edition        string   `json:"edition"` // which cut ("Extended"); "" = the ordinary one
+	// DynamicRange is dv, hdr10, hlg or "" (SDR, or not read yet); DVProfile
+	// is the Dolby Vision profile (5, 7, 8…), 0 when it isn't Dolby Vision.
+	DynamicRange string `json:"dynamicRange"`
+	DVProfile    int    `json:"dvProfile"`
 }
 
 const fileCols = `f.id, f.library_id, f.media_item_id, f.episode_id, f.path, f.size, f.mtime, f.duration_sec,
 	f.container, f.video_codec, f.audio_codec, f.width, f.height, f.audio_tracks, f.subtitle_tracks,
 	f.has_still, f.added_at, COALESCE(w.position_sec, 0), COALESCE(w.watched, 0),
 	EXISTS (SELECT 1 FROM optimized o WHERE o.file_id = f.id), f.problem,
-	f.role, f.part_no, f.extra_title, f.role_pinned, f.edition`
+	f.role, f.part_no, f.extra_title, f.role_pinned, f.edition, COALESCE(f.dynamic_range, ''), f.dv_profile`
 
 // fileFrom selects files the profile in ctx may see, with its watch state.
 func fileFrom(ctx context.Context) string {
@@ -50,7 +54,7 @@ func scanFile(r interface{ Scan(...any) error }) (File, error) {
 	err := r.Scan(&f.ID, &f.LibraryID, &f.MediaItemID, &f.EpisodeID, &f.Path, &f.Size, &f.Mtime, &f.DurationSec,
 		&f.Container, &f.VideoCodec, &f.AudioCodec, &f.Width, &f.Height, &f.AudioTracks, &f.SubtitleTracks,
 		&f.HasStill, &f.AddedAt, &f.PositionSec, &f.Watched, &f.Optimized, &f.Problem,
-		&f.Role, &f.PartNo, &f.ExtraTitle, &f.RolePinned, &f.Edition)
+		&f.Role, &f.PartNo, &f.ExtraTitle, &f.RolePinned, &f.Edition, &f.DynamicRange, &f.DVProfile)
 	return f, err
 }
 
@@ -185,9 +189,16 @@ func (d *DB) TouchFile(ctx context.Context, id, seen int64) error {
 // UpsertFile inserts or refreshes a file row keyed by path and returns its id.
 func (d *DB) UpsertFile(ctx context.Context, f File, seen int64) (int64, error) {
 	var id int64
+	// A file that couldn't be read has no known range (NULL), so it's read
+	// again once it can be.
+	var dr any = f.DynamicRange
+	if f.Problem != "" {
+		dr = nil
+	}
 	err := d.sql.QueryRowContext(ctx, `INSERT INTO files (library_id, media_item_id, episode_id, path, size, mtime,
-		duration_sec, container, video_codec, audio_codec, width, height, audio_tracks, subtitle_tracks, problem, last_seen)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		duration_sec, container, video_codec, audio_codec, width, height, audio_tracks, subtitle_tracks, problem, last_seen,
+		dynamic_range, dv_profile)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (path) DO UPDATE SET library_id = excluded.library_id,
 		  -- a file merged under another title by hand stays there, whatever its name says
 		  media_item_id = CASE WHEN files.item_pinned THEN files.media_item_id ELSE excluded.media_item_id END,
@@ -196,11 +207,24 @@ func (d *DB) UpsertFile(ctx context.Context, f File, seen int64) (int64, error) 
 		  duration_sec = excluded.duration_sec, container = excluded.container, video_codec = excluded.video_codec,
 		  audio_codec = excluded.audio_codec, width = excluded.width, height = excluded.height,
 		  audio_tracks = excluded.audio_tracks, subtitle_tracks = excluded.subtitle_tracks,
-		  problem = excluded.problem, has_still = 0, last_seen = excluded.last_seen
+		  problem = excluded.problem, has_still = 0, last_seen = excluded.last_seen,
+		  dynamic_range = excluded.dynamic_range, dv_profile = excluded.dv_profile
 		RETURNING id`,
 		f.LibraryID, f.MediaItemID, f.EpisodeID, f.Path, f.Size, f.Mtime, f.DurationSec, f.Container, f.VideoCodec,
-		f.AudioCodec, f.Width, f.Height, f.AudioTracks, f.SubtitleTracks, f.Problem, seen).Scan(&id)
+		f.AudioCodec, f.Width, f.Height, f.AudioTracks, f.SubtitleTracks, f.Problem, seen, dr, f.DVProfile).Scan(&id)
 	return id, err
+}
+
+// FilesNeedingDynamicRange lists a library's readable files whose dynamic
+// range hasn't been read (indexed before it was recorded).
+func (d *DB) FilesNeedingDynamicRange(ctx context.Context, libraryID int64) ([]File, error) {
+	return d.queryFiles(ctx, `WHERE f.library_id = ? AND f.problem = '' AND f.dynamic_range IS NULL ORDER BY f.id`, libraryID)
+}
+
+// SetDynamicRange records a file's dynamic range (see File.DynamicRange).
+func (d *DB) SetDynamicRange(ctx context.Context, id int64, dynamicRange string, dvProfile int) error {
+	_, err := d.sql.ExecContext(ctx, `UPDATE files SET dynamic_range = ?, dv_profile = ? WHERE id = ?`, dynamicRange, dvProfile, id)
+	return err
 }
 
 // SetFileEdition records which cut of a film a file is.

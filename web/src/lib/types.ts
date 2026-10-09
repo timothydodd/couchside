@@ -1,6 +1,9 @@
 export type ItemKind = "movie" | "series";
 export type MatchStatus = "pending" | "matched" | "unmatched";
 
+/** A video's dynamic range: Dolby Vision, HDR10, HLG, or "" for SDR (or not read yet). */
+export type DynamicRange = "" | "dv" | "hdr10" | "hlg";
+
 export interface ItemSummary {
   id: number;
   kind: ItemKind;
@@ -20,6 +23,8 @@ export interface ItemSummary {
   /** On this profile's "My list". */
   inWatchlist: boolean;
   lastAddedAt: number;
+  /** The best among the title's copies and episodes (extras aside). */
+  dynamicRange: DynamicRange;
 }
 
 export interface Item extends ItemSummary {
@@ -62,6 +67,9 @@ export interface MediaFile {
   rolePinned: boolean;
   /** Which cut ("Extended"); "" for the ordinary one. */
   edition: string;
+  dynamicRange: DynamicRange;
+  /** The Dolby Vision profile (5, 7, 8…); 0 when it isn't Dolby Vision. */
+  dvProfile: number;
 }
 
 export interface EpisodeRow {
@@ -683,6 +691,7 @@ export interface ManageFile {
   role: FileRole;
   partNo: number;
   extraTitle: string;
+  dynamicRange: DynamicRange;
 }
 
 /** GET /api/items/{id}/lookup */

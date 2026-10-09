@@ -8,6 +8,7 @@ import { attempt } from "../../lib/notices";
 import { canDirectPlay } from "../../lib/playback";
 import { PROBLEM_TEXT, type MediaFile } from "../../lib/types";
 import { useIsAdmin } from "../../stores/auth";
+import RangeChip from "../RangeChip";
 
 /** How this browser will play a file. */
 export function PlaybackChip({ f }: { f: MediaFile }) {
@@ -60,7 +61,12 @@ export default function FilesCard({ files, onChange }: { files: MediaFile[]; onC
                     {f.path}
                   </Link>
                 </td>
-                <td>{fmtResolution(f.width, f.height) && <span className="chip">{fmtResolution(f.width, f.height)}</span>}</td>
+                <td>
+                  <span className="inline-flex flex-wrap items-center gap-1">
+                    {fmtResolution(f.width, f.height) && <span className="chip">{fmtResolution(f.width, f.height)}</span>}
+                    <RangeChip range={f.dynamicRange} dvProfile={f.dvProfile} />
+                  </span>
+                </td>
                 <td className="mono hidden text-content-secondary sm:table-cell">{f.videoCodec || "?"}</td>
                 <td className="mono hidden text-content-secondary sm:table-cell">
                   {f.audioCodec || "?"}

@@ -3,7 +3,7 @@ import { Trash2 } from "lucide-react";
 import { ErrorNote, Spinner } from "../ui";
 import { api } from "../../lib/api";
 import { fmtBytes, fmtRuntime, relPath } from "../../lib/format";
-import { codecLabel, qualityLabel, qualityTone } from "../../lib/quality";
+import { codecLabel, qualityLabel, qualityTone, rangeLabel } from "../../lib/quality";
 import type { DeleteResult, FileRole, ItemKind, ManageFile } from "../../lib/types";
 import { errText } from "../../lib/errors";
 
@@ -112,6 +112,7 @@ export default function FileList({
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5 text-xs">
                         <span className={`badge tint-${qualityTone(f.height)}`}>{qualityLabel(f.height)}</span>
+                        {rangeLabel(f.dynamicRange) && <span className="badge tint-info">{rangeLabel(f.dynamicRange)}</span>}
                         <span className="text-content-secondary">
                           {[f.videoCodec && codecLabel(f.videoCodec), f.audioCodec?.toUpperCase(), f.container.toUpperCase(), fmtRuntime(f.durationSec), fmtBytes(f.size)]
                             .filter(Boolean)

@@ -34,6 +34,20 @@ func (i *Info) HDR() bool {
 	return i.ColorTransfer == "smpte2084" || i.ColorTransfer == "arib-std-b67"
 }
 
+// DynamicRange names the video's range: "dv" (Dolby Vision, whatever is
+// underneath), "hdr10" (PQ), "hlg", or "" for SDR.
+func (i *Info) DynamicRange() string {
+	switch {
+	case i.DVProfile > 0:
+		return "dv"
+	case i.ColorTransfer == "smpte2084":
+		return "hdr10"
+	case i.ColorTransfer == "arib-std-b67":
+		return "hlg"
+	}
+	return ""
+}
+
 // EightBit420 reports whether the video is plain 8-bit 4:2:0, the only H.264 flavour browsers decode.
 func (i *Info) EightBit420() bool {
 	return i.PixFmt == "yuv420p" || i.PixFmt == "yuvj420p"

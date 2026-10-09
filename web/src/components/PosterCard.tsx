@@ -5,6 +5,7 @@ import FadeImg from "./FadeImg";
 import { useQueue } from "../stores/queue";
 import { posterUrl } from "../lib/api";
 import { placeholderAngle } from "../lib/format";
+import { rangeLabel, rangeShort } from "../lib/quality";
 import type { ItemSummary } from "../lib/types";
 
 /** Poster art, or a branded gradient with the title when there's no poster (bare: no title, for tiny thumbnails). */
@@ -75,6 +76,11 @@ export default function PosterCard({ item, selected, onClick }: { item: ItemSumm
             </span>
           )}
           {item.matchStatus === "unmatched" && <span className="art-badge scrim">Unmatched</span>}
+          {rangeShort(item.dynamicRange) && (
+            <span className="art-badge scrim" title={rangeLabel(item.dynamicRange)}>
+              {rangeShort(item.dynamicRange)}
+            </span>
+          )}
         </div>
         {item.rating != null && (
           <span className="art-badge scrim absolute bottom-1.5 left-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">

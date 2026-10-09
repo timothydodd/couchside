@@ -102,13 +102,14 @@ type ManageFile struct {
 	Role         string   `json:"role"`
 	PartNo       int      `json:"partNo"`
 	ExtraTitle   string   `json:"extraTitle"`
+	DynamicRange string   `json:"dynamicRange"` // dv, hdr10, hlg or ""
 }
 
 // ManageFiles lists an item's files in episode order, best copy first.
 func (d *DB) ManageFiles(ctx context.Context, itemID int64) ([]ManageFile, error) {
 	rows, err := d.sql.QueryContext(ctx, `SELECT f.id, f.path, f.size, f.duration_sec, f.container, f.video_codec,
 		f.audio_codec, f.width, f.height, f.problem, f.added_at, e.season, e.episode, COALESCE(e.title, ''),
-		f.role, f.part_no, f.extra_title
+		f.role, f.part_no, f.extra_title, COALESCE(f.dynamic_range, '')
 		FROM files f LEFT JOIN episodes e ON e.id = f.episode_id
 		WHERE f.media_item_id = ?
 		ORDER BY COALESCE(e.season, 0), COALESCE(e.episode, 0), CASE f.role WHEN 'copy' THEN 0 WHEN 'part' THEN 1 ELSE 2 END,
@@ -122,7 +123,7 @@ func (d *DB) ManageFiles(ctx context.Context, itemID int64) ([]ManageFile, error
 		var f ManageFile
 		if err := rows.Scan(&f.ID, &f.Path, &f.Size, &f.DurationSec, &f.Container, &f.VideoCodec, &f.AudioCodec,
 			&f.Width, &f.Height, &f.Problem, &f.AddedAt, &f.Season, &f.Episode, &f.EpisodeTitle,
-			&f.Role, &f.PartNo, &f.ExtraTitle); err != nil {
+			&f.Role, &f.PartNo, &f.ExtraTitle, &f.DynamicRange); err != nil {
 			return nil, err
 		}
 		out = append(out, f)

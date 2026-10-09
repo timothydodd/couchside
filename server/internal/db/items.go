@@ -27,6 +27,9 @@ type ItemSummary struct {
 	WatchedCount int      `json:"watchedCount"`
 	InWatchlist  bool     `json:"inWatchlist"` // on the profile's "My list"
 	LastAddedAt  int64    `json:"lastAddedAt"`
+	// DynamicRange is the best among the title's files (extras aside): dv,
+	// hdr10, hlg or "" (SDR or not known), for a badge.
+	DynamicRange string `json:"dynamicRange"`
 }
 
 // Item is the full detail record.
@@ -54,13 +57,24 @@ func summaryCols(ctx context.Context) string {
 	(SELECT COUNT(*) FROM files f WHERE f.media_item_id = m.id AND f.role <> 'extra'),
 	(SELECT COUNT(*) FROM files f ` + watchJoin(ctx) + ` WHERE f.media_item_id = m.id AND f.role <> 'extra' AND w.watched = 1),
 	EXISTS (SELECT 1 FROM profile_items pi WHERE pi.item_id = m.id AND pi.profile_id = ` + strconv.FormatInt(ProfileID(ctx), 10) + `),
-	COALESCE((SELECT MAX(f.added_at) FROM files f WHERE f.media_item_id = m.id), m.added_at) AS last_added`
+	COALESCE((SELECT MAX(f.added_at) FROM files f WHERE f.media_item_id = m.id), m.added_at) AS last_added,
+	COALESCE((SELECT MAX(CASE f.dynamic_range WHEN 'dv' THEN 3 WHEN 'hdr10' THEN 2 WHEN 'hlg' THEN 1 ELSE 0 END)
+		FROM files f WHERE f.media_item_id = m.id AND f.role <> 'extra'), 0)`
 }
 
 func scanSummary(dest *ItemSummary, extra ...any) []any {
 	return append([]any{&dest.ID, &dest.Kind, &dest.Title, &dest.SortTitle, &dest.Year, &genreScanner{&dest.Genres}, &dest.Rating,
 		&dest.RuntimeMin, &dest.HasPoster, &dest.HasBackdrop, &dest.MatchStatus, &dest.AddedAt, &dest.UpdatedAt,
-		&dest.FileCount, &dest.WatchedCount, &dest.InWatchlist, &dest.LastAddedAt}, extra...)
+		&dest.FileCount, &dest.WatchedCount, &dest.InWatchlist, &dest.LastAddedAt, rangeScanner{&dest.DynamicRange}}, extra...)
+}
+
+// rangeScanner reads summaryCols' range rank (3 dv, 2 hdr10, 1 hlg, 0 SDR) as its name.
+type rangeScanner struct{ dest *string }
+
+func (r rangeScanner) Scan(v any) error {
+	n, _ := v.(int64)
+	*r.dest = [...]string{"", "hlg", "hdr10", "dv"}[min(max(n, 0), 3)]
+	return nil
 }
 
 // Watchlist is the profile's "My list", newest first.

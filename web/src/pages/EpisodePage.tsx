@@ -10,6 +10,7 @@ import { BackButton, EmptyState, ErrorNote, Loading } from "../components/ui";
 import { api, backdropUrl, stillUrl, useApi } from "../lib/api";
 import { fmtAirDate, fmtClock, fmtResolution, fmtRuntime } from "../lib/format";
 import { attempt } from "../lib/notices";
+import RangeChip from "../components/RangeChip";
 import { PROBLEM_TEXT, type EpisodeDetail, type EpisodeRef } from "../lib/types";
 import { useIsAdmin } from "../stores/auth";
 
@@ -79,6 +80,7 @@ export default function EpisodePage({ id }: { id: number }) {
           {e.released && <span>{e.released}</span>}
           {runtime && <span>{runtime}</span>}
           {best && fmtResolution(best.width, best.height) && <span className="chip">{fmtResolution(best.width, best.height)}</span>}
+          {best && <RangeChip range={best.dynamicRange} dvProfile={best.dvProfile} />}
           {e.rating != null && (
             <span className="inline-flex items-center gap-1">
               <Star size={14} className="fill-warning text-warning" />
