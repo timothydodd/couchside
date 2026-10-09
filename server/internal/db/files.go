@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 type File struct {
@@ -167,23 +168,68 @@ type FileStamp struct {
 	MediaItemID int64
 }
 
-func (d *DB) FileStamp(ctx context.Context, path string) (*FileStamp, error) {
+const stampSelect = `SELECT f.path, f.id, f.size, f.mtime, m.parsed_title, m.parsed_year,
+	COALESCE(e.season, 0), COALESCE(e.episode, 0),
+	f.role, f.part_no, f.extra_title, f.role_pinned, f.problem, f.edition, f.item_pinned, f.media_item_id
+	FROM files f JOIN media_items m ON m.id = f.media_item_id LEFT JOIN episodes e ON e.id = f.episode_id `
+
+func scanStamp(r interface{ Scan(...any) error }, path *string) (*FileStamp, error) {
 	var s FileStamp
-	err := d.sql.QueryRowContext(ctx, `SELECT f.id, f.size, f.mtime, m.parsed_title, m.parsed_year,
-		COALESCE(e.season, 0), COALESCE(e.episode, 0),
-		f.role, f.part_no, f.extra_title, f.role_pinned, f.problem, f.edition, f.item_pinned, f.media_item_id
-		FROM files f JOIN media_items m ON m.id = f.media_item_id LEFT JOIN episodes e ON e.id = f.episode_id
-		WHERE f.path = ?`, path).Scan(&s.ID, &s.Size, &s.Mtime, &s.ParsedTitle, &s.ParsedYear, &s.Season, &s.Episode,
+	err := r.Scan(path, &s.ID, &s.Size, &s.Mtime, &s.ParsedTitle, &s.ParsedYear, &s.Season, &s.Episode,
 		&s.Role, &s.PartNo, &s.ExtraTitle, &s.RolePinned, &s.Problem, &s.Edition, &s.ItemPinned, &s.MediaItemID)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
 	return &s, err
 }
 
+func (d *DB) FileStamp(ctx context.Context, path string) (*FileStamp, error) {
+	var p string
+	s, err := scanStamp(d.sql.QueryRowContext(ctx, stampSelect+`WHERE f.path = ?`, path), &p)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return s, err
+}
+
+// FileStamps is FileStamp for every file of a library, keyed by path, so a
+// scan asks once instead of once per file.
+func (d *DB) FileStamps(ctx context.Context, libraryID int64) (map[string]*FileStamp, error) {
+	rows, err := d.sql.QueryContext(ctx, stampSelect+`WHERE f.library_id = ?`, libraryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]*FileStamp{}
+	for rows.Next() {
+		var p string
+		s, err := scanStamp(rows, &p)
+		if err != nil {
+			return nil, err
+		}
+		out[p] = s
+	}
+	return out, rows.Err()
+}
+
 func (d *DB) TouchFile(ctx context.Context, id, seen int64) error {
-	_, err := d.sql.ExecContext(ctx, `UPDATE files SET last_seen = ? WHERE id = ?`, seen, id)
-	return err
+	return d.TouchFiles(ctx, []int64{id}, seen)
+}
+
+// TouchFiles marks files seen, many per statement: one write lock and one
+// commit for hundreds of unchanged files instead of one each.
+func (d *DB) TouchFiles(ctx context.Context, ids []int64, seen int64) error {
+	for len(ids) > 0 {
+		n := min(len(ids), 500)
+		args := make([]any, 0, n+1)
+		args = append(args, seen)
+		for _, id := range ids[:n] {
+			args = append(args, id)
+		}
+		q := `UPDATE files SET last_seen = ? WHERE id IN (?` + strings.Repeat(",?", n-1) + `)`
+		if _, err := d.sql.ExecContext(ctx, q, args...); err != nil {
+			return err
+		}
+		ids = ids[n:]
+	}
+	return nil
 }
 
 // UpsertFile inserts or refreshes a file row keyed by path and returns its id.

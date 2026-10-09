@@ -119,3 +119,39 @@ func BenchmarkItems5k(b *testing.B) {
 		}
 	})
 }
+
+// TouchFiles marks exactly the files given, across its 500-id chunks, and
+// FileStamps reads the same stamps FileStamp does, for one library only.
+func TestTouchFilesAndStamps(t *testing.T) {
+	d := openTest(t)
+	ctx := context.Background()
+	a, _ := d.CreateLibrary(ctx, "A", "/a", "movies")
+	b, _ := d.CreateLibrary(ctx, "B", "/b", "movies")
+	item, _, _ := d.EnsureItem(ctx, a, "movie", "Heat", 1995)
+	var ids []int64
+	for i := 0; i < 1201; i++ {
+		id, err := d.UpsertFile(ctx, File{LibraryID: a, MediaItemID: item, Path: fmt.Sprintf("/a/%d.mkv", i), Size: 1, Mtime: 1}, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	other, _ := d.UpsertFile(ctx, File{LibraryID: b, MediaItemID: item, Path: "/b/x.mkv", Size: 1, Mtime: 1}, 1)
+	if err := d.TouchFiles(ctx, ids, 99); err != nil {
+		t.Fatal(err)
+	}
+	var touched, untouched int
+	d.sql.QueryRow(`SELECT COUNT(*) FROM files WHERE last_seen = 99`).Scan(&touched)
+	d.sql.QueryRow(`SELECT COUNT(*) FROM files WHERE id = ? AND last_seen = 1`, other).Scan(&untouched)
+	if touched != 1201 || untouched != 1 {
+		t.Fatalf("touched %d (want 1201), other library untouched %d", touched, untouched)
+	}
+	stamps, err := d.FileStamps(ctx, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	one, _ := d.FileStamp(ctx, "/a/7.mkv")
+	if len(stamps) != 1201 || stamps["/b/x.mkv"] != nil || !reflect.DeepEqual(stamps["/a/7.mkv"], one) {
+		t.Fatalf("stamps: %d, other library's %v, /a/7 %+v vs %+v", len(stamps), stamps["/b/x.mkv"], stamps["/a/7.mkv"], one)
+	}
+}

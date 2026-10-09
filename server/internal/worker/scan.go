@@ -125,6 +125,21 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 		}
 	}
 
+	// Every file the library had, read once: an unchanged file then costs
+	// no query, and is marked seen in batches.
+	stamps, err := w.db.FileStamps(ctx, lib.ID)
+	if err != nil {
+		return "", err
+	}
+	var touched []int64
+	touch := func(id int64) error {
+		touched = append(touched, id)
+		if len(touched) >= 500 {
+			return flushTouched(ctx, w.db, &touched, start)
+		}
+		return nil
+	}
+
 	walkErr := filepath.WalkDir(lib.Path, func(path string, d fs.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -187,9 +202,12 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 			skips.add(skipSample, relPath(lib, path))
 			return nil
 		}
-		stamp, err := w.db.FileStamp(ctx, path)
-		if err != nil {
-			return err
+		stamp := stamps[path]
+		if stamp == nil {
+			// New, or rowed under another library (nested library folders).
+			if stamp, err = w.db.FileStamp(ctx, path); err != nil {
+				return err
+			}
 		}
 		// A file once unreadable is probed again: the failure may have been the share, not the file.
 		if stamp != nil && stamp.Size == info.Size() && stamp.Mtime == info.ModTime().Unix() && stamp.Problem != "unreadable" &&
@@ -197,7 +215,7 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 			if err := w.refreshRole(ctx, lib, path, stamp); err != nil {
 				return err
 			}
-			return w.db.TouchFile(ctx, stamp.ID, start)
+			return touch(stamp.ID)
 		}
 		ok, err := w.indexFile(ctx, lib, path, info, start)
 		if errors.Is(err, errProbeTimeout) {
@@ -206,7 +224,7 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 			slog.Warn("scan: ffprobe timed out; will try again next scan", "path", path)
 			skips.add(skipTimeout, relPath(lib, path))
 			if stamp != nil {
-				return w.db.TouchFile(ctx, stamp.ID, start)
+				return touch(stamp.ID)
 			}
 			return nil
 		}
@@ -226,6 +244,10 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 	if walkErr != nil {
 		// Don't prune after a partial walk: missing files may just be unvisited.
 		return "", walkErr
+	}
+	// Before anything can prune: an unflushed file would look unseen.
+	if err := flushTouched(ctx, w.db, &touched, start); err != nil {
+		return "", err
 	}
 	if unreadable != "" {
 		slog.Warn("scan incomplete, nothing removed", "library", lib.Name, "unreadable", unreadable, "added", added, "changed", changed)
@@ -255,6 +277,16 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 		return summary, err
 	}
 	return summary, w.db.MarkLibraryScanned(ctx, lib.ID, time.Now().Unix())
+}
+
+// flushTouched marks the batched unchanged files seen.
+func flushTouched(ctx context.Context, d *db.DB, ids *[]int64, seen int64) error {
+	if len(*ids) == 0 {
+		return nil
+	}
+	err := d.TouchFiles(ctx, *ids, seen)
+	*ids = (*ids)[:0]
+	return err
 }
 
 // TidyCache brings the cache in line with a prune or a library delete. A renamed file's folder
