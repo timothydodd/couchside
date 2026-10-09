@@ -103,9 +103,16 @@ func (s *Server) Run(ctx context.Context) {
 			}
 		}
 	}()
-	// Print the setup code at start-up if there's no admin yet.
+	// Print the setup code at start-up if there's no admin yet, or (with
+	// passwordless sign-in) while the first run isn't done, for an owner
+	// setting up from outside the home network.
 	if _, err := s.setupNeeded(ctx); err != nil {
 		slog.Error("accounts", "err", err)
+	}
+	if first, err := s.firstRun(ctx); err != nil {
+		slog.Error("accounts", "err", err)
+	} else if on, _, _ := s.passwordless(ctx); first && on {
+		s.firstRunCode()
 	}
 	if s.cfg.Auth {
 		// Passwords are required now; sessions from passwordless days end.

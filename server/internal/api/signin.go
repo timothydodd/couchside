@@ -52,6 +52,9 @@ type authInfo struct {
 	Insecure           bool          `json:"insecure"`            // this request is plain HTTP from an internet address
 	// OIDC is the label of the "sign in with a provider" button, when there is one.
 	OIDC string `json:"oidc,omitempty"`
+	// RemoteFirstRun: first run, and this visitor isn't on the home network,
+	// so claiming the server needs the setup code from the log.
+	RemoteFirstRun bool `json:"remoteFirstRun"`
 }
 
 type profileStub struct {
@@ -90,6 +93,10 @@ func (s *Server) authStatus(w http.ResponseWriter, r *http.Request) {
 	if out.FirstRun, err = s.firstRun(ctx); err != nil {
 		writeErr(w, err)
 		return
+	}
+	if out.FirstRun && out.Passwordless && !localClient(r) {
+		out.RemoteFirstRun = true
+		s.firstRunCode()
 	}
 	if u, err := s.tokenUser(r); err == nil {
 		if p, err := s.db.Profile(ctx, u.ID); err == nil {

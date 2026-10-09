@@ -128,6 +128,11 @@ func publicAddr(ip string) bool {
 	return !(a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast() || a.IsUnspecified() || cgnat.Contains(a))
 }
 
+// localClient says the request comes from this machine or the local network
+// (loopback, private, link-local, CGNAT and Tailscale), as realIP worked it
+// out from trusted proxies.
+func localClient(r *http.Request) bool { return !publicAddr(clientIP(r)) }
+
 // plainHTTPFromInternet is a sign-in that sends a password or token in the clear
 // across the internet.
 func plainHTTPFromInternet(r *http.Request) bool {

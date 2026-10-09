@@ -28,9 +28,14 @@ rules and server settings are shared. Switch profiles from the sidebar.
   It suits a demo server, where visitors needn't see the admin account. It
   only keeps the account out of sight, so give it a password.
 - **First run.** A new server is passwordless with one admin profile, "Me".
-  With `COUCHSIDE_AUTH=true` and no admin password yet, the server log prints a
-  one-time setup code; open the UI and enter it with your name and a password.
-  Use an existing profile's name to keep its watch history.
+  Until the first run is finished, only a browser on the home network (or the
+  server itself, a VPN or Tailscale) can claim it. From anywhere else it asks
+  for the one-time setup code printed in the server log, and a password.
+  Behind a reverse proxy, set `COUCHSIDE_TRUSTED_PROXIES` so the server sees
+  visitors' real addresses (or every visitor looks like the proxy, which is on
+  the home network). With `COUCHSIDE_AUTH=true` and no admin password yet, the
+  log prints the setup code too; open the UI and enter it with your name and a
+  password. Use an existing profile's name to keep its watch history.
 - **Roles.** Admins reach Settings, Libraries, file management, Activity and the
   account manager. Users watch and change their own preferences and password.
   Recording is a per-account switch an admin turns on. So is "can set and

@@ -737,6 +737,8 @@ export interface AuthInfo {
   setupRequired: boolean;
   /** The first-run setup (your name, your media) isn't done. */
   firstRun: boolean;
+  /** First run, and this browser isn't on the server's home network: claiming it needs the setup code. */
+  remoteFirstRun?: boolean;
   user: Profile | null;
   accessExpiresAt?: number;
   /** Seconds until the access token runs out. */

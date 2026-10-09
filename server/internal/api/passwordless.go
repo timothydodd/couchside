@@ -140,6 +140,13 @@ func (s *Server) pick(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip := clientIP(r)
+	if first, err := s.firstRun(ctx); err != nil {
+		writeErr(w, err)
+		return
+	} else if first && !localClient(r) {
+		refuseRemoteFirstRun(w, ip)
+		return
+	}
 	if wait := s.auth.picks.Wait(ip); wait > 0 {
 		retryLater(w, wait)
 		return
