@@ -16,9 +16,15 @@ prints a one-time setup code:
   kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "couchside.fullname" . }} | grep -i "setup code"
 {{- else }}
 
-Sign-in is passwordless at first: pick a profile. Before putting Couchside on
-the internet, set auth.enabled=true, give every account a password and serve
-it over HTTPS (docs/install.md).
+Sign-in is passwordless at first: pick a profile. Until the first run is
+done, a browser outside your home network needs the setup code from the log.
+Before putting Couchside on the internet, set auth.enabled=true, give every
+account a password and serve it over HTTPS (docs/install.md).
+{{- if .Values.ingress.enabled }}
+
+WARNING: this ingress allows passwordless sign-in (auth.allowOpenIngress).
+Anyone who can open {{ .Values.ingress.host }} can pick a profile.
+{{- end }}
 {{- end }}
 
 Lost the admin password?

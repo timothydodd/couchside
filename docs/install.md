@@ -93,8 +93,12 @@ kubectl create namespace media
 
 helm install couchside deploy/helm/couchside -n media \
   --set media.type=nfs --set media.nfs.server=192.168.1.10 --set media.nfs.path=/volume1/media \
-  --set ingress.enabled=true --set ingress.host=couchside.home.lan
+  --set ingress.enabled=true --set ingress.host=couchside.home.lan \
+  --set auth.enabled=true
 ```
+
+The pod log prints a one-time setup code; open the UI and enter it with your
+name and a password.
 
 - Media can be NFS, a hostPath or an existing PVC (`media.type`). The SQLite
   database lives on its own PVC. Media is mounted read-only unless you set
@@ -106,8 +110,14 @@ helm install couchside deploy/helm/couchside -n media \
   `extraEnv`.
 - The memory limit (4Gi) covers the server and every ffmpeg it runs; raise it
   for several software 4K transcodes at once.
+- The chart refuses an Ingress without `auth.enabled=true`. For an ingress
+  only your LAN can reach, `auth.allowOpenIngress=true` keeps passwordless
+  sign-in.
 - The Deployment uses `strategy: Recreate` because the database sits on a
-  ReadWriteOnce volume. Don't scale it past one replica.
+  ReadWriteOnce volume. Don't scale it past one replica. Upgrading restarts
+  the pod: a recording in progress is cut and resumed by the new one.
+- Liveness uses `/livez` (the process answers) and readiness `/healthz` (the
+  database answers), so a long scan or backup doesn't get the pod restarted.
 - LAN discovery needs `discovery.hostNetwork=true` (multicast doesn't reach
   the pod network); the pod then serves on the node's port 8080.
 - Optional keys come from Secrets: `tmdb.existingSecret` for your own TMDB key

@@ -18,6 +18,7 @@ spec:
     spec:
       # Couchside never talks to the Kubernetes API.
       automountServiceAccountToken: false
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       {{- if .Values.discovery.hostNetwork }}
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
@@ -150,16 +151,23 @@ spec:
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          # /healthz asks the database; /livez only that the process answers,
+          # so a busy database (a scan, a backup) never gets the pod killed.
           startupProbe:
             httpGet: { path: /healthz, port: http }
             periodSeconds: {{ .Values.startupProbe.periodSeconds }}
             failureThreshold: {{ .Values.startupProbe.failureThreshold }}
+            timeoutSeconds: 5
           readinessProbe:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
           livenessProbe:
-            httpGet: { path: /healthz, port: http }
+            httpGet: { path: /livez, port: http }
             periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 6
           resources: {{- toYaml .Values.resources | nindent 12 }}
       volumes:
         - name: data

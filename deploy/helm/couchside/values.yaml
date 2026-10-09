@@ -30,6 +30,11 @@ omdb:
 #   kubectl exec -it deploy/couchside -- couchside reset-password -admin <name>
 auth:
   enabled: false
+  # An Ingress puts Couchside where people outside your home may reach it, so
+  # the chart refuses ingress.enabled=true unless auth.enabled is true too.
+  # For an ingress only your LAN can reach, allowOpenIngress: true keeps
+  # passwordless sign-in.
+  allowOpenIngress: false
   # Reverse proxies whose X-Forwarded-For / X-Forwarded-Proto Couchside
   # believes (CIDRs or addresses). Behind the ingress, that's the ingress
   # controller's pods: on k3s with Traefik, the pod network, 10.42.0.0/16.
@@ -172,10 +177,17 @@ podSecurityContext:
 readOnlyRootFilesystem: false
 
 # Liveness only starts once the server has answered. Hardware detection and
-# database migrations run before it listens, so allow a few minutes.
+# database migrations run before it listens, so allow a few minutes. The
+# startup and readiness probes ask the database (/healthz); liveness only asks
+# whether the process answers (/livez).
 startupProbe:
   periodSeconds: 5
   failureThreshold: 60
+
+# How long a stopping pod has to finish requests, leave its job for the next
+# start and close the database. A recording in progress is cut either way and
+# resumed by the next pod.
+terminationGracePeriodSeconds: 60
 
 nodeSelector: {}
 tolerations: []
