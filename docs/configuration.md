@@ -114,3 +114,9 @@ in `backups/`). The database it replaces is kept as
 `couchside.db.before-restore`. In Kubernetes: scale the Deployment to 0, run a
 one-off pod of the same image with the data volume and `restore` as its
 argument, then scale back up.
+
+**Going back to an older version.** An older Couchside won't open a database
+a newer one has upgraded: it stops with a message naming the newer change.
+To go back, stop Couchside, run `couchside restore couchside-upgrade-<time>.db`
+(the copy saved just before the upgrade) with the older version, then start
+it. Anything changed since that upgrade is lost.

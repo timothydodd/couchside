@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -20,6 +21,9 @@ import (
 
 //go:embed migrations/*.sql
 var migrationFS embed.FS
+
+// migrations is the set migrate applies; tests swap in extra ones.
+var migrations fs.FS = migrationFS
 
 // ErrNotFound is returned by single-row lookups that match nothing.
 var ErrNotFound = errors.New("not found")
@@ -109,7 +113,7 @@ func migrate(s *sql.DB, path string) error {
 		applied_at INTEGER NOT NULL DEFAULT (unixepoch()))`); err != nil {
 		return err
 	}
-	entries, err := fs.ReadDir(migrationFS, "migrations")
+	entries, err := fs.ReadDir(migrations, "migrations")
 	if err != nil {
 		return err
 	}
@@ -118,24 +122,23 @@ func migrate(s *sql.DB, path string) error {
 		names = append(names, e.Name())
 	}
 	sort.Strings(names)
-	var applied int
-	if err := s.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&applied); err != nil {
+	applied, err := appliedMigrations(s)
+	if err != nil {
 		return err
 	}
-	backedUp := applied == 0 // a new database has nothing to keep
+	if err := checkMigrations(names, applied, filepath.Join(filepath.Dir(path), BackupDir)); err != nil {
+		return err
+	}
+	backedUp := len(applied) == 0 // a new database has nothing to keep
 	for _, name := range names {
-		var n int
-		if err := s.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE version = ?`, name).Scan(&n); err != nil {
-			return err
-		}
-		if n > 0 {
+		if applied[name] {
 			continue
 		}
 		if !backedUp {
 			backupBeforeUpgrade(s, path)
 			backedUp = true
 		}
-		body, err := migrationFS.ReadFile("migrations/" + name)
+		body, err := fs.ReadFile(migrations, "migrations/"+name)
 		if err != nil {
 			return err
 		}
@@ -154,6 +157,67 @@ func migrate(s *sql.DB, path string) error {
 		if err := tx.Commit(); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// ErrNewerDatabase means the database was last migrated by a newer
+// Couchside than this one, which would misread it.
+type ErrNewerDatabase struct{ Newest, BackupDir string }
+
+func (e *ErrNewerDatabase) Error() string {
+	return fmt.Sprintf("this database was upgraded by a newer version of Couchside (migration %s), so this version can't use it. "+
+		"Run the newer version, or stop Couchside and restore the copy saved before that upgrade "+
+		"(couchside-upgrade-<time>.db in %s) with `couchside restore <file>`", e.Newest, e.BackupDir)
+}
+
+func appliedMigrations(s *sql.DB) (map[string]bool, error) {
+	rows, err := s.Query(`SELECT version FROM schema_migrations`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil, err
+		}
+		out[v] = true
+	}
+	return out, rows.Err()
+}
+
+// checkMigrations refuses a database this build would misread: one with a
+// migration it doesn't know (a newer Couchside ran on it), or one missing a
+// migration older than another it has (the table was edited by hand).
+// names must be sorted.
+func checkMigrations(names []string, applied map[string]bool, backupDir string) error {
+	known := make(map[string]bool, len(names))
+	for _, n := range names {
+		known[n] = true
+	}
+	var unknown []string
+	newest := ""
+	for v := range applied {
+		if !known[v] {
+			unknown = append(unknown, v)
+		}
+		newest = max(newest, v)
+	}
+	if len(unknown) > 0 {
+		sort.Strings(unknown)
+		return &ErrNewerDatabase{Newest: unknown[len(unknown)-1], BackupDir: backupDir}
+	}
+	var missing []string
+	for _, n := range names {
+		if n < newest && !applied[n] {
+			missing = append(missing, n)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("the database has migration %s but not the earlier %s, so it was changed by hand; restore a backup from %s with `couchside restore <file>`",
+			newest, strings.Join(missing, ", "), backupDir)
 	}
 	return nil
 }
