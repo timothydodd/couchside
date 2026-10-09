@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"strings"
+	"time"
 )
 
 type Job struct {
@@ -65,7 +66,8 @@ func (d *DB) ClaimJob(ctx context.Context, encode bool) (*Job, error) {
 func (d *DB) claim(ctx context.Context, where string, args ...any) (*Job, error) {
 	j, err := scanJob(d.sql.QueryRowContext(ctx, `UPDATE jobs SET status = 'running', attempts = attempts + 1,
 		started_at = unixepoch(), error = '', progress = NULL, result = ''
-		WHERE id = (SELECT id FROM jobs WHERE status = 'queued' AND `+where+` ORDER BY id LIMIT 1)
+		WHERE id = (SELECT id FROM jobs WHERE status = 'queued' AND (not_before IS NULL OR not_before <= unixepoch()) AND `+where+`
+		  ORDER BY id LIMIT 1)
 		RETURNING `+jobCols, args...))
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -74,6 +76,15 @@ func (d *DB) claim(ctx context.Context, where string, args ...any) (*Job, error)
 		return nil, err
 	}
 	return &j, nil
+}
+
+// RetryJobLater queues a job that failed for a passing reason again, to be
+// claimed no sooner than delay from now. why stays in its error so Activity
+// shows what went wrong meanwhile.
+func (d *DB) RetryJobLater(ctx context.Context, id int64, delay time.Duration, why string) error {
+	_, err := d.sql.ExecContext(ctx, `UPDATE jobs SET status = 'queued', not_before = unixepoch() + ?, error = ?, progress = NULL
+		WHERE id = ?`, int64(delay/time.Second), why, id)
+	return err
 }
 
 func (d *DB) FinishJob(ctx context.Context, id int64, jobErr error) error {

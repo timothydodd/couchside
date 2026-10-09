@@ -41,6 +41,9 @@ type TMDB struct {
 	badKeyBackoff time.Duration
 }
 
+// ErrRateLimited means TMDB asked us to slow down (HTTP 429): try again later.
+var ErrRateLimited = errors.New("tmdb: rate limited (HTTP 429); will retry")
+
 // ErrBadKey means TMDB refused the API key (HTTP 401). If the key is the one
 // built into Couchside, every server using it is refused at once.
 var ErrBadKey = errors.New("tmdb: the API key was refused (HTTP 401)")
@@ -626,7 +629,7 @@ func (t *TMDB) get(ctx context.Context, path string, q url.Values, ttl time.Dura
 			t.keyRefused()
 			return ErrBadKey
 		case status == http.StatusTooManyRequests:
-			return errors.New("tmdb: rate limited (HTTP 429); will retry")
+			return ErrRateLimited
 		case status != http.StatusOK:
 			return fmt.Errorf("tmdb: HTTP %d", status)
 		}

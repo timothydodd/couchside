@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 // oldSummaryCols is summaryCols as Items used it before the aggregated join,
@@ -198,5 +199,31 @@ func TestClaimJobOrder(t *testing.T) {
 	rows.Close()
 	if !strings.Contains(plan, "jobs_queued") {
 		t.Errorf("claim doesn't use jobs_queued: %s", plan)
+	}
+}
+
+// A job queued again for later isn't claimed before its time.
+func TestRetryJobLater(t *testing.T) {
+	d := openTest(t)
+	ctx := context.Background()
+	if err := d.Enqueue(ctx, "match", 1, "Match Heat"); err != nil {
+		t.Fatal(err)
+	}
+	j, err := d.ClaimJob(ctx, false)
+	if err != nil || j == nil {
+		t.Fatalf("claim: %v, %v", j, err)
+	}
+	if err := d.RetryJobLater(ctx, j.ID, time.Hour, "network down (trying again in 1h0m0s)"); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := d.ClaimJob(ctx, false); again != nil {
+		t.Fatal("claimed before its time")
+	}
+	if got, _ := d.Job(ctx, j.ID); got.Status != "queued" || got.Error == "" {
+		t.Fatalf("job = %+v, want queued with the reason", got)
+	}
+	d.sql.Exec(`UPDATE jobs SET not_before = unixepoch() - 1 WHERE id = ?`, j.ID)
+	if again, _ := d.ClaimJob(ctx, false); again == nil || again.ID != j.ID || again.Attempts != 2 {
+		t.Fatalf("after its time: %+v", again)
 	}
 }
