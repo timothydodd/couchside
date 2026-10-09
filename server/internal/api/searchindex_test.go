@@ -10,8 +10,6 @@ import (
 	"github.com/timothydodd/couchside/internal/db"
 )
 
-
-
 // Searches are answered from the current snapshot at once; an old one is
 // rebuilt in the background and swapped in, and concurrent searches never
 // see a missing index.
