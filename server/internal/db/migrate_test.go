@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"io/fs"
@@ -152,5 +153,24 @@ func TestOpenCreatesIndexes(t *testing.T) {
 		if !have[want] {
 			t.Errorf("no index %s", want)
 		}
+	}
+}
+
+// Maintain runs on a live database and leaves the write-ahead log empty.
+func TestMaintain(t *testing.T) {
+	p := newDBFile(t)
+	d, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if _, err := d.CreateLibrary(context.Background(), "Films", "/films", "movies"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Maintain(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if st, err := os.Stat(p + "-wal"); err == nil && st.Size() != 0 {
+		t.Errorf("wal is %d bytes after a TRUNCATE checkpoint", st.Size())
 	}
 }

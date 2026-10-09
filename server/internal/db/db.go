@@ -42,6 +42,10 @@ func Open(path string) (*DB, error) {
 	q.Add("_pragma", "journal_mode(WAL)")
 	q.Add("_pragma", "foreign_keys(1)")
 	q.Add("_pragma", "synchronous(NORMAL)")
+	// 16 MB of page cache per connection (SQLite's default is 2 MB): the
+	// library lists and scans reread the same pages. modernc's cache is Go
+	// heap, so it counts against GOMEMLIMIT; 8 connections stay under 128 MB.
+	q.Add("_pragma", "cache_size(-16384)")
 	q.Set("_txlock", "immediate")
 	s, err := sql.Open("sqlite", "file:"+path+"?"+q.Encode())
 	if err != nil {
@@ -238,6 +242,24 @@ func checkMigrations(names []string, applied map[string]bool, backupDir string) 
 	if len(missing) > 0 {
 		return fmt.Errorf("the database has migration %s but not the earlier %s, so it was changed by hand; restore a backup from %s with `couchside restore <file>`",
 			newest, strings.Join(missing, ", "), backupDir)
+	}
+	return nil
+}
+
+// Maintain is the database's daily housekeeping: PRAGMA optimize refreshes
+// the planner's statistics where tables have changed, and a TRUNCATE
+// checkpoint folds the write-ahead log back in and shrinks it, which long
+// reads during a scan can stop the automatic checkpoints from doing.
+func (d *DB) Maintain(ctx context.Context) error {
+	if _, err := d.sql.ExecContext(ctx, `PRAGMA optimize`); err != nil {
+		return err
+	}
+	var busy, logPages, done int
+	if err := d.sql.QueryRowContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`).Scan(&busy, &logPages, &done); err != nil {
+		return err
+	}
+	if busy != 0 {
+		slog.Info("database checkpoint couldn't finish while a read was open; it runs again tomorrow", "pages", logPages, "done", done)
 	}
 	return nil
 }

@@ -152,6 +152,9 @@ func (s *Server) pruneTables(ctx context.Context) {
 	if jobs+cached+int64(len(people)) > 0 {
 		slog.Info("pruned old rows", "jobs", jobs, "providerResponses", cached, "people", len(people))
 	}
+	if err := s.db.Maintain(ctx); err != nil {
+		slog.Warn("database maintenance", "err", err)
+	}
 }
 
 // securityHeaders: nothing is sniffed into another type, and the UI can't be
