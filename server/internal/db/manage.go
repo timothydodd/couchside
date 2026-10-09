@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 )
 
 // ManageRow is one movie or show in a library's Manage view.
@@ -34,12 +35,12 @@ type ManageRow struct {
 // ManageRows lists a library's items with the file facts the Manage view
 // sorts and filters on.
 func (d *DB) ManageRows(ctx context.Context, libraryID int64) ([]ManageRow, error) {
-	return d.manageRows(ctx, `EXISTS (SELECT 1 FROM files fl WHERE fl.media_item_id = m.id AND fl.library_id = ?)`, libraryID)
+	return d.manageRows(ctx, true, `EXISTS (SELECT 1 FROM files fl WHERE fl.media_item_id = m.id AND fl.library_id = ?)`, libraryID)
 }
 
 // ManageRow is one title's Manage row, for the title page's Edit panel.
 func (d *DB) ManageRow(ctx context.Context, itemID int64) (ManageRow, error) {
-	rows, err := d.manageRows(ctx, `m.id = ?`, itemID)
+	rows, err := d.manageRows(ctx, false, `m.id = ?`, itemID)
 	if err != nil {
 		return ManageRow{}, err
 	}
@@ -49,10 +50,40 @@ func (d *DB) ManageRow(ctx context.Context, itemID int64) (ManageRow, error) {
 	return rows[0], nil
 }
 
-func (d *DB) manageRows(ctx context.Context, where string, arg any) ([]ManageRow, error) {
+// manageAggCols are manageRows' per-title file numbers from one pass over
+// files grouped by title (fs), for a whole library: the same values as the
+// correlated subqueries below, which suit a single title better.
+const manageAggCols = `COALESCE(fs.files, 0), COALESCE(fs.episodes, 0), COALESCE(fs.size, 0), COALESCE(best.height, 0),
+		COALESCE(fs.min_height, 0), COALESCE(best.video_codec, ''),
+		(SELECT COUNT(*) FROM media_items m2 WHERE m2.id <> m.id AND m.imdb_id <> '' AND m2.imdb_id = m.imdb_id),
+		COALESCE(fs.parts, 0), COALESCE(fs.extras, 0), COALESCE(fs.editions, 0)`
+
+const manageAggJoin = ` LEFT JOIN (SELECT f.media_item_id AS item_id, COUNT(*) AS files, COUNT(DISTINCT f.episode_id) AS episodes,
+		SUM(f.size) AS size, MIN(CASE WHEN f.role <> 'extra' THEN COALESCE(f.height, 0) END) AS min_height,
+		SUM(CASE WHEN f.role = 'part' THEN 1 ELSE 0 END) AS parts, SUM(CASE WHEN f.role = 'extra' THEN 1 ELSE 0 END) AS extras,
+		COUNT(DISTINCT CASE WHEN f.role = 'copy' THEN f.edition END) AS editions
+		FROM files f GROUP BY f.media_item_id) fs ON fs.item_id = m.id`
+
+func (d *DB) manageRows(ctx context.Context, wholeLibrary bool, where string, arg any) ([]ManageRow, error) {
+	cols, join := manageRowCols, ""
+	if wholeLibrary {
+		cols, join = manageAggCols, manageAggJoin
+	}
 	rows, err := d.sql.QueryContext(ctx, `SELECT m.id, m.kind, m.title, m.year, m.parsed_title, m.parsed_year,
 		m.match_status, m.imdb_id, m.has_poster, m.custom_poster, m.custom_backdrop, m.updated_at, m.added_at,
-		(SELECT COUNT(*) FROM files f WHERE f.media_item_id = m.id),
+		`+cols+`
+		FROM media_items m`+join+`
+		LEFT JOIN files best ON best.id = (SELECT f.id FROM files f WHERE f.media_item_id = m.id AND f.role <> 'extra'
+		  ORDER BY COALESCE(f.height, 0) DESC, f.size DESC LIMIT 1)
+		WHERE `+where+` ORDER BY m.sort_title`, arg)
+	if err != nil {
+		return nil, err
+	}
+	return scanManageRows(rows)
+}
+
+// manageRowCols are the per-title file numbers as correlated subqueries.
+const manageRowCols = `(SELECT COUNT(*) FROM files f WHERE f.media_item_id = m.id),
 		(SELECT COUNT(DISTINCT f.episode_id) FROM files f WHERE f.media_item_id = m.id),
 		(SELECT COALESCE(SUM(f.size), 0) FROM files f WHERE f.media_item_id = m.id),
 		COALESCE(best.height, 0),
@@ -61,14 +92,9 @@ func (d *DB) manageRows(ctx context.Context, where string, arg any) ([]ManageRow
 		(SELECT COUNT(*) FROM media_items m2 WHERE m2.id <> m.id AND m.imdb_id <> '' AND m2.imdb_id = m.imdb_id),
 		(SELECT COUNT(*) FROM files f WHERE f.media_item_id = m.id AND f.role = 'part'),
 		(SELECT COUNT(*) FROM files f WHERE f.media_item_id = m.id AND f.role = 'extra'),
-		(SELECT COUNT(DISTINCT f.edition) FROM files f WHERE f.media_item_id = m.id AND f.role = 'copy')
-		FROM media_items m
-		LEFT JOIN files best ON best.id = (SELECT f.id FROM files f WHERE f.media_item_id = m.id AND f.role <> 'extra'
-		  ORDER BY COALESCE(f.height, 0) DESC, f.size DESC LIMIT 1)
-		WHERE `+where+` ORDER BY m.sort_title`, arg)
-	if err != nil {
-		return nil, err
-	}
+		(SELECT COUNT(DISTINCT f.edition) FROM files f WHERE f.media_item_id = m.id AND f.role = 'copy')`
+
+func scanManageRows(rows *sql.Rows) ([]ManageRow, error) {
 	defer rows.Close()
 	out := []ManageRow{}
 	for rows.Next() {

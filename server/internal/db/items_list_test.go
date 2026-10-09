@@ -260,3 +260,51 @@ func TestRecordingsPaging(t *testing.T) {
 		t.Fatalf("pages covered %d recordings, want 7", len(seen))
 	}
 }
+
+// The Manage list's one pass over files gives each title the same numbers
+// as asking for that title alone.
+func TestManageRowsJoinMatchesSubqueries(t *testing.T) {
+	d := openTest(t)
+	ctx := context.Background()
+	me, _ := d.SetupAdmin(ctx, "Me", "hash")
+	seedLibrary(t, d, me.ID, 40)
+	// Parts and editions too: copies of a few titles become a part, or an
+	// Extended cut.
+	var ids []int64
+	rows, _ := d.sql.Query(`SELECT id FROM files WHERE role = 'copy' ORDER BY id LIMIT 6`)
+	for rows.Next() {
+		var id int64
+		rows.Scan(&id)
+		ids = append(ids, id)
+	}
+	rows.Close()
+	for i, id := range ids {
+		if i%2 == 0 {
+			if err := d.SetFileRole(ctx, id, "part", 2, ""); err != nil {
+				t.Fatal(err)
+			}
+		} else if err := d.SetFileEdition(ctx, id, "Extended"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	libs, err := d.Libraries(ctx)
+	if err != nil || len(libs) == 0 {
+		t.Fatalf("libraries: %v %v", libs, err)
+	}
+	all, err := d.ManageRows(ctx, libs[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 40 {
+		t.Fatalf("%d rows, want 40", len(all))
+	}
+	for _, r := range all {
+		one, err := d.ManageRow(ctx, r.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(r, one) {
+			t.Fatalf("item %d:\n list %+v\n  one %+v", r.ID, r, one)
+		}
+	}
+}
