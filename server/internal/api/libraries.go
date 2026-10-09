@@ -200,10 +200,12 @@ func (s *Server) deleteLibrary(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	if err := s.db.DeleteLibrary(r.Context(), id); err != nil {
+	pr, err := s.db.DeleteLibrary(r.Context(), id)
+	if err != nil {
 		writeErr(w, err)
 		return
 	}
+	worker.TidyCache(s.cfg.CacheDir, pr)
 	w.WriteHeader(http.StatusNoContent)
 }
 

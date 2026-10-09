@@ -76,12 +76,12 @@ func (s *skipLog) total() int {
 
 // scanSummary is a scan's result line in Activity: "Added 2, removed 1.
 // Skipped 3: no season and episode in the name (a.mp4, b.mp4 and 1 more)."
-func scanSummary(added, changed, removed int, skips *skipLog) string {
+func scanSummary(added, changed, removed, renamed int, skips *skipLog) string {
 	var parts []string
 	for _, c := range []struct {
 		n    int
 		verb string
-	}{{added, "added"}, {changed, "changed"}, {removed, "removed"}} {
+	}{{added, "added"}, {changed, "changed"}, {renamed, "renamed"}, {removed, "removed"}} {
 		if c.n > 0 {
 			parts = append(parts, fmt.Sprintf("%d %s", c.n, c.verb))
 		}
@@ -229,7 +229,7 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 	}
 	if unreadable != "" {
 		slog.Warn("scan incomplete, nothing removed", "library", lib.Name, "unreadable", unreadable, "added", added, "changed", changed)
-		return scanSummary(added, changed, 0, &skips), fmt.Errorf("couldn't read %s, so nothing was removed", unreadable)
+		return scanSummary(added, changed, 0, 0, &skips), fmt.Errorf("couldn't read %s, so nothing was removed", unreadable)
 	}
 	// An unmounted share is usually an empty folder. Someone who really
 	// emptied a library removes it in Libraries.
@@ -237,12 +237,17 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 		slog.Warn("scan found no files, nothing removed", "library", lib.Name, "path", lib.Path)
 		return "", fmt.Errorf("library folder %s is empty; is the share mounted? Nothing was removed", lib.Path)
 	}
-	removed, err := w.db.PruneLibrary(ctx, lib.ID, start)
+	pr, err := w.db.PruneLibrary(ctx, lib.ID, start)
 	if err != nil {
 		return "", err
 	}
-	slog.Info("scan complete", "library", lib.Name, "added", added, "changed", changed, "removed", removed, "skipped", skips.total())
-	summary := scanSummary(added, changed, int(removed), &skips)
+	TidyCache(w.cfg.CacheDir, pr)
+	// A renamed file was counted as added; it's neither added nor removed.
+	renamed := len(pr.Renamed)
+	added -= renamed
+	removed := int(pr.Files) - renamed
+	slog.Info("scan complete", "library", lib.Name, "added", added, "changed", changed, "removed", removed, "renamed", renamed, "skipped", skips.total())
+	summary := scanSummary(added, changed, removed, renamed, &skips)
 	if err := w.retryMatches(ctx, lib); err != nil {
 		return summary, err
 	}
@@ -250,6 +255,35 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 		return summary, err
 	}
 	return summary, w.db.MarkLibraryScanned(ctx, lib.ID, time.Now().Unix())
+}
+
+// TidyCache brings the cache in line with a prune or a library delete. A renamed file's folder
+// (its still and preview thumbnails, still valid since a rename keeps size
+// and mtime) moves to its new id. A deleted file's folder and optimized copy
+// and a deleted title's artwork go: ids are reused, so a folder left behind
+// would show the old file's pictures for a new one.
+func TidyCache(cacheDir string, pr db.Pruned) {
+	if cacheDir == "" {
+		return
+	}
+	for oldID, newID := range pr.Renamed {
+		from := filepath.Dir(FileStillPath(cacheDir, oldID))
+		to := filepath.Dir(FileStillPath(cacheDir, newID))
+		if _, err := os.Stat(from); err != nil {
+			continue
+		}
+		_ = os.RemoveAll(to) // anything the new row has made so far
+		if err := os.Rename(from, to); err != nil {
+			slog.Warn("couldn't move a renamed file's pictures", "from", from, "to", to, "err", err)
+		}
+	}
+	for _, id := range pr.FileIDs {
+		_ = os.RemoveAll(filepath.Dir(FileStillPath(cacheDir, id)))
+		_ = os.Remove(OptimizedFile(cacheDir, id))
+	}
+	for _, id := range pr.Items {
+		_ = os.RemoveAll(ItemArtDir(cacheDir, id))
+	}
 }
 
 // retryMatches queues a match for items whose last one failed on the way to

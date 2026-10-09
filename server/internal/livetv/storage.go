@@ -150,7 +150,10 @@ func (s *Service) SetRecordingsDir(ctx context.Context, dir string, move bool) (
 			// The auto-created DVR library is pointless once emptied into a real one.
 			if oldLib.Name == "DVR Recordings" && oldLib.Path == old && res.Moved > 0 && len(res.Failed) == 0 && !hasFiles(old) {
 				if lib, _ := s.db.LibraryContaining(ctx, dir); lib == nil || lib.ID != oldLib.ID {
-					_ = s.db.DeleteLibrary(ctx, oldLib.ID)
+					// Its recordings were moved and are scanned into the new library.
+					// The old rows' still folders stay in the cache; a reused id
+					// starts without a still and grabs a new one, so they're unused.
+					_, _ = s.db.DeleteLibrary(ctx, oldLib.ID)
 				}
 			}
 		}

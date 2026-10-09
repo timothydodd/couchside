@@ -71,7 +71,7 @@ func TestItemsAreSharedAcrossLibraries(t *testing.T) {
 		t.Fatal("the pruned file is still there")
 	}
 	// Deleting the DVR library takes the last file and the show with it.
-	if err := d.DeleteLibrary(ctx, dvr); err != nil {
+	if _, err := d.DeleteLibrary(ctx, dvr); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := d.Item(ctx, a); err == nil {

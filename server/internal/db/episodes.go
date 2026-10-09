@@ -81,6 +81,13 @@ type EpisodeStill struct {
 	StillURL string
 }
 
+// EpisodeStillURL is the provider still an episode should show, or "".
+func (d *DB) EpisodeStillURL(ctx context.Context, episodeID int64) (string, error) {
+	var u string
+	err := d.sql.QueryRowContext(ctx, `SELECT still_url FROM episodes WHERE id = ?`, episodeID).Scan(&u)
+	return u, notFoundOK(err)
+}
+
 // EpisodeStills lists the series' episodes that have a provider still, with
 // each one's best file, for the artwork job.
 func (d *DB) EpisodeStills(ctx context.Context, seriesID int64) ([]EpisodeStill, error) {
