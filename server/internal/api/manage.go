@@ -104,6 +104,10 @@ func (s *Server) itemLookup(w http.ResponseWriter, r *http.Request) {
 		kind = metadata.Series
 	}
 	res, err := s.providers.SearchTitles(r.Context(), kind, q, year)
+	if errors.Is(err, metadata.ErrBadKey) {
+		writeErr(w, badRequest(metadata.BadKeyMessage(s.cfg.TMDBKeySource())))
+		return
+	}
 	if err != nil {
 		writeErr(w, badRequest(err.Error()))
 		return

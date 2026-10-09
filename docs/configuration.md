@@ -44,7 +44,7 @@ locations too, fixed by the environment.
 | `COUCHSIDE_DEBUG` | none | Debug logging |
 | `TZ` | UTC | Time zone for guide times and recording names |
 | **Metadata** | | |
-| `TMDB_API_KEY` | built in | Your own TMDB key (v3 key or v4 read token) instead of Couchside's; `off` disables TMDB |
+| `TMDB_API_KEY` | built in | Your own TMDB key (v3 key or v4 read token) instead of Couchside's shared one; `off` disables TMDB. If TMDB refuses a key, Couchside waits before asking again (10 minutes, doubling to 6 hours), and Activity says to set your own |
 | `OMDB_API_KEY` | none | Optional fallback metadata source; free keys at omdbapi.com |
 | **Accounts** | | |
 | `COUCHSIDE_AUTH` | `false` | Require passwords: no passwordless sign-in. Set it for a server on the internet |

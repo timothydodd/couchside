@@ -51,6 +51,9 @@ func (s *Server) features(ctx context.Context) []string {
 	}
 	if !s.providers.Empty() {
 		f = append(f, "metadata")
+		if len(s.providers.Degraded()) > 0 {
+			f = append(f, "metadataDegraded")
+		}
 	}
 	if s.db != nil {
 		if on, _, err := s.passwordless(ctx); err == nil && on {

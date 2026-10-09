@@ -2,10 +2,12 @@ package metadata
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // fakeTMDB answers the handful of endpoints the provider uses.
@@ -150,7 +152,10 @@ func TestTMDBBadKeyIsNotCached(t *testing.T) {
 	if _, err := p.Lookup(context.Background(), Movie, "The Matrix", 1999); err == nil || !strings.Contains(err.Error(), "401") {
 		t.Fatalf("err = %v", err)
 	}
+	// A new key comes with a restart, which starts a provider without the
+	// wait a refused key sets.
 	p.key = "k"
+	p.keyAccepted()
 	if d, err := p.Lookup(context.Background(), Movie, "The Matrix", 1999); err != nil || d == nil {
 		t.Fatalf("after fixing the key: %+v, %v", d, err)
 	}
@@ -191,5 +196,56 @@ func TestTMDBUndecodableResponseIsNotCached(t *testing.T) {
 	portal = false
 	if res, err := p.SearchTitles(context.Background(), Movie, "The Matrix", 1999); err != nil || len(res) == 0 {
 		t.Fatalf("after the portal: %v, %v", res, err)
+	}
+}
+
+// A refused key isn't asked again until the wait is over, says so through
+// Degraded, and works again as soon as TMDB answers.
+func TestTMDBBadKeyBacksOff(t *testing.T) {
+	calls := 0
+	refuse := true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if refuse {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Write([]byte(`{"results":[{"id":603,"title":"The Matrix","release_date":"1999-03-30"}]}`))
+	}))
+	defer srv.Close()
+	p := NewTMDB("k", &memCache{m: map[string][]byte{}})
+	p.base = srv.URL
+	ctx := context.Background()
+	if _, err := p.SearchTitles(ctx, Movie, "The Matrix", 1999); !errors.Is(err, ErrBadKey) {
+		t.Fatalf("first refusal = %v, want ErrBadKey", err)
+	}
+	if bad, why := p.Degraded(); !bad || why == "" {
+		t.Fatal("not degraded after a 401")
+	}
+	if _, err := p.SearchTitles(ctx, Movie, "Heat", 1995); !errors.Is(err, ErrBadKey) || calls != 1 {
+		t.Fatalf("second lookup = %v after %d calls; want ErrBadKey without asking TMDB", err, calls)
+	}
+	chain := &Chain{Providers: []Provider{p}}
+	if got := chain.Degraded(); len(got) != 1 {
+		t.Fatalf("chain degraded = %v", got)
+	}
+	// The wait runs out and TMDB accepts the key again.
+	p.mu.Lock()
+	p.badKeyUntil = time.Now().Add(-time.Second)
+	p.mu.Unlock()
+	refuse = false
+	if _, err := p.SearchTitles(ctx, Movie, "The Matrix", 1999); err != nil {
+		t.Fatalf("after the wait: %v", err)
+	}
+	if bad, _ := p.Degraded(); bad || len(chain.Degraded()) != 0 {
+		t.Fatal("still degraded after TMDB answered")
+	}
+	p.keyRefused()
+	p.keyRefused()
+	p.mu.Lock()
+	backoff := p.badKeyBackoff
+	p.mu.Unlock()
+	if backoff != 2*badKeyFirstWait {
+		t.Fatalf("second refusal waits %v, want %v", backoff, 2*badKeyFirstWait)
 	}
 }

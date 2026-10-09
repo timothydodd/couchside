@@ -19,6 +19,7 @@ import (
 	"github.com/timothydodd/couchside/internal/keylock"
 	"github.com/timothydodd/couchside/internal/metadata"
 	"github.com/timothydodd/couchside/internal/remoteimg"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 func (w *Worker) match(ctx context.Context, itemID int64) error {
@@ -42,6 +43,10 @@ func (w *Worker) match(ctx context.Context, itemID int64) error {
 		pinned = item.ImdbID
 	}
 	d, p, skipped, err := w.providers.Lookup(ctx, kind, item.ParsedTitle, item.ParsedYear, pinned)
+	if errors.Is(err, metadata.ErrBadKey) {
+		// The item stays pending, so the next scan queues it again.
+		return usererr.New(metadata.BadKeyMessage(w.cfg.TMDBKeySource()))
+	}
 	if err != nil {
 		return err
 	}

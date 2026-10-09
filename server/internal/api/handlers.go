@@ -37,7 +37,9 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		"workers":    s.cfg.Workers,
 		"comskip":    s.worker.CommercialsAvailable(),
 		"apiVersion": APIVersion,
-		"features":   s.features(r.Context()),
+		// Why metadata lookups fail right now (TMDB refusing the key); empty when fine.
+		"metadataDegraded": s.providers.Degraded(),
+		"features":         s.features(r.Context()),
 		"transcode": map[string]any{
 			"hwaccel":        s.tc.Encoder().HW,
 			"requested":      s.cfg.HWAccel,
