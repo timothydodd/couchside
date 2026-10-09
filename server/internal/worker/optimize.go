@@ -71,6 +71,7 @@ func (w *Worker) optimize(ctx context.Context, jobID, fileID int64) error {
 	height := transcode.OutputHeight(w.cfg.OptimizeHeight, srcH)
 
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-y"}
+	args = append(args, transcode.ThreadArgs(w.cfg.JobThreads())...)
 	var vIn, vOut []string
 	if !copyVideo {
 		vIn, vOut = w.enc.Video(transcode.VideoOpts{MaxHeight: height, SrcHeight: srcH,

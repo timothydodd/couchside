@@ -411,3 +411,12 @@ func TestRemuxRunsLessFarAhead(t *testing.T) {
 		t.Fatalf("remux: copy %v, ahead %d", s.CopyVideo, s.aheadLimit())
 	}
 }
+
+func TestThreadArgs(t *testing.T) {
+	if ThreadArgs(0) != nil || ThreadArgs(-1) != nil {
+		t.Error("0 must add nothing")
+	}
+	if got := strings.Join(ThreadArgs(4), " "); got != "-threads 4" {
+		t.Errorf("ThreadArgs(4) = %q", got)
+	}
+}

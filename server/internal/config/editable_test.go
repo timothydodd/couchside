@@ -2,6 +2,7 @@ package config
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -87,5 +88,20 @@ func TestProgramsNotEditable(t *testing.T) {
 		if s.Kind == "file" {
 			t.Errorf("%s has kind file", s.Key)
 		}
+	}
+}
+
+func TestThreads(t *testing.T) {
+	if got := (Config{FFmpegThreads: 3}).LiveThreads(); got != 3 {
+		t.Errorf("override: %d", got)
+	}
+	if got, want := (Config{MaxTranscodes: 2}).LiveThreads(), max(1, runtime.NumCPU()/2); got != want {
+		t.Errorf("shared out: %d, want %d", got, want)
+	}
+	if got := (Config{MaxTranscodes: 1000}).LiveThreads(); got != 1 {
+		t.Errorf("never below 1: %d", got)
+	}
+	if (Config{}).JobThreads() != 2 || (Config{FFmpegThreads: 5}).JobThreads() != 5 {
+		t.Error("job threads")
 	}
 }

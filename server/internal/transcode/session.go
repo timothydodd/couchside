@@ -535,6 +535,7 @@ func (s *Session) start(n int) error {
 	var vIn, vCodec []string
 	var chain string
 	if !s.CopyVideo {
+		args = append(args, ThreadArgs(s.enc.Threads)...)
 		vIn, chain, vCodec = s.enc.VideoParts(VideoOpts{MaxHeight: s.Height, SrcHeight: s.srcHeight, BitrateK: s.BitrateK, HDR: s.HDR,
 			HWDecode: s.HWDecode})
 	}

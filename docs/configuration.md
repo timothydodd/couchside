@@ -61,6 +61,8 @@ locations too, fixed by the environment.
 | `COUCHSIDE_MAX_TRANSCODES` | `2` | Live transcode sessions at once; idle ones are evicted |
 | `COUCHSIDE_ENCODE_WORKERS` | `1` | Background optimize encodes at once |
 | `COUCHSIDE_OPTIMIZE_HEIGHT` | `1080` | Height cap for optimized copies |
+| `COUCHSIDE_FFMPEG_THREADS` | cores ÷ `COUCHSIDE_MAX_TRANSCODES` for playback and live TV, 2 for background jobs | CPU threads each ffmpeg that converts video may use |
+| `GOMEMLIMIT` | `1GiB` in the container and chart, unset otherwise | Soft limit for Couchside's own memory (ffmpeg isn't counted). Raise it if Settings → System shows Couchside near it |
 | **Live TV & DVR** | | |
 | `COUCHSIDE_HDHOMERUN` | none | HDHomeRun IP or host; enables Live TV and the DVR |
 | `COUCHSIDE_RECORDINGS_DIR` | `$DATA_DIR/recordings` | Default folder for recordings (Settings can pick another) |

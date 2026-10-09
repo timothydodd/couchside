@@ -150,6 +150,11 @@ ingress:
     secretName: couchside-tls
     clusterIssuer: ""   # e.g. letsencrypt; adds the cert-manager annotation
 
+# A soft limit for the server's own Go heap (GOMEMLIMIT): near it the garbage
+# collector works harder and hands memory back, leaving room under the pod's
+# limit for ffmpeg and comskip, which aren't counted. "" leaves it unset.
+goMemLimit: 1GiB
+
 resources:
   requests:
     cpu: 100m

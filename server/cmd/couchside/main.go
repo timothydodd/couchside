@@ -183,6 +183,7 @@ func serve(parent context.Context, ignoreSaved string) (again bool, err error) {
 	var restart atomic.Bool
 
 	enc := transcode.Detect(ctx, cfg.FFmpeg, cfg.HWAccel, cfg.VAAPIDevice)
+	enc.Threads = cfg.LiveThreads()
 	tc, err := transcode.NewManager(enc, cfg.FFprobe, filepath.Join(cfg.CacheDir, "transcode"), cfg.MaxTranscodes)
 	if err != nil {
 		return false, err

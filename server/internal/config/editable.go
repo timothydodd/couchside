@@ -51,6 +51,8 @@ var Editable = func() []Setting {
 			Help: "Background \"optimize\" and commercial-detection jobs.", Default: "1"},
 		{Key: "COUCHSIDE_OPTIMIZE_HEIGHT", Group: "Encoding", Label: "Optimized copy size", Kind: "choice",
 			Options: []string{"480", "720", "1080"}, Help: "The tallest picture an optimized copy keeps.", Default: "1080"},
+		{Key: "COUCHSIDE_FFMPEG_THREADS", Advanced: true, Group: "Encoding", Label: "Threads per ffmpeg", Kind: "int",
+			Help: "CPU threads each conversion may use. Empty shares the CPUs out: cores divided by streams converted at once for playback, 2 for background jobs.", Default: "Automatic"},
 
 		{Key: "COUCHSIDE_HDHOMERUN", Group: "Live TV", Label: "HDHomeRun tuner", Kind: "text",
 			Help: "The tuner's IP address or host name. Empty turns off broadcast TV and recording (your own channels still work).", Default: "None", Placeholder: "192.168.1.50"},
