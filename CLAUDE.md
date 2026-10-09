@@ -98,8 +98,8 @@ Couchside is a self-hosted media server for k3s. Go backend in `server/`, React 
 
 ## Next milestones
 
-The plan is `docs/stories.md` (fixes B, cleanup C, features F, on the `audit-2`
-branch) and the Roku repo's `docs/stories.md`. Beyond it:
+The plan is `../stories/server.md` (fixes B, cleanup C, features F, on the `audit-2`
+branch), `../stories/server-polish.md` and the Roku's `../stories/roku.md`; the stories live outside this repo. Beyond it:
 
 1. Audio track choice for live TV (secondary audio / SAP).
 2. An ffmpeg build with NVENC or QSV GPU runtime (for example jellyfin-ffmpeg) if those are needed.
