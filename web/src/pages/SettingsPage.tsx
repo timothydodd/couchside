@@ -2,6 +2,7 @@ import { useRef } from "react";
 import Link from "../components/Link";
 import AccountManager from "../components/settings/AccountManager";
 import AdvancedArea from "../components/settings/AdvancedArea";
+import Diagnostics from "../components/settings/Diagnostics";
 import SingleSignOn from "../components/settings/SingleSignOn";
 import AccountSettings from "../components/settings/AccountSettings";
 import Console from "../components/settings/Console";
@@ -64,8 +65,9 @@ export default function SettingsPage() {
             <ServerNow />
             <SystemHistory />
             <ServerInfo />
-            <AdvancedArea what="Backups of the database">
+            <AdvancedArea what="Backups of the database, and diagnostics for a bug report">
               <BackupSettings />
+              <Diagnostics />
             </AdvancedArea>
           </>
         )}

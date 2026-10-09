@@ -242,6 +242,51 @@ func checkMigrations(names []string, applied map[string]bool, backupDir string) 
 	return nil
 }
 
+// MigrationReport lists, for diagnostics, the migrations this build has and
+// the ones the database has had applied.
+func (d *DB) MigrationReport(ctx context.Context) (embedded, applied []string, err error) {
+	entries, err := fs.ReadDir(migrations, "migrations")
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, e := range entries {
+		embedded = append(embedded, e.Name())
+	}
+	sort.Strings(embedded)
+	set, err := appliedMigrations(d.sql)
+	if err != nil {
+		return embedded, nil, err
+	}
+	for v := range set {
+		applied = append(applied, v)
+	}
+	sort.Strings(applied)
+	return embedded, applied, nil
+}
+
+// Health is the live database's integrity check (up to 20 problems; "ok"
+// when there are none) and its size in bytes.
+func (d *DB) Health(ctx context.Context) (check string, size int64, err error) {
+	rows, err := d.sql.QueryContext(ctx, `PRAGMA quick_check(20)`)
+	if err != nil {
+		return "", 0, err
+	}
+	var lines []string
+	for rows.Next() {
+		var l string
+		if err := rows.Scan(&l); err != nil {
+			rows.Close()
+			return "", 0, err
+		}
+		lines = append(lines, l)
+	}
+	rows.Close()
+	if err := d.sql.QueryRowContext(ctx, `SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()`).Scan(&size); err != nil {
+		return strings.Join(lines, "\n"), 0, err
+	}
+	return strings.Join(lines, "\n"), size, nil
+}
+
 // notFoundOK maps "no rows" to a nil error for optional lookups.
 func notFoundOK(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
