@@ -14,7 +14,10 @@ Run `couchside-<version>-windows-amd64-setup.exe`. It asks for a port, then:
 - installs Couchside with ffmpeg beside it (jellyfin-ffmpeg, whose NVENC runs on
   older NVIDIA drivers than upstream builds), so there's nothing else to install;
 - runs it as the **Couchside** Windows service, which starts with Windows and
-  restarts if it stops unexpectedly;
+  restarts if it stops unexpectedly. The service runs as its own account,
+  `NT SERVICE\Couchside`, not as an administrator: it can change only its own
+  folders (`%ProgramData%\Couchside`), and reads your media with the rights
+  local users have;
 - lists your graphics cards. Couchside picks the encoder at start-up: NVIDIA
   NVENC first, then Intel Quick Sync, else the CPU. Settings → System shows the
   one in use, or why a GPU couldn't be used (for example a driver too old);
@@ -34,12 +37,21 @@ installer again upgrades in place and keeps your settings.
 
 **Media on a NAS.** Add it as a network share location with its network path
 (`\\nas\media`), not a mapped drive letter (services can't see mapped
-drives), and the NAS's user name and password. The service runs as Local
-System, which a NAS usually turns away, so Couchside signs in to the share
-itself whenever it starts (like `net use`); the password is kept encrypted for
-this computer (Windows DPAPI). Alternatively, in Services (`services.msc`) open
-Couchside → Log On, choose an account that can read the share, and restart the
-service.
+drives), and the NAS's user name and password. The service's own account
+means nothing to a NAS, so Couchside signs in to the share itself whenever it
+starts (like `net use`); the password is kept encrypted for that account
+(Windows DPAPI). Alternatively, in Services (`services.msc`) open Couchside →
+Log On, choose an account that can read the share, and restart the service.
+
+**Local folders** need to be readable by `NT SERVICE\Couchside`, which they
+usually are (local users can read them). For the DVR to record into a folder,
+or to delete files from Couchside, give that account Modify on it:
+`icacls "D:\TV Shows" /grant "NT SERVICE\Couchside:(OI)(CI)M"`.
+
+**Upgrading from 0.18 or earlier**, when the service ran as Local System:
+saved share passwords were encrypted for that account, so Settings → Server →
+Media locations shows each share needing its password again; edit it and type
+it once. Folders that only Local System could write to need the grant above.
 
 Test builds of the installer come from `pre-*` tags: the installer is attached to
 that workflow run (Actions → prerelease → windows-installer), not published.
