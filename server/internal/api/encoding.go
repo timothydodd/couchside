@@ -49,8 +49,8 @@ func (s *Server) createHLS(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	if msg := ProblemMessage(f.Problem); msg != "" {
-		writeErr(w, httpError{http.StatusUnprocessableEntity, msg})
+	if err := s.checkMedia(r.Context(), f); err != nil {
+		writeErr(w, err)
 		return
 	}
 	info, err := s.db.PlayInfo(r.Context(), id)

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/timothydodd/couchside/internal/fsx"
 	"github.com/timothydodd/couchside/internal/keylock"
 	"github.com/timothydodd/couchside/internal/parse"
 	"github.com/timothydodd/couchside/internal/probe"
@@ -42,6 +44,8 @@ var sidecarExts = map[string]bool{".srt": true, ".vtt": true, ".ass": true, ".ss
 // sidecars finds subtitle files next to a video: "Movie.srt", "Movie.en.srt",
 // "Movie.en.forced.srt". A file that fits a longer video name in the same
 // folder is that video's: "Alien.Resurrection.srt" isn't Alien.mkv's.
+func isSidecarName(n string) bool { return sidecarExts[strings.ToLower(filepath.Ext(n))] }
+
 func sidecars(videoPath string) []string {
 	dir := filepath.Dir(videoPath)
 	stem := videoStem(videoPath)
@@ -72,7 +76,13 @@ next:
 				continue next
 			}
 		}
-		out = append(out, filepath.Join(dir, n))
+		p := filepath.Join(dir, n)
+		// A linked sidecar must lead to a subtitle file, not to whatever
+		// someone pointed "Film.en.srt" at.
+		if e.Type()&fs.ModeSymlink != 0 && fsx.Allowed(p, "", isSidecarName) != nil {
+			continue
+		}
+		out = append(out, p)
 	}
 	return out
 }
@@ -118,6 +128,10 @@ func (s *Server) fileStreams(w http.ResponseWriter, r *http.Request) {
 	}
 	f, err := s.db.File(r.Context(), id)
 	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := s.checkLink(r.Context(), f); err != nil {
 		writeErr(w, err)
 		return
 	}
@@ -197,6 +211,10 @@ func (s *Server) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 	n, _ := strconv.Atoi(m[2])
 	f, err := s.db.File(r.Context(), id)
 	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := s.checkLink(r.Context(), f); err != nil {
 		writeErr(w, err)
 		return
 	}

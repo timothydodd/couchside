@@ -1,10 +1,17 @@
 package api
 
 import (
+	"context"
+	"errors"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/timothydodd/couchside/internal/db"
+	"github.com/timothydodd/couchside/internal/fsx"
+	"github.com/timothydodd/couchside/internal/parse"
 )
 
 // --- files & playback --------------------------------------------------------
@@ -91,12 +98,19 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Query().Get("version") == "optimized" {
+		if msg := ProblemMessage(f.Problem); msg != "" {
+			writeErr(w, httpError{http.StatusUnprocessableEntity, msg})
+			return
+		}
 		p, err := s.db.OptimizedPath(r.Context(), id)
 		if err != nil || p == "" {
 			writeErr(w, httpError{http.StatusNotFound, "no optimized version"})
 			return
 		}
 		f.Path = p
+	} else if err := s.checkMedia(r.Context(), f); err != nil {
+		writeErr(w, err)
+		return
 	}
 	fh, err := os.Open(f.Path)
 	if err != nil {
@@ -113,4 +127,34 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", ct)
 	}
 	http.ServeContent(w, r, filepath.Base(f.Path), st.ModTime(), fh)
+}
+
+// errMissing is what a file that can't be served answers: missing, or a
+// link planted in the library. Both look the same from outside.
+var errMissing = httpError{http.StatusNotFound, "file is missing on disk; rescan the library"}
+
+// checkMedia refuses a file the scanner flagged as unplayable, and one whose
+// path leads (through a link) outside its library to anything but a video,
+// before its bytes are served or handed to ffmpeg.
+func (s *Server) checkMedia(ctx context.Context, f db.File) error {
+	if msg := ProblemMessage(f.Problem); msg != "" {
+		return httpError{http.StatusUnprocessableEntity, msg}
+	}
+	return s.checkLink(ctx, f)
+}
+
+// checkLink is checkMedia without the playability check, for routes that
+// read a file's tracks or sidecars.
+func (s *Server) checkLink(ctx context.Context, f db.File) error {
+	lib, err := s.db.Library(ctx, f.LibraryID)
+	if err != nil {
+		return err
+	}
+	if err := fsx.Allowed(f.Path, lib.Path, parse.IsVideo); err != nil {
+		if errors.Is(err, fsx.ErrRefused) {
+			slog.Warn("refused a file that links outside its library", "file", f.ID, "path", f.Path)
+		}
+		return errMissing
+	}
+	return nil
 }

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/timothydodd/couchside/internal/db"
+	"github.com/timothydodd/couchside/internal/fsx"
 	"github.com/timothydodd/couchside/internal/parse"
 	"github.com/timothydodd/couchside/internal/probe"
 	"github.com/timothydodd/couchside/internal/usererr"
@@ -42,6 +43,7 @@ const (
 	skipNoEpisode = "no season and episode in the name"
 	skipSample    = "sample clips"
 	skipTimeout   = "ffprobe timed out (tried again next scan)"
+	skipLink      = "links that lead outside the library to something that isn't a video"
 )
 
 // skipLog counts skipped files per reason, keeping a few names to show.
@@ -158,6 +160,20 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 			}
 		}
 		info, err := d.Info()
+		if err == nil && d.Type()&fs.ModeSymlink != 0 {
+			// A link can point anywhere ("Film.mkv -> /data/auth.key"). Index
+			// it only when it leads to a video, and describe the video, not
+			// the link.
+			if aerr := fsx.Allowed(path, lib.Path, parse.IsVideo); errors.Is(aerr, fsx.ErrRefused) {
+				slog.Warn("scan: skipping a link", "path", path)
+				skips.add(skipLink, relPath(lib, path))
+				return nil
+			} else if aerr != nil {
+				err = aerr // dangling: treated like a file deleted mid-walk below
+			} else {
+				info, err = os.Stat(path)
+			}
+		}
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil // deleted since the folder was listed (keep-last-N, Manage): it's gone, not unreadable
 		}

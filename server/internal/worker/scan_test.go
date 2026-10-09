@@ -261,3 +261,52 @@ func TestScanKeepsMergedFilesWhereTheyWerePut(t *testing.T) {
 		}
 	}
 }
+
+// A link in the library that leads to something other than a video (the
+// server's own auth.key, say) is never indexed; one that leads to a video on
+// another disk is, and is described by its target.
+func TestScanSkipsLinksToNonVideos(t *testing.T) {
+	w, d, libID, root := scanFixture(t)
+	outside := t.TempDir()
+	secret := filepath.Join(outside, "auth.key")
+	if err := os.WriteFile(secret, []byte("not a film, but a long secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	elsewhere := filepath.Join(outside, "Alien (1979).mkv")
+	writeVideo(t, elsewhere)
+	heat := filepath.Join(root, "Heat (1995).mkv")
+	writeVideo(t, heat)
+	planted := filepath.Join(root, "Planted (2001).mkv")
+	if err := os.Symlink(secret, planted); err != nil {
+		t.Skipf("symlinks unavailable here: %v", err)
+	}
+	alien := filepath.Join(root, "Alien (1979).mkv")
+	if err := os.Symlink(elsewhere, alien); err != nil {
+		t.Fatal(err)
+	}
+	dangling := filepath.Join(root, "Gone (2002).mkv")
+	if err := os.Symlink(filepath.Join(outside, "nothing.mkv"), dangling); err != nil {
+		t.Fatal(err)
+	}
+	summary, err := w.scanLibrary(context.Background(), libID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := indexed(t, d, heat, planted, alien, dangling)
+	if ids[0] == 0 || ids[2] == 0 {
+		t.Errorf("real video and link to a video should be indexed: %v", ids)
+	}
+	if ids[1] != 0 || ids[3] != 0 {
+		t.Errorf("link to a non-video and dangling link must not be indexed: %v", ids)
+	}
+	if !strings.Contains(summary, "Planted (2001).mkv") {
+		t.Errorf("summary should name the skipped link: %q", summary)
+	}
+	f, err := d.File(context.Background(), ids[2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Size != 1 {
+		t.Errorf("linked video's size = %d, want its target's (1)", f.Size)
+	}
+}

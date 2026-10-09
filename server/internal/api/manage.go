@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/timothydodd/couchside/internal/db"
+	"github.com/timothydodd/couchside/internal/fsx"
 	"github.com/timothydodd/couchside/internal/imaging"
 	"github.com/timothydodd/couchside/internal/metadata"
 	"github.com/timothydodd/couchside/internal/worker"
@@ -259,10 +260,7 @@ func (s *Server) deleteFiles(ctx context.Context, lib db.Library, files []db.Fil
 }
 
 // insideDir reports whether p is strictly inside dir.
-func insideDir(p, dir string) bool {
-	rel, err := filepath.Rel(filepath.Clean(dir), filepath.Clean(p))
-	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
-}
+func insideDir(p, dir string) bool { return fsx.Inside(p, dir) }
 
 // removeEmptyDirs removes dir and its parents up to (not including) root
 // while they're empty. It returns the first folder left because it still
