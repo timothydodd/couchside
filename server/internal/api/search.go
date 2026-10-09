@@ -2,38 +2,65 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/timothydodd/couchside/internal/db"
 	"github.com/timothydodd/couchside/internal/search"
 )
 
-// indexTTL is how long the search index is reused. Someone typing a query
-// sends a request per pause, so they share one build; new titles show up
-// within this long.
+// indexTTL is how old the search index may get before a search starts a
+// rebuild. New titles show up in searches within about this long.
 const indexTTL = 15 * time.Second
 
-// searchIndex caches every searchable title in memory. A home library is a few
-// thousand titles and tens of thousands of episodes, small enough to rank in Go
-// with forgiving matching that SQL LIKE can't do.
+// searchIndex holds every searchable title in memory. A home library is a
+// few thousand titles and tens of thousands of episodes, small enough to rank
+// in Go with forgiving matching that SQL LIKE can't do.
+//
+// Searches never wait for a rebuild: they get the current snapshot, and the
+// first one after indexTTL starts a rebuild in the background that swaps in
+// when done. Only the very first search builds while it waits.
 type searchIndex struct {
-	mu    sync.Mutex
+	cur      atomic.Pointer[indexSnapshot]
+	first    sync.Mutex  // the first build, which searches wait for
+	building atomic.Bool // a background rebuild is running
+}
+
+type indexSnapshot struct {
 	docs  []search.Doc
 	built time.Time
 	tv    bool
 }
 
 func (x *searchIndex) get(ctx context.Context, d *db.DB, withTV bool) ([]search.Doc, error) {
-	x.mu.Lock()
-	defer x.mu.Unlock()
-	if x.docs != nil && x.tv == withTV && time.Since(x.built) < indexTTL {
-		return x.docs, nil
+	if s := x.cur.Load(); s != nil && s.tv == withTV {
+		if time.Since(s.built) >= indexTTL && x.building.CompareAndSwap(false, true) {
+			go func() {
+				defer x.building.Store(false)
+				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+				defer cancel()
+				if _, err := x.build(ctx, d, withTV); err != nil {
+					slog.Warn("search index rebuild failed; searching the previous one", "err", err)
+				}
+			}()
+		}
+		return s.docs, nil
 	}
+	x.first.Lock()
+	defer x.first.Unlock()
+	if s := x.cur.Load(); s != nil && s.tv == withTV {
+		return s.docs, nil // another search just built it
+	}
+	return x.build(ctx, d, withTV)
+}
+
+func (x *searchIndex) build(ctx context.Context, d *db.DB, withTV bool) ([]search.Doc, error) {
 	now := time.Now()
 	rows, err := d.SearchRows(ctx, withTV, now.Unix())
 	if err != nil {
@@ -43,7 +70,7 @@ func (x *searchIndex) get(ctx context.Context, d *db.DB, withTV bool) ([]search.
 	for _, r := range rows {
 		docs = append(docs, search.NewDoc(r.Kind, r.ID, r.Ref, r.StartAt, r.EndAt, r.Names...))
 	}
-	x.docs, x.built, x.tv = docs, now, withTV
+	x.cur.Store(&indexSnapshot{docs: docs, built: now, tv: withTV})
 	return docs, nil
 }
 
