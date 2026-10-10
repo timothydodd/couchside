@@ -4,6 +4,17 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## 0.19.3
+
+### Fixed
+
+- 4K films whose keyframes are far apart no longer fail on the Roku when
+  their picture is passed through: a copied picture can only be cut at the
+  film's own keyframes, so a film with keyframes 10s apart made segments of
+  about 50 MB, more than the Roku's player holds. A client can now send
+  `maxSegmentBytes` with `POST /api/files/{id}/hls`; the server measures the
+  copy's segments and converts the picture when they would be bigger.
+
 ## 0.19.2
 
 ### Fixed

@@ -68,10 +68,15 @@ type Request struct {
 	// plays: "ac3", "eac3". A track already in one is copied; any other
 	// track with more than two channels is converted to one, 5.1, instead of
 	// being mixed down to stereo AAC.
-	AudioCodecs  []string
-	AudioIndex   int   // which audio track (0:a:N)
-	BurnSubtitle int   // image subtitle track to burn into the video, -1 for none
-	Owner        int64 // the profile that asked; only it (or an admin) uses the session
+	AudioCodecs []string
+	// MaxSegmentBytes is the biggest segment the client's player can hold
+	// (a Roku's is about 31 MB); 0 means any. A copied picture can only be
+	// cut at its keyframes, so when they're too far apart for that, the
+	// video is converted instead (LargestSegment).
+	MaxSegmentBytes int64
+	AudioIndex      int   // which audio track (0:a:N)
+	BurnSubtitle    int   // image subtitle track to burn into the video, -1 for none
+	Owner           int64 // the profile that asked; only it (or an admin) uses the session
 }
 
 // Session is one live stream of one file at one quality.
@@ -222,6 +227,17 @@ func (m *Manager) Create(ctx context.Context, r Request) (*Session, error) {
 	listed := info.DVProfile != 5 && slices.ContainsFunc(r.VideoCodecs, func(c string) bool { return codecName(c) == info.VideoCodec })
 	copyVideo := r.AllowCopyVideo && !burn && (plainH264 || listed) &&
 		(r.Height == 0 || (srcH > 0 && srcH <= r.Height))
+	if copyVideo && r.MaxSegmentBytes > 0 {
+		// Sampled a quarter of the way in (past any opening titles), for 30s.
+		from := min(r.Duration/4, 600)
+		if n, err := probe.LargestSegment(ctx, m.ffprobe, r.Path, from, 30, SegDur); err != nil {
+			slog.Warn("couldn't measure segments; copying the picture anyway", "file", r.FileID, "err", err)
+		} else if n > r.MaxSegmentBytes {
+			slog.Info("segments too big for the player; converting the picture", "file", r.FileID,
+				"segmentMB", n>>20, "limitMB", r.MaxSegmentBytes>>20)
+			copyVideo = false
+		}
+	}
 	surround := func(c string) bool {
 		return slices.ContainsFunc(r.AudioCodecs, func(x string) bool { return audioName(x) == c })
 	}

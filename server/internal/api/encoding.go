@@ -39,6 +39,8 @@ func (s *Server) createHLS(w http.ResponseWriter, r *http.Request) {
 		// Surround codecs the client plays ("ac3", "eac3"): such a track is
 		// copied, and other multichannel audio converted to one, not to stereo.
 		AudioCodecs []string `json:"audioCodecs"`
+		// The biggest segment the client's player holds; 0 = any (see transcode.Request).
+		MaxSegmentBytes int64 `json:"maxSegmentBytes"`
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, err)
@@ -74,7 +76,8 @@ func (s *Server) createHLS(w http.ResponseWriter, r *http.Request) {
 		FileID: id, Title: title, Path: f.Path, Duration: dur,
 		Height: in.Height, BitrateK: in.BitrateK, AllowCopyVideo: in.CopyVideo, AllowCopyAudio: in.CopyAudio,
 		AudioIndex: max(0, in.AudioIndex), BurnSubtitle: burn, VideoCodecs: in.VideoCodecs, AudioCodecs: in.AudioCodecs,
-		Owner: currentUser(r.Context()).ID,
+		MaxSegmentBytes: in.MaxSegmentBytes,
+		Owner:           currentUser(r.Context()).ID,
 	})
 	if err != nil {
 		if errors.Is(err, transcode.ErrBusy) {
