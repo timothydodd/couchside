@@ -133,3 +133,44 @@ func TestNVENCFullPipeline(t *testing.T) {
 		t.Errorf("fallback in=%v chain=%q", in, chain)
 	}
 }
+
+// A wide source is fitted into the 16:9 box for its height cap, on every
+// path, rather than scaled by height alone (1998×1080 from a 1.85:1 4K film).
+func TestFitSize(t *testing.T) {
+	cases := []struct {
+		srcW, srcH, maxH int
+		w, h             int
+		fit              bool
+	}{
+		{3840, 2076, 1080, 1920, 1038, true}, // 1.85:1 4K (The Blob)
+		{3840, 1608, 1080, 1920, 804, true},  // 2.39:1 4K
+		{3840, 2160, 1080, 1920, 1080, true},
+		{2560, 1080, 1080, 1920, 810, true}, // ultrawide already at the cap
+		{1920, 1080, 720, 1280, 720, true},
+		{1440, 1080, 720, 960, 720, true}, // 4:3 stays tall
+		{1920, 800, 480, 854, 356, true},
+		{1920, 1080, 1080, 0, 0, false}, // already fits
+		{1280, 720, 1080, 0, 0, false},
+		{0, 2160, 1080, 0, 0, false}, // width unknown
+	}
+	for _, c := range cases {
+		w, h, fit := fitSize(VideoOpts{MaxHeight: c.maxH, SrcHeight: c.srcH, SrcWidth: c.srcW})
+		if w != c.w || h != c.h || fit != c.fit {
+			t.Errorf("fitSize(%dx%d, %d) = %dx%d %v, want %dx%d %v", c.srcW, c.srcH, c.maxH, w, h, fit, c.w, c.h, c.fit)
+		}
+	}
+	if _, _, fit := fitSize(VideoOpts{MaxHeight: 1080, SrcHeight: 2076, SrcWidth: 3840, Exact: true}); fit {
+		t.Error("Exact output was fitted")
+	}
+	o := VideoOpts{MaxHeight: 1080, SrcHeight: 2076, SrcWidth: 3840, BitrateK: 8000, HDR: true, HWDecode: true}
+	if _, chain, _ := (Encoder{HW: "vaapi", HWDecode: true, HWTonemap: true}).VideoParts(o); !strings.HasPrefix(chain, "scale_vaapi=w=1920:h=1038:format=p010,") {
+		t.Errorf("vaapi chain = %q", chain)
+	}
+	if _, chain, _ := (Encoder{HW: "nvenc", HWDecode: true}).VideoParts(o); !strings.HasPrefix(chain, "scale_cuda=w=1920:h=1038:") {
+		t.Errorf("nvenc chain = %q", chain)
+	}
+	o.HWDecode = false
+	if _, chain, _ := (Encoder{HW: "vaapi"}).VideoParts(o); !strings.HasPrefix(chain, "scale=1920:1038,") {
+		t.Errorf("cpu chain = %q", chain)
+	}
+}

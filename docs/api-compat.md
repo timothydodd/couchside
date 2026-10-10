@@ -39,6 +39,7 @@ doesn't know means nothing to it.
 | Name | Means |
 | --- | --- |
 | `deviceCode`, `editions`, `hls`, `optimize`, `people`, `segments`, `totp`, `trickplay`, `virtualChannels`, `watchlist` | API surfaces every 0.19+ server has. |
+| `clientLog` | `POST /api/client/log` takes a client's report (a player error) for the server log. |
 | `hwaccel` | A GPU encoder passed its test. |
 | `livetv` | Live TV is set up (a tuner or a virtual channel). |
 | `tuner`, `dvr` | An HDHomeRun is configured: tuning and recording. |

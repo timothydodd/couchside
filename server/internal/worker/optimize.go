@@ -54,9 +54,12 @@ func (w *Worker) optimize(ctx context.Context, jobID, fileID int64) error {
 	if info.DurationSec != nil {
 		duration = *info.DurationSec
 	}
-	srcH := 0
+	srcH, srcW := 0, 0
 	if info.Height != nil {
 		srcH = *info.Height
+	}
+	if info.Width != nil {
+		srcW = *info.Width
 	}
 	out := OptimizedFile(w.cfg.CacheDir, fileID)
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
@@ -74,7 +77,7 @@ func (w *Worker) optimize(ctx context.Context, jobID, fileID int64) error {
 	args = append(args, transcode.ThreadArgs(w.cfg.JobThreads())...)
 	var vIn, vOut []string
 	if !copyVideo {
-		vIn, vOut = w.enc.Video(transcode.VideoOpts{MaxHeight: height, SrcHeight: srcH,
+		vIn, vOut = w.enc.Video(transcode.VideoOpts{MaxHeight: height, SrcHeight: srcH, SrcWidth: srcW,
 			BitrateK: transcode.BitrateFor(height) + 2000, HDR: info.HDR(), File: true})
 	}
 	args = append(args, vIn...)

@@ -33,7 +33,7 @@ func (s *Server) serverInfo(w http.ResponseWriter, r *http.Request) {
 func (s *Server) features(ctx context.Context) []string {
 	f := []string{
 		// API surfaces every server since 0.19 has.
-		"deviceCode", "editions", "hls", "optimize", "people", "segments", "totp", "trickplay", "virtualChannels", "watchlist",
+		"clientLog", "deviceCode", "editions", "hls", "optimize", "people", "segments", "totp", "trickplay", "virtualChannels", "watchlist",
 	}
 	if s.tc != nil && s.tc.Encoder().HW != "" && s.tc.Encoder().HW != "none" {
 		f = append(f, "hwaccel")

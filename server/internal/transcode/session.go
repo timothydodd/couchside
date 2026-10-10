@@ -97,6 +97,7 @@ type Session struct {
 	dir       string
 	duration  float64
 	srcHeight int
+	srcWidth  int
 	enc       Encoder
 
 	// restartMu serialises stopping and starting ffmpeg, which releases mu
@@ -197,9 +198,12 @@ func (m *Manager) Create(ctx context.Context, r Request) (*Session, error) {
 		return nil, err
 	}
 
-	srcH := 0
+	srcH, srcW := 0, 0
 	if info.Height != nil {
 		srcH = *info.Height
+	}
+	if info.Width != nil {
+		srcW = *info.Width
 	}
 	// The chosen audio track decides whether audio can be copied.
 	audioCodec, audioCh := info.AudioCodec, info.AudioChannels
@@ -237,7 +241,7 @@ func (m *Manager) Create(ctx context.Context, r Request) (*Session, error) {
 		ID: newID(), FileID: r.FileID, Title: r.Title, CopyVideo: copyVideo, CopyAudio: copyAudio, AudioOut: audioOut,
 		Audio: r.AudioIndex, BurnSub: r.BurnSubtitle,
 		HDR: info.HDR() && !copyVideo, HW: m.enc.HW, Created: time.Now(),
-		src: r.Path, duration: r.Duration, srcHeight: srcH, enc: m.enc,
+		src: r.Path, duration: r.Duration, srcHeight: srcH, srcWidth: srcW, enc: m.enc,
 		lastAccess: time.Now(), hi: -1, ahead: aheadLimit, Owner: r.Owner,
 	}
 	if copyVideo {
@@ -538,7 +542,7 @@ func (s *Session) start(n int) error {
 	var chain string
 	if !s.CopyVideo {
 		args = append(args, ThreadArgs(s.enc.Threads)...)
-		vIn, chain, vCodec = s.enc.VideoParts(VideoOpts{MaxHeight: s.Height, SrcHeight: s.srcHeight, BitrateK: s.BitrateK, HDR: s.HDR,
+		vIn, chain, vCodec = s.enc.VideoParts(VideoOpts{MaxHeight: s.Height, SrcHeight: s.srcHeight, SrcWidth: s.srcWidth, BitrateK: s.BitrateK, HDR: s.HDR,
 			HWDecode: s.HWDecode})
 	}
 	args = append(args, vIn...)

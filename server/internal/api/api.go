@@ -53,6 +53,7 @@ type Server struct {
 	tv        *livetv.Service // always set by main (its virtual channels need no tuner; HasTuner gates DVR); nil only in tests
 	version   string
 	presence  *presence
+	reports   reportLimiter // client reports per client (clientlog.go)
 	sys       sysstat.Sampler
 	history   *sysstat.History // CPU and memory over time, for System
 	logs      *logbuf.Buffer   // recent log lines, for System → Console; nil without one
@@ -266,6 +267,7 @@ func (s *Server) userRoutes(r chi.Router) {
 	r.Get("/home", s.home)
 	r.Delete("/home/continue/{id}", s.hideFromHome)
 	r.Get("/search", s.search)
+	r.Post("/client/log", s.clientLog)
 
 	r.Get("/profiles", s.listProfiles)
 	r.Put("/profiles/{id}", s.updateProfile)

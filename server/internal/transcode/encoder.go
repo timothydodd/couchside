@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -254,6 +255,7 @@ func testHWDecode(ctx context.Context, e Encoder, filters string) bool {
 type VideoOpts struct {
 	MaxHeight   int  // output height cap; 0 keeps the source height. With SrcHeight unknown the cap is a filter expression, so a smaller picture is never scaled up
 	SrcHeight   int  // 0 when unknown
+	SrcWidth    int  // 0 when unknown; with SrcHeight, the picture is fitted into a 16:9 box (fitSize)
 	BitrateK    int  // target/peak bitrate in kbit/s
 	HDR         bool // source is PQ/HLG: tone map to SDR
 	File        bool // whole-file encode: slower preset, better compression
@@ -286,7 +288,10 @@ func (e Encoder) VideoParts(o VideoOpts) (in []string, chain string, codec []str
 		// Only touches frames flagged interlaced, so progressive channels pass through.
 		f = append(f, "yadif=mode=send_frame:parity=auto:deint=interlaced")
 	}
+	w, h, fit := fitSize(o)
 	switch {
+	case fit:
+		f = append(f, fmt.Sprintf("scale=%d:%d", w, h))
 	case o.MaxHeight > 0 && o.Exact:
 		f = append(f, fmt.Sprintf("scale=-2:%d", o.MaxHeight))
 	case o.MaxHeight > 0 && o.SrcHeight == 0:
@@ -373,6 +378,9 @@ func (e Encoder) vaapiFull(o VideoOpts) (in []string, chain string, codec []stri
 // gpuSize is the w/h options for scale_vaapi or scale_cuda, ending in ":"
 // when set.
 func gpuSize(o VideoOpts) string {
+	if w, h, fit := fitSize(o); fit {
+		return fmt.Sprintf("w=%d:h=%d:", w, h)
+	}
 	switch {
 	case o.MaxHeight > 0 && o.Exact:
 		return fmt.Sprintf("w=-2:h=%d:", o.MaxHeight)
@@ -382,6 +390,25 @@ func gpuSize(o VideoOpts) string {
 		return fmt.Sprintf("w=-2:h=%d:", o.MaxHeight)
 	}
 	return ""
+}
+
+// fitSize is the output size for a source whose size is known: inside a 16:9
+// box as tall as the height cap (1920×1080 for 1080p), keeping the shape and
+// both sides even. Scaling by height alone made a 1.85:1 4K film 1998×1080
+// and a 2.39:1 one about 2580×1080, wider than a TV's H.264 decoder may take.
+// fit is false when the source already fits, the size is unknown, or the
+// output must be exactly MaxHeight tall (Exact).
+func fitSize(o VideoOpts) (w, h int, fit bool) {
+	if o.MaxHeight <= 0 || o.Exact || o.SrcWidth <= 0 || o.SrcHeight <= 0 {
+		return 0, 0, false
+	}
+	even := func(x float64) int { return max(2, 2*int(math.Round(x/2))) }
+	boxW := even(float64(o.MaxHeight) * 16 / 9)
+	if o.SrcWidth <= boxW && o.SrcHeight <= o.MaxHeight {
+		return 0, 0, false
+	}
+	k := min(float64(boxW)/float64(o.SrcWidth), float64(o.MaxHeight)/float64(o.SrcHeight))
+	return min(even(float64(o.SrcWidth)*k), boxW), min(even(float64(o.SrcHeight)*k), o.MaxHeight), true
 }
 
 // nvencFull is vaapiFull for NVIDIA: NVDEC decodes into CUDA frames,

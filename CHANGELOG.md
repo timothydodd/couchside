@@ -4,6 +4,23 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## 0.19.2
+
+### Fixed
+
+- A wide film that has to be converted is now fitted inside 1920×1080 (or
+  the 16:9 box for the quality picked) instead of being scaled by height
+  alone: a 1.85:1 4K film came out 1998×1080, and a 2.39:1 one about
+  2580×1080, wider than a TV's H.264 decoder may play. Optimized copies are
+  fitted the same way.
+
+### New
+
+- TV apps can send problem reports (`POST /api/client/log`, feature
+  `clientLog`): when playback fails on a Roku, what its player said and what
+  it was playing appear in System → Console as `client report`, next to the
+  server's own lines about the stream.
+
 ## 0.19.1
 
 0.19.0 was tagged but never released: its build failed the Go vulnerability
