@@ -4,7 +4,7 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
-## Unreleased
+## 0.19.0
 
 ### Breaking changes and upgrade notes
 
