@@ -64,7 +64,7 @@ export default function PosterCard({ item, selected, onClick }: { item: ItemSumm
 
   return (
     <Link to={`/item/${item.id}`} className="poster-link group block" title={item.title} onClick={(e) => { useQueue.getState().clear(); onClick?.(e); }} data-selected={selected || undefined}>
-      <div className="poster">
+      <div className="poster" data-hero={item.id}>
         <PosterArt item={item} />
         {selected && (
           <span className="art-badge absolute left-1.5 top-1.5 bg-accent text-on-accent">

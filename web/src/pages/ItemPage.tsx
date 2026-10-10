@@ -99,7 +99,7 @@ export default function ItemPage({ id, season, edit }: { id: number; season?: nu
 
       <div className="relative -mt-24 flex flex-col gap-6 gutter sm:-mt-40 md:flex-row">
         {/* On phones the backdrop above is the picture; the poster would push everything below the fold. */}
-        <div className="poster hidden w-44 shrink-0 self-start shadow-[var(--shadow-poster)] sm:block md:w-56">
+        <div className="poster hidden w-44 shrink-0 self-start shadow-[var(--shadow-poster)] sm:block md:w-56" data-hero={item.id} data-hero-page>
           <PosterArt item={item} size="full" />
         </div>
         <div className="min-w-0 flex-1 md:pt-16">

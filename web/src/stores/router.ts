@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { transition, type NavKind } from "../lib/transition";
 
 /** Settings pages: "you" (/settings) is everyone's own; the rest are admin-only. */
 export const SETTINGS_SECTIONS = ["you", "system", "server", "console", "accounts", "metadata", "livetv"] as const;
@@ -82,10 +83,13 @@ export const useRouter = create<RouterState>((set, get) => ({
   route: parseRoute(here()),
   pop: false,
   go: (path, opts) => {
-    if (path === get().path) return;
+    // Compared with the address bar, which changes at once; the store may be
+    // a frame behind while a page transition captures the old page.
+    if (path === here()) return;
     if (opts?.replace) history.replaceState({ couchside: true }, "", path);
     else history.pushState({ couchside: true }, "", path);
-    set({ path, route: parseRoute(path), pop: false });
+    const route = parseRoute(path);
+    transition(() => set({ path, route, pop: false }), navKind(get().route, route, false));
   },
   back: (fallback) => {
     // Only go back if the previous entry is ours; otherwise go to the fallback.
@@ -98,6 +102,16 @@ function here() {
   return location.pathname + location.search;
 }
 
+// Sidebar and tab-bar destinations: moving between them is a swap, not a step in or out.
+const TOP = new Set<Route["name"]>(["home", "movies", "tv", "livetv", "activity", "libraries", "settings", "profiles", "admin", "link", "search"]);
+
+function navKind(from: Route, to: Route, pop: boolean): NavKind {
+  if (TOP.has(from.name) && TOP.has(to.name)) return "swap";
+  return pop ? "back" : "forward";
+}
+
 window.addEventListener("popstate", () => {
-  useRouter.setState({ path: here(), route: parseRoute(here()), pop: true });
+  const path = here();
+  const route = parseRoute(path);
+  transition(() => useRouter.setState({ path, route, pop: true }), navKind(useRouter.getState().route, route, true));
 });
