@@ -46,6 +46,8 @@ its own notes list every merged change.
 
 ### Fixed
 
+- Built with Go 1.27.2, which fixes security issues in Go's HTTP/2, HTTP,
+  TLS and header parsing (GO-2026-6603 to GO-2026-6617).
 - A link in a media folder could serve any file the server could read.
 - Security headers: a full Content-Security-Policy for the web UI, HSTS
   over HTTPS, Referrer-Policy.
