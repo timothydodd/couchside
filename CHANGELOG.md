@@ -4,6 +4,17 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## Unreleased
+
+### New
+
+- Ready for the LG webOS app (`couchside-webos`). Apps installed on the TV
+  run from `file://`, so the API now answers CORS for that origin (`null`)
+  only, never with credentials, so cookies and the web's sessions stay out
+  of it. The stream and subtitle routes also take the access token as
+  `?access_token=`, because a `<video>` or `<track>` element can't send a
+  header.
+
 ## 0.19.4
 
 0.19.3 was tagged but never released: its release was stopped to add the

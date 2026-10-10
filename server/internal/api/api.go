@@ -187,7 +187,7 @@ const uiCSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-i
 
 func (s *Server) Handler() http.Handler {
 	r := chi.NewRouter()
-	r.Use(s.realIP, middleware.Recoverer, securityHeaders, keepConditional)
+	r.Use(s.realIP, middleware.Recoverer, securityHeaders, tvAppCORS, keepConditional)
 
 	r.Get("/healthz", s.health)
 	r.Get("/livez", s.live)
@@ -238,7 +238,8 @@ func (s *Server) Handler() http.Handler {
 		})
 	})
 	// Artwork and streams sit outside the no-cache group. Artwork is open even
-	// with accounts on, so TV apps' image nodes needn't send a token.
+	// with accounts on, so TV apps' image nodes needn't send a token; streams
+	// and subtitles take one in the URL from web TV apps (queryToken).
 	r.Get("/api/artwork/items/{id}/{kind}", s.itemArtwork)
 	r.Get("/api/artwork/files/{id}/still", s.fileStill)
 	// Preview thumbnails are pictures like stills: the Roku fetches its BIF
@@ -247,7 +248,7 @@ func (s *Server) Handler() http.Handler {
 	r.Get("/api/artwork/people/{id}", s.personPhoto)
 	r.Get("/api/artwork/remote", s.remoteImage)
 	r.Group(func(r chi.Router) {
-		r.Use(s.authenticate, s.passwordCurrent)
+		r.Use(queryToken, s.authenticate, s.passwordCurrent)
 		r.Get("/api/files/{id}/stream", s.stream)
 		r.With(middleware.Compress(5, "text/vtt")).Get("/api/files/{id}/subtitles/{key}", s.subtitleVTT)
 	})
