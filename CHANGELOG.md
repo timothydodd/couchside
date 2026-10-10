@@ -4,7 +4,17 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
-## 0.19.3
+## 0.19.4
+
+0.19.3 was tagged but never released: its release was stopped to add the
+diagnostics below. 0.19.4 has everything 0.19.3 would have.
+
+### New
+
+- A transcode that makes video slower than it plays is logged once per
+  session ("transcode is slower than real time", with its speed), so constant
+  buffering has an explanation in System → Console. A failed GPU run logs more
+  of ffmpeg's output.
 
 ### Fixed
 

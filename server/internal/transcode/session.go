@@ -116,7 +116,9 @@ type Session struct {
 	exitErr    error
 	stderr     *limitedWriter
 	startSeg   int
-	hi         int // highest finished segment of the current run
+	runStart   time.Time // when the current run started, for slowWarn
+	slowWarned bool      // "slower than real time" logged once per session
+	hi         int       // highest finished segment of the current run
 	lastReq    int
 	lastAccess time.Time
 	paused     bool
@@ -422,6 +424,7 @@ func (m *Manager) Segment(ctx context.Context, id string, n int) (string, error)
 	defer tick.Stop()
 	for {
 		if exists(path) {
+			s.slowWarn(n)
 			return path, nil
 		}
 		s.mu.Lock()
@@ -430,7 +433,7 @@ func (m *Manager) Segment(ctx context.Context, id string, n int) (string, error)
 		errMsg := ""
 		cleanEOF := false
 		if exited && s.stderr != nil {
-			errMsg = Tail(s.stderr.String(), 400)
+			errMsg = Tail(s.stderr.String(), 1000)
 			cleanEOF = s.exitErr == nil && s.cmd != nil
 		}
 		s.mu.Unlock()
@@ -459,6 +462,25 @@ func (m *Manager) Segment(ctx context.Context, id string, n int) (string, error)
 			return "", usererr.New("timed out waiting for the transcoder; the server may be too slow for this file")
 		case <-tick.C:
 		}
+	}
+}
+
+// slowWarn logs, once per session, a run that makes video slower than it
+// plays (a 4K 60fps film tone mapped on the CPU, say): the player then waits
+// on every segment, so the viewer sees buffering and the log says why. Called
+// when a segment the player waited for appears.
+func (s *Session) slowWarn(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	took := time.Since(s.runStart).Seconds()
+	if s.slowWarned || s.CopyVideo || n < s.startSeg || took < 10 {
+		return
+	}
+	made := float64((n - s.startSeg + 1) * SegDur)
+	if speed := made / took; speed < 0.9 {
+		s.slowWarned = true
+		slog.Warn("transcode is slower than real time; playback will keep buffering", "session", s.ID, "file", s.FileID,
+			"speed", fmt.Sprintf("%.2fx", speed), "height", s.Height, "hdr", s.HDR, "gpuDecode", s.HWDecode, "hw", s.HW)
 	}
 }
 
@@ -640,7 +662,7 @@ func (s *Session) start(n int) error {
 	}
 	exited := make(chan struct{})
 	s.cmd, s.exited, s.stderr, s.exitErr = cmd, exited, stderr, nil
-	s.startSeg, s.hi, s.paused = n, n-1, false
+	s.startSeg, s.hi, s.paused, s.runStart = n, n-1, false, time.Now()
 	go func() {
 		err := cmd.Wait()
 		s.mu.Lock()
