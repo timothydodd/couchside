@@ -4,7 +4,10 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
-## 0.19.0
+## 0.19.1
+
+0.19.0 was tagged but never released: its build failed the Go vulnerability
+check. 0.19.1 is the same release, built with Go 1.27.2.
 
 ### Breaking changes and upgrade notes
 
