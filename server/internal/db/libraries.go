@@ -105,6 +105,8 @@ func pathInUse(err error) error {
 // files. The result names them so the caller can clear their cache.
 func (d *DB) DeleteLibrary(ctx context.Context, id int64) (Pruned, error) {
 	var out Pruned
+	itemsMu.Lock() // tidyItems: see HoldItems
+	defer itemsMu.Unlock()
 	tx, err := d.sql.BeginTx(ctx, nil)
 	if err != nil {
 		return out, err

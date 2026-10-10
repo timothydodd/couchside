@@ -160,6 +160,8 @@ func (d *DB) ManageFiles(ctx context.Context, itemID int64) ([]ManageFile, error
 // DeleteFileRows forgets files (already deleted on disk), then any items and
 // episodes left without files. It returns the items that went.
 func (d *DB) DeleteFileRows(ctx context.Context, fileIDs []int64) ([]int64, error) {
+	itemsMu.Lock() // tidyItems: see HoldItems
+	defer itemsMu.Unlock()
 	tx, err := d.sql.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err

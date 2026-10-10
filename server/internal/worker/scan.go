@@ -419,46 +419,28 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 	if err != nil {
 		return false, err
 	}
+	// Parse the name first: a file that isn't an episode is skipped unread.
 	var (
-		itemID  int64
-		created bool
-		label   string
-		role    = parse.Role{Kind: "copy"}
+		r    parse.Result
+		role = parse.Role{Kind: "copy"}
 	)
 	if lib.Kind == "tv" {
 		rel, _ := filepath.Rel(lib.Path, path)
-		r, ok := parse.Episode(rel)
-		if !ok {
+		var ok bool
+		if r, ok = parse.Episode(rel); !ok {
 			slog.Info("scan: no episode number, skipping", "path", path)
 			return false, nil
 		}
-		if prev != nil && prev.ItemPinned {
-			// Merged under another show by hand: UpsertFile keeps its title and episode.
-			itemID, label = prev.MediaItemID, r.Title
-		} else if itemID, created, err = w.db.EnsureItem(ctx, lib.ID, "series", r.Title, r.Year); err != nil {
-			return false, err
-		}
-		if prev == nil || !prev.ItemPinned {
-			epID, err := w.db.EnsureEpisode(ctx, itemID, r.Season, r.Episode, r.EpisodeTitle, r.AirDate)
-			if err != nil {
-				return false, err
-			}
-			f.EpisodeID = &epID
-		}
-		label = r.Title
 	} else {
 		rel := relPath(lib, path)
-		r := parse.MovieIn(rel, videosIn(lib))
-		if prev != nil && prev.ItemPinned {
-			itemID = prev.MediaItemID
-		} else if itemID, created, err = w.db.EnsureItem(ctx, lib.ID, "movie", r.Title, r.Year); err != nil {
-			return false, err
-		}
-		label = r.Title
+		r = parse.MovieIn(rel, videosIn(lib))
 		role = parse.MovieRoleIn(rel, r.Title, videosIn(lib))
 	}
-	f.MediaItemID = itemID
+	label := r.Title
 
+	// Probe before making the title: it takes seconds, and an item or episode
+	// made before then has no file yet, so another library's scan finishing
+	// meanwhile would tidy it away.
 	if p, err := probe.Probe(ctx, w.cfg.FFprobe, path); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return false, err
@@ -480,10 +462,11 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 		}
 	}
 
-	fileID, err := w.db.UpsertFile(ctx, f, seen)
+	fileID, created, err := w.writeFile(ctx, lib, &f, prev, r, seen)
 	if err != nil {
 		return false, err
 	}
+	itemID := f.MediaItemID
 	if lib.Kind != "tv" {
 		if err := w.db.SetDetectedRole(ctx, fileID, role.Kind, role.Part, role.Extra); err != nil {
 			return false, err
@@ -522,6 +505,34 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 		}
 	}
 	return true, nil
+}
+
+// writeFile makes (or finds) the file's title and episode and writes its row,
+// holding off the tidy-up in between so they can't be deleted first.
+func (w *Worker) writeFile(ctx context.Context, lib db.Library, f *db.File, prev *db.FileStamp, r parse.Result, seen int64) (fileID int64, created bool, err error) {
+	release := w.db.HoldItems()
+	defer release()
+	pinned := prev != nil && prev.ItemPinned
+	switch {
+	case pinned:
+		// Merged under another title by hand: UpsertFile keeps its title and episode.
+		f.MediaItemID = prev.MediaItemID
+	case lib.Kind == "tv":
+		if f.MediaItemID, created, err = w.db.EnsureItem(ctx, lib.ID, "series", r.Title, r.Year); err != nil {
+			return 0, false, err
+		}
+		epID, err := w.db.EnsureEpisode(ctx, f.MediaItemID, r.Season, r.Episode, r.EpisodeTitle, r.AirDate)
+		if err != nil {
+			return 0, false, err
+		}
+		f.EpisodeID = &epID
+	default:
+		if f.MediaItemID, created, err = w.db.EnsureItem(ctx, lib.ID, "movie", r.Title, r.Year); err != nil {
+			return 0, false, err
+		}
+	}
+	fileID, err = w.db.UpsertFile(ctx, *f, seen)
+	return fileID, created, err
 }
 
 // RescanFile reads one file again the way a scan reads a new one (probe,

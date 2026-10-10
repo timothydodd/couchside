@@ -214,6 +214,20 @@ func (d *DB) EnsureItem(ctx context.Context, libraryID int64, kind, title string
 // unique key is per library, and titles are shared across them.
 var ensureMu sync.Mutex
 
+// itemsMu keeps the tidy-up after files go (tidyItems) from deleting an item
+// or episode a scan has just made for a file it hasn't written yet, which
+// failed that scan with a foreign key error when two libraries scanned at
+// once. Indexers hold it shared (HoldItems) from EnsureItem to UpsertFile;
+// the deletes that tidy hold it alone, taken before their transaction.
+var itemsMu sync.RWMutex
+
+// HoldItems keeps items and episodes from being tidied away until release is
+// called; hold it from making a file's item and episode until its row is written.
+func (d *DB) HoldItems() (release func()) {
+	itemsMu.RLock()
+	return itemsMu.RUnlock
+}
+
 // Metadata is what a provider contributes to an item.
 type Metadata struct {
 	Title        string

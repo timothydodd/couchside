@@ -306,6 +306,8 @@ func (d *DB) SetFileStill(ctx context.Context, id int64, has bool) error {
 // episodes left without files.
 func (d *DB) PruneLibrary(ctx context.Context, libraryID, scanStart int64) (Pruned, error) {
 	var out Pruned
+	itemsMu.Lock() // tidyItems: see HoldItems
+	defer itemsMu.Unlock()
 	tx, err := d.sql.BeginTx(ctx, nil)
 	if err != nil {
 		return out, err
