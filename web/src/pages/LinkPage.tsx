@@ -4,12 +4,14 @@ import { ErrorNote, PageHeader, GoodNote } from "../components/ui";
 import { api } from "../lib/api";
 import { errText } from "../lib/errors";
 import { useProfile } from "../stores/profile";
+import { useTitle } from "../lib/title";
 
 /**
  * /link: sign a TV in from here. The TV app shows a code; entering it signs
  * the TV in as the profile using this browser.
  */
 export default function LinkPage() {
+  useTitle("Sign in a TV");
   const profile = useProfile((s) => s.current);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);

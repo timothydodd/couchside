@@ -7,6 +7,34 @@ container image (amd64 and arm64) at `ghcr.io/timothydodd/couchside`.
 Once it's running, open http://localhost:8080 (or your host) and add a library
 on the Libraries page. Settings are covered in [configuration.md](configuration.md).
 
+## Requirements and formats
+
+- **Server:** Linux (amd64 or arm64), macOS, or Windows 10/11 x64. Two cores
+  and 1 GB of memory cover direct play and one 1080p software transcode; a 4K
+  software transcode alone can take 1 to 2 GB, so plan more for several at
+  once, or use a GPU. A small arm64 box plays files directly well but is slow
+  to transcode in software.
+- **Storage:** the database is small (tens of MB for thousands of titles). The
+  cache (artwork, stills, subtitles, preview thumbnails, optimized copies,
+  live TV segments) grows with the library: plan 20 GB, and more if you make
+  optimized copies. Media can stay read-only.
+- **Programs:** the container and the Windows installer include ffmpeg (and
+  the container comskip). The zips need `ffmpeg` and `ffprobe` on the PATH, and
+  `comskip` for commercial detection.
+- **Video files** scanned: `.mkv .mp4 .m4v .avi .mov .wmv .webm .ts .m2ts .mpg
+  .mpeg .flv`. Whatever ffmpeg can decode inside them plays: the browser or TV
+  plays a file directly when it can, and otherwise the server remuxes or
+  converts it ([playback.md](playback.md)), tone mapping HDR to SDR.
+- **Subtitles:** text tracks inside the file and sidecar `.srt .vtt .ass .ssa`
+  files next to it (`Movie.en.srt`) show as captions; picture subtitles (PGS,
+  DVD) are burned in by the server.
+- **Naming:** `Movies/Title (Year)/Title (Year).mkv`,
+  `TV/Show/Season 01/Show S01E01.mkv` and the common variants, including
+  editions and extras ([library.md](library.md)).
+- **Live TV:** an HDHomeRun tuner on the same network.
+- **Players:** current Chrome, Edge, Firefox and Safari, and the Couchside Roku
+  channel. The web UI can be installed as an app but needs the server to work.
+
 ## Windows installer
 
 Run `couchside-<version>-windows-amd64-setup.exe`. It asks for a port, then:
@@ -14,7 +42,10 @@ Run `couchside-<version>-windows-amd64-setup.exe`. It asks for a port, then:
 - installs Couchside with ffmpeg beside it (jellyfin-ffmpeg, whose NVENC runs on
   older NVIDIA drivers than upstream builds), so there's nothing else to install;
 - runs it as the **Couchside** Windows service, which starts with Windows and
-  restarts if it stops unexpectedly;
+  restarts if it stops unexpectedly. The service runs as its own account,
+  `NT SERVICE\Couchside`, not as an administrator: it can change only its own
+  folders (`%ProgramData%\Couchside`), and reads your media with the rights
+  local users have;
 - lists your graphics cards. Couchside picks the encoder at start-up: NVIDIA
   NVENC first, then Intel Quick Sync, else the CPU. Settings → System shows the
   one in use, or why a GPU couldn't be used (for example a driver too old);
@@ -34,12 +65,21 @@ installer again upgrades in place and keeps your settings.
 
 **Media on a NAS.** Add it as a network share location with its network path
 (`\\nas\media`), not a mapped drive letter (services can't see mapped
-drives), and the NAS's user name and password. The service runs as Local
-System, which a NAS usually turns away, so Couchside signs in to the share
-itself whenever it starts (like `net use`); the password is kept encrypted for
-this computer (Windows DPAPI). Alternatively, in Services (`services.msc`) open
-Couchside → Log On, choose an account that can read the share, and restart the
-service.
+drives), and the NAS's user name and password. The service's own account
+means nothing to a NAS, so Couchside signs in to the share itself whenever it
+starts (like `net use`); the password is kept encrypted for that account
+(Windows DPAPI). Alternatively, in Services (`services.msc`) open Couchside →
+Log On, choose an account that can read the share, and restart the service.
+
+**Local folders** need to be readable by `NT SERVICE\Couchside`, which they
+usually are (local users can read them). For the DVR to record into a folder,
+or to delete files from Couchside, give that account Modify on it:
+`icacls "D:\TV Shows" /grant "NT SERVICE\Couchside:(OI)(CI)M"`.
+
+**Upgrading from 0.18 or earlier**, when the service ran as Local System:
+saved share passwords were encrypted for that account, so Settings → Server →
+Media locations shows each share needing its password again; edit it and type
+it once. Folders that only Local System could write to need the grant above.
 
 Test builds of the installer come from `pre-*` tags: the installer is attached to
 that workflow run (Actions → prerelease → windows-installer), not published.
@@ -57,11 +97,17 @@ docker run -d --name couchside -p 8080:8080 \
   to record into a library folder, or want to delete files from the Manage view.
 - Add `-e COUCHSIDE_HDHOMERUN=<tuner IP>` for [Live TV](live-tv.md).
 - Add `-e TZ=America/New_York` (your zone) so guide times and recording names are local.
+- For the DVR add `-v couchside-recordings:/recordings` (or record into a
+  writable `/media` folder chosen in Settings → Live TV): without a volume,
+  recordings go with the container.
 - For TV apps to find the server on their own (LAN discovery), run it with
   `--network host` instead of `-p`: SSDP's multicast doesn't reach a container
   on Docker's bridge network. Otherwise type the address into the TV app.
 - For GPU transcoding, pass the GPU in (`--device /dev/dri`) and set
   `-e COUCHSIDE_HWACCEL=vaapi`. See [playback.md](playback.md#hardware).
+- The container runs as user 1000. A bind-mounted `/data` must belong to it:
+  Couchside keeps the folder and its database readable by that user only,
+  since they hold password hashes and the session key.
 
 ## Zip
 
@@ -79,22 +125,39 @@ one on the PATH. (On Windows a conversion isn't paused when it gets ahead of the
 detection, put [Comskip](https://github.com/erikkaashoek/Comskip) on the PATH
 or set `COUCHSIDE_COMSKIP` (the container image has it built in).
 
-## Docker Compose against a NAS share
+## Docker Compose
 
-Copy `.env.example` to `.env`, fill it in, and run `docker compose up -d`. That runs the published image; to build from a checkout instead, add `-f docker-compose.yml -f docker-compose.dev.yml` and `--build` (a local build has no built-in TMDB key, so set `TMDB_API_KEY`).
-Docker Desktop can't see mapped network drives, so the compose file mounts the
-SMB share directly. It mounts the share writable so the DVR can record into
-your TV library.
+`docker-compose.yml` runs the published image with your media from `./media`
+next to it (create the folder first, or set `MEDIA_PATH` in `.env`), and named
+volumes for the database, cache and recordings. Copy `.env.example` to `.env`
+for the time zone, HDHomeRun and keys, and `COUCHSIDE_VERSION` to pin a
+release; then `docker compose up -d`.
+
+**Media on a NAS share:** `docker compose -f docker-compose.smb.yml up -d`
+mounts an SMB share directly (Docker Desktop can't see mapped network drives),
+using the `NAS_*` lines in `.env`. It mounts the share writable so the DVR can
+record into your TV library.
+
+To build from a checkout instead, add `-f docker-compose.dev.yml` and `--build`
+(a local build has no built-in TMDB key, so set `TMDB_API_KEY`).
 
 ## Kubernetes / k3s (Helm)
 
 ```bash
 kubectl create namespace media
 
-helm install couchside deploy/helm/couchside -n media \
+helm install couchside oci://ghcr.io/timothydodd/charts/couchside --version <version> -n media \
   --set media.type=nfs --set media.nfs.server=192.168.1.10 --set media.nfs.path=/volume1/media \
-  --set ingress.enabled=true --set ingress.host=couchside.home.lan
+  --set ingress.enabled=true --set ingress.host=couchside.home.lan \
+  --set auth.enabled=true
 ```
+
+`<version>` is a release without the `v` (`0.19.0`); upgrade with
+`helm upgrade couchside oci://ghcr.io/timothydodd/charts/couchside --version <new> --reuse-values -n media`.
+From a checkout, `deploy/helm/couchside` works in place of the `oci://` address.
+
+The pod log prints a one-time setup code; open the UI and enter it with your
+name and a password.
 
 - Media can be NFS, a hostPath or an existing PVC (`media.type`). The SQLite
   database lives on its own PVC. Media is mounted read-only unless you set
@@ -106,14 +169,52 @@ helm install couchside deploy/helm/couchside -n media \
   `extraEnv`.
 - The memory limit (4Gi) covers the server and every ffmpeg it runs; raise it
   for several software 4K transcodes at once.
+- GPU (Intel or AMD, VAAPI): install a GPU device plugin and set
+  `--set hwaccel.mode=vaapi --set hwaccel.dri.resource=gpu.intel.com/i915
+  --set 'hwaccel.dri.groups={<render gid>}'` (Intel's plugin; `squat.ai/dri`
+  with generic-device-plugin). Without a plugin,
+  `hwaccel.dri.enabled=true hwaccel.dri.privileged=true` mounts `/dev/dri` from
+  the node into a privileged container. The image's ffmpeg has no NVENC or
+  Quick Sync.
+- The chart refuses an Ingress without `auth.enabled=true`. For an ingress
+  only your LAN can reach, `auth.allowOpenIngress=true` keeps passwordless
+  sign-in.
 - The Deployment uses `strategy: Recreate` because the database sits on a
-  ReadWriteOnce volume. Don't scale it past one replica.
+  ReadWriteOnce volume. Don't scale it past one replica. Upgrading restarts
+  the pod: a recording in progress is cut and resumed by the new one.
+- Liveness uses `/livez` (the process answers) and readiness `/healthz` (the
+  database answers), so a long scan or backup doesn't get the pod restarted.
 - LAN discovery needs `discovery.hostNetwork=true` (multicast doesn't reach
   the pod network); the pod then serves on the node's port 8080.
 - Optional keys come from Secrets: `tmdb.existingSecret` for your own TMDB key
   (release builds have one built in) and `omdb.existingSecret` for the OMDb
   fallback. See `deploy/helm/couchside/values.yaml` for everything else,
   including `auth.enabled` and GPU settings.
+
+## Upgrading
+
+A new version that changes the database saves
+`backups/couchside-upgrade-<time>.db` in the data folder before it does. For
+an extra copy, Settings → System → Advanced → Back up now first.
+
+- **Windows installer:** run the new installer. It stops the service, replaces
+  the program, keeps `couchside.env` and the data folder, and starts it again.
+- **Container:** `docker pull` the new tag and recreate the container with the
+  same volumes (`docker compose pull && docker compose up -d`). Set
+  `COUCHSIDE_VERSION` in `.env` to choose when to move instead of following
+  `latest`.
+- **Helm:** `helm upgrade couchside oci://ghcr.io/timothydodd/charts/couchside
+  --version <version> --reuse-values -n media`. The old pod stops before the
+  new one starts, so a recording in progress is cut (and resumed as the new
+  pod starts); upgrade between recordings.
+- **Zip:** stop Couchside, replace the binary, start it.
+
+Read the release notes first for anything that needs doing by hand.
+
+**Going back.** An older version refuses to open a database a newer one has
+upgraded. Stop Couchside, run `couchside restore couchside-upgrade-<time>.db`
+with the older version ([configuration.md](configuration.md#backups)), then
+start it. Anything changed since that copy is lost.
 
 ## Putting it on the internet
 

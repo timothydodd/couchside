@@ -10,14 +10,17 @@ A variable set in the environment wins over the file.
 
 Most of them can also be set by an admin in **Settings → Server**: rescans and
 background jobs, the hardware
-encoder and how many streams and optimized copies run at once, ffmpeg and
-comskip, the HDHomeRun, the metadata keys and the network settings. A value
+encoder and how many streams and optimized copies run at once, the HDHomeRun, the metadata keys and the network settings. A value
 saved there wins over the variable and the settings file, and takes effect
 when the server restarts, which the page does in place (playback stops;
 recordings carry on in the same file). Clearing a field goes back to the
 variable. If the server can't start with the saved values, it starts without
 them and the page says why. The listen address, the data and cache folders,
-`COUCHSIDE_WEB_DIR` and `COUCHSIDE_AUTH` can only be set in the environment.
+`COUCHSIDE_WEB_DIR`, `COUCHSIDE_AUTH` and the programs Couchside runs
+(`COUCHSIDE_FFMPEG`, `COUCHSIDE_FFPROBE`, `COUCHSIDE_COMSKIP`,
+`COUCHSIDE_COMSKIP_INI`) can only be set in the environment or the settings
+file (`couchside.env` on Windows), so a browser session can't choose what the
+server runs.
 
 **Media locations** are where libraries can be: drives, folders and network
 shares, added in the first-run setup or Settings → Server (with a folder
@@ -41,8 +44,8 @@ locations too, fixed by the environment.
 | `COUCHSIDE_DEBUG` | none | Debug logging |
 | `TZ` | UTC | Time zone for guide times and recording names |
 | **Metadata** | | |
-| `TMDB_API_KEY` | built in | Your own TMDB key (v3 key or v4 read token) instead of Couchside's; `off` disables TMDB |
-| `OMDB_API_KEY` | none | Optional fallback metadata source; free keys at omdbapi.com |
+| `TMDB_API_KEY` | built in | Your own TMDB key (v3 key or v4 read token) instead of Couchside's shared one; `off` disables TMDB. If TMDB refuses a key, Couchside waits before asking again (10 minutes, doubling to 6 hours), and Activity says to set your own |
+| `OMDB_API_KEY` | none | Optional fallback metadata source; free keys at omdbapi.com. OMDb's data is CC BY-NC (non-commercial): leave it unset for commercial use |
 | **Accounts** | | |
 | `COUCHSIDE_AUTH` | `false` | Require passwords: no passwordless sign-in. Set it for a server on the internet |
 | `COUCHSIDE_TRUSTED_PROXIES` | none | Reverse proxies (CIDRs or addresses, comma-separated) whose `X-Forwarded-For` and `X-Forwarded-Proto` are believed. See [install.md](install.md#putting-it-on-the-internet) |
@@ -58,6 +61,8 @@ locations too, fixed by the environment.
 | `COUCHSIDE_MAX_TRANSCODES` | `2` | Live transcode sessions at once; idle ones are evicted |
 | `COUCHSIDE_ENCODE_WORKERS` | `1` | Background optimize encodes at once |
 | `COUCHSIDE_OPTIMIZE_HEIGHT` | `1080` | Height cap for optimized copies |
+| `COUCHSIDE_FFMPEG_THREADS` | cores ÷ `COUCHSIDE_MAX_TRANSCODES` for playback and live TV, 2 for background jobs | CPU threads each ffmpeg that converts video may use |
+| `GOMEMLIMIT` | `1GiB` in the container and chart, unset otherwise | Soft limit for Couchside's own memory (ffmpeg isn't counted). Raise it if Settings → System shows Couchside near it |
 | **Live TV & DVR** | | |
 | `COUCHSIDE_HDHOMERUN` | none | HDHomeRun IP or host; enables Live TV and the DVR |
 | `COUCHSIDE_RECORDINGS_DIR` | `$DATA_DIR/recordings` | Default folder for recordings (Settings can pick another) |
@@ -114,3 +119,9 @@ in `backups/`). The database it replaces is kept as
 `couchside.db.before-restore`. In Kubernetes: scale the Deployment to 0, run a
 one-off pod of the same image with the data volume and `restore` as its
 argument, then scale back up.
+
+**Going back to an older version.** An older Couchside won't open a database
+a newer one has upgraded: it stops with a message naming the newer change.
+To go back, stop Couchside, run `couchside restore couchside-upgrade-<time>.db`
+(the copy saved just before the upgrade) with the older version, then start
+it. Anything changed since that upgrade is lost.

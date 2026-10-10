@@ -131,6 +131,9 @@
     your file names, or IMDb IDs, to look up details, cast and artwork; then
     image downloads from TMDB's image servers.
     See <a href="https://www.themoviedb.org/privacy-policy">TMDB's privacy policy</a>.
+    Unless you set your own key (<code>TMDB_API_KEY</code>), these requests use
+    Couchside's shared TMDB key, so TMDB sees them as coming from Couchside,
+    with your server's IP address.
     You can turn TMDB off.</li>
     <li><strong>OMDb</strong>, only if you add an OMDb key: the same title
     lookups, and poster downloads from the image hosts it links to.</li>

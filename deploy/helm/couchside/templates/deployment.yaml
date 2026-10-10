@@ -1,3 +1,9 @@
+{{- if and .Values.hwaccel.dri.enabled (not .Values.hwaccel.dri.privileged) }}
+{{- fail "hwaccel.dri.enabled mounts /dev/dri from the node, which containerd only lets a privileged container open: set hwaccel.dri.privileged=true, or use a GPU device plugin instead (hwaccel.dri.resource=gpu.intel.com/i915) with dri.enabled=false." }}
+{{- end }}
+{{- if and .Values.hwaccel.dri.enabled .Values.hwaccel.dri.resource }}
+{{- fail "set hwaccel.dri.enabled (mount /dev/dri) or hwaccel.dri.resource (a device plugin), not both" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -12,12 +18,23 @@ spec:
     matchLabels: {{- include "couchside.selector" . | nindent 6 }}
   template:
     metadata:
-      labels: {{- include "couchside.selector" . | nindent 8 }}
+      labels:
+        {{- include "couchside.selector" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       annotations:
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       # Couchside never talks to the Kubernetes API.
       automountServiceAccountToken: false
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
       {{- if .Values.discovery.hostNetwork }}
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
@@ -37,14 +54,15 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
-            {{- if and .Values.hwaccel.dri.enabled .Values.hwaccel.dri.privileged }}
-            privileged: true
-            {{- else }}
-            {{- /* No GPU, or a GPU through a device plugin: either way unprivileged. */}}
-            allowPrivilegeEscalation: false
             runAsNonRoot: true
             capabilities:
               drop: [ALL]
+            {{- if and .Values.hwaccel.dri.enabled .Values.hwaccel.dri.privileged }}
+            {{- /* /dev/dri from the node: containerd needs privileged. It still runs as 1000:1000. */}}
+            privileged: true
+            {{- else }}
+            {{- /* No GPU, or a GPU through a device plugin: unprivileged. */}}
+            allowPrivilegeEscalation: false
             {{- end }}
             {{- if .Values.readOnlyRootFilesystem }}
             readOnlyRootFilesystem: true
@@ -71,6 +89,10 @@ spec:
               value: {{ .Values.config.encodeWorkers | quote }}
             - name: COUCHSIDE_OPTIMIZE_HEIGHT
               value: {{ .Values.config.optimizeHeight | quote }}
+            {{- with .Values.goMemLimit }}
+            - name: GOMEMLIMIT
+              value: {{ . | quote }}
+            {{- end }}
             {{- if .Values.auth.enabled }}
             - name: COUCHSIDE_AUTH
               value: "true"
@@ -150,17 +172,30 @@ spec:
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          # /healthz asks the database; /livez only that the process answers,
+          # so a busy database (a scan, a backup) never gets the pod killed.
           startupProbe:
             httpGet: { path: /healthz, port: http }
             periodSeconds: {{ .Values.startupProbe.periodSeconds }}
             failureThreshold: {{ .Values.startupProbe.failureThreshold }}
+            timeoutSeconds: 5
           readinessProbe:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
           livenessProbe:
-            httpGet: { path: /healthz, port: http }
+            httpGet: { path: /livez, port: http }
             periodSeconds: 30
-          resources: {{- toYaml .Values.resources | nindent 12 }}
+            timeoutSeconds: 5
+            failureThreshold: 6
+          {{- $res := deepCopy (.Values.resources | default dict) }}
+          {{- if .Values.hwaccel.dri.resource }}
+          {{- $limits := deepCopy ($res.limits | default dict) }}
+          {{- $_ := set $limits .Values.hwaccel.dri.resource (.Values.hwaccel.dri.resourceCount | int) }}
+          {{- $_ := set $res "limits" $limits }}
+          {{- end }}
+          resources: {{- toYaml $res | nindent 12 }}
       volumes:
         - name: data
           persistentVolumeClaim:

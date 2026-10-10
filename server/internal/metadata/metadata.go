@@ -71,6 +71,26 @@ type Chain struct{ Providers []Provider }
 
 func (c *Chain) Empty() bool { return c == nil || len(c.Providers) == 0 }
 
+// Degradable is a provider that can say it's unable to answer for now (TMDB
+// refusing its key).
+type Degradable interface{ Degraded() (bool, string) }
+
+// Degraded lists why providers can't answer right now; empty when all can.
+func (c *Chain) Degraded() []string {
+	out := []string{}
+	if c == nil {
+		return out
+	}
+	for _, p := range c.Providers {
+		if d, ok := p.(Degradable); ok {
+			if bad, why := d.Degraded(); bad {
+				out = append(out, why)
+			}
+		}
+	}
+	return out
+}
+
 func (c *Chain) Names() []string {
 	out := []string{}
 	if c != nil {

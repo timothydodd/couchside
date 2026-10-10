@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -109,10 +110,14 @@ func serve(parent context.Context, ignoreSaved string) (again bool, err error) {
 	if cfg.EnvFile != "" {
 		slog.Info("settings file", "path", cfg.EnvFile)
 	}
-	for _, dir := range []string{cfg.DataDir, cfg.CacheDir} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return false, err
-		}
+	// The data folder holds the session key, password hashes and API keys:
+	// only the server's own user may read it. The cache holds nothing secret.
+	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
+		return false, err
+	}
+	tightenDir(cfg.DataDir)
+	if err := os.MkdirAll(cfg.CacheDir, 0o755); err != nil {
+		return false, err
 	}
 	cfg.ServerID = serverID(cfg.DataDir)
 	database, err := db.Open(filepath.Join(cfg.DataDir, "couchside.db"))
@@ -125,6 +130,15 @@ func serve(parent context.Context, ignoreSaved string) (again bool, err error) {
 	saved, err := database.EnvOverrides(parent)
 	if err != nil {
 		return false, err
+	}
+	// Settings an older version let admins save from the web that can only
+	// come from the environment now (the ffmpeg and comskip programs).
+	for k := range saved {
+		if _, ok := config.EditableSetting(k); !ok {
+			slog.Warn("ignoring a saved setting that can no longer be set from the web; set it in the environment or the settings file instead", "key", k)
+			_ = database.SetEnvOverride(parent, k, nil)
+			delete(saved, k)
+		}
 	}
 	if ignoreSaved != "" {
 		saved = nil
@@ -169,6 +183,7 @@ func serve(parent context.Context, ignoreSaved string) (again bool, err error) {
 	var restart atomic.Bool
 
 	enc := transcode.Detect(ctx, cfg.FFmpeg, cfg.HWAccel, cfg.VAAPIDevice)
+	enc.Threads = cfg.LiveThreads()
 	tc, err := transcode.NewManager(enc, cfg.FFprobe, filepath.Join(cfg.CacheDir, "transcode"), cfg.MaxTranscodes)
 	if err != nil {
 		return false, err
@@ -233,9 +248,13 @@ func serve(parent context.Context, ignoreSaved string) (again bool, err error) {
 		<-ctx.Done()
 		// A second Ctrl-C or SIGTERM now exits at once.
 		stop()
-		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		// Kubernetes allows 60s (the chart's terminationGracePeriodSeconds):
+		// 20 for requests to finish, then cut the rest (a long direct-play
+		// download) so the worker and the database close before the kill.
+		shutdown, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(shutdown)
+		_ = srv.Close()
 	}()
 
 	web := cfg.WebDir
@@ -287,8 +306,23 @@ func serverID(dataDir string) string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
 	id := fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
-	if err := os.WriteFile(p, []byte(id+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(p, []byte(id+"\n"), 0o600); err != nil {
 		slog.Warn("couldn't save the server id", "err", err)
 	}
 	return id
+}
+
+// tightenDir takes group and other access off a folder that holds secrets,
+// for data folders made by older versions (MkdirAll doesn't change an
+// existing folder). Windows has no POSIX modes; the installer's ACLs cover
+// it. A volume that refuses (some NFS mounts) only gets a warning.
+func tightenDir(p string) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	if st, err := os.Stat(p); err == nil && st.Mode().Perm()&0o077 != 0 {
+		if err := os.Chmod(p, 0o700); err != nil {
+			slog.Warn("couldn't restrict the data folder to Couchside's user", "path", p, "err", err)
+		}
+	}
 }

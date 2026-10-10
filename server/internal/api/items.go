@@ -26,7 +26,8 @@ func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	// Polled while a library is open (every 20s on the web): unchanged, it's a 304.
+	writeJSONRevalidated(w, r, items)
 }
 
 type season struct {

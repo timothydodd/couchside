@@ -62,6 +62,33 @@ func summaryCols(ctx context.Context) string {
 		FROM files f WHERE f.media_item_id = m.id AND f.role <> 'extra'), 0)`
 }
 
+// summaryListCols and summaryListFrom are summaryCols for whole-kind lists:
+// the per-title subqueries (five index probes per title) become one pass
+// over files grouped by title. Same columns in the same order, so
+// scanSummary reads both. Use them together; callers add WHERE and ORDER BY
+// on m. Single titles and short IN lists stay on summaryCols, which SQLite
+// answers faster there.
+func summaryListCols() string {
+	return `m.id, m.kind, m.title, m.sort_title, m.year, m.genres, m.rating, m.runtime_min,
+	m.has_poster, m.has_backdrop, m.match_status, m.added_at, m.updated_at,
+	COALESCE(fs.file_count, 0), COALESCE(fs.watched_count, 0),
+	pi.item_id IS NOT NULL,
+	COALESCE(fs.last_added, m.added_at) AS last_added,
+	COALESCE(fs.range_rank, 0)`
+}
+
+func summaryListFrom(ctx context.Context) string {
+	return ` FROM media_items m
+	LEFT JOIN (SELECT f.media_item_id AS item_id,
+		SUM(CASE WHEN f.role <> 'extra' THEN 1 ELSE 0 END) AS file_count,
+		SUM(CASE WHEN f.role <> 'extra' AND w.watched = 1 THEN 1 ELSE 0 END) AS watched_count,
+		MAX(f.added_at) AS last_added,
+		MAX(CASE WHEN f.role = 'extra' THEN 0 WHEN f.dynamic_range = 'dv' THEN 3 WHEN f.dynamic_range = 'hdr10' THEN 2
+			WHEN f.dynamic_range = 'hlg' THEN 1 ELSE 0 END) AS range_rank
+		FROM files f ` + watchJoin(ctx) + ` GROUP BY f.media_item_id) fs ON fs.item_id = m.id
+	LEFT JOIN profile_items pi ON pi.item_id = m.id AND pi.profile_id = ` + strconv.FormatInt(ProfileID(ctx), 10)
+}
+
 func scanSummary(dest *ItemSummary, extra ...any) []any {
 	return append([]any{&dest.ID, &dest.Kind, &dest.Title, &dest.SortTitle, &dest.Year, &genreScanner{&dest.Genres}, &dest.Rating,
 		&dest.RuntimeMin, &dest.HasPoster, &dest.HasBackdrop, &dest.MatchStatus, &dest.AddedAt, &dest.UpdatedAt,
@@ -123,12 +150,12 @@ func SplitGenres(s string) []string {
 // Items lists every item of a kind. The client filters and sorts: a home
 // library is a few thousand rows, and doing it client-side keeps the grid instant.
 func (d *DB) Items(ctx context.Context, kind string) ([]ItemSummary, error) {
-	return d.querySummaries(ctx, `SELECT `+summaryCols(ctx)+` FROM media_items m WHERE m.kind = ?`+visible(ctx, "m")+` ORDER BY m.sort_title`, kind)
+	return d.querySummaries(ctx, `SELECT `+summaryListCols()+summaryListFrom(ctx)+` WHERE m.kind = ?`+visible(ctx, "m")+` ORDER BY m.sort_title`, kind)
 }
 
 // RecentItems returns items of a kind ordered by newest file.
 func (d *DB) RecentItems(ctx context.Context, kind string, limit int) ([]ItemSummary, error) {
-	return d.querySummaries(ctx, `SELECT `+summaryCols(ctx)+` FROM media_items m WHERE m.kind = ?`+visible(ctx, "m")+`
+	return d.querySummaries(ctx, `SELECT `+summaryListCols()+summaryListFrom(ctx)+` WHERE m.kind = ?`+visible(ctx, "m")+`
 		ORDER BY last_added DESC, m.id DESC LIMIT ?`, kind, limit)
 }
 
@@ -186,6 +213,20 @@ func (d *DB) EnsureItem(ctx context.Context, libraryID int64, kind, title string
 // ensureMu keeps two scans from creating the same title at once: the table's
 // unique key is per library, and titles are shared across them.
 var ensureMu sync.Mutex
+
+// itemsMu keeps the tidy-up after files go (tidyItems) from deleting an item
+// or episode a scan has just made for a file it hasn't written yet, which
+// failed that scan with a foreign key error when two libraries scanned at
+// once. Indexers hold it shared (HoldItems) from EnsureItem to UpsertFile;
+// the deletes that tidy hold it alone, taken before their transaction.
+var itemsMu sync.RWMutex
+
+// HoldItems keeps items and episodes from being tidied away until release is
+// called; hold it from making a file's item and episode until its row is written.
+func (d *DB) HoldItems() (release func()) {
+	itemsMu.RLock()
+	return itemsMu.RUnlock
+}
 
 // Metadata is what a provider contributes to an item.
 type Metadata struct {

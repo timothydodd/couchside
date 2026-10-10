@@ -13,10 +13,12 @@ import { attempt } from "../lib/notices";
 import RangeChip from "../components/RangeChip";
 import { PROBLEM_TEXT, type EpisodeDetail, type EpisodeRef } from "../lib/types";
 import { useIsAdmin } from "../stores/auth";
+import { useTitle } from "../lib/title";
 
 /** One episode: its still, synopsis, guest stars and crew, its copies, and the episodes either side. */
 export default function EpisodePage({ id }: { id: number }) {
   const { data, error, loading, reload } = useApi<EpisodeDetail>(`/api/episodes/${id}`);
+  useTitle(data && [data.series.title, data.episode.title || `S${data.episode.season} · E${data.episode.episode}`].join(" · "));
   const admin = useIsAdmin();
   const [editing, setEditing] = useState(false);
 

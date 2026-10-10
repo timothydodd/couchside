@@ -4,6 +4,7 @@ import { ApiError, api, setAuthHooks } from "../lib/api";
 import type { AuthInfo, Profile, SignedIn } from "../lib/types";
 import { stopStatus } from "./status";
 import { errText } from "../lib/errors";
+import { forgetReturnTo, takeReturnTo } from "../lib/returnTo";
 
 /**
  * Accounts are always on. Signing in is by name and password, or with
@@ -25,6 +26,8 @@ interface AuthState {
   setupRequired: boolean;
   /** The first-run setup (your name, your media) isn't done. */
   firstRun: boolean;
+  /** First run from outside the home network: welcome needs the setup code and a password. */
+  remoteFirstRun: boolean;
   user: Profile | null;
   signedIn: AuthInfo["signedIn"];
   /** Signing in here sends passwords unencrypted across the internet. */
@@ -37,8 +40,8 @@ interface AuthState {
   /** Passwordless sign-in to a profile without a password. */
   pick: (profileId: number) => Promise<void>;
   setup: (code: string, name: string, password: string) => Promise<void>;
-  /** First run, passwordless: name the admin profile (and maybe give it a password) and sign in. */
-  welcome: (name: string, password: string) => Promise<void>;
+  /** First run, passwordless: name the admin profile (and maybe give it a password) and sign in. From outside the home network it takes the setup code. */
+  welcome: (name: string, password: string, code?: string) => Promise<void>;
   /** Switch to another profile this browser is signed in to. */
   switchTo: (profileId: number) => Promise<void>;
   logout: (everywhere?: boolean) => Promise<void>;
@@ -54,6 +57,7 @@ export const useAuth = create<AuthState>((set, get) => ({
   hideAdmins: false,
   setupRequired: false,
   firstRun: false,
+  remoteFirstRun: false,
   user: null,
   signedIn: [],
   insecure: false,
@@ -70,6 +74,7 @@ export const useAuth = create<AuthState>((set, get) => ({
         hideAdmins: !!info.hideAdmins,
         setupRequired: info.setupRequired,
         firstRun: !!info.firstRun,
+        remoteFirstRun: !!info.remoteFirstRun,
         user: info.user,
         signedIn: info.signedIn,
         insecure: !!info.insecure,
@@ -87,20 +92,20 @@ export const useAuth = create<AuthState>((set, get) => ({
   login: async (name, password, code) => {
     await api<SignedIn>("/api/auth/login", { method: "POST", json: { name, password, code, client: "web" } });
     announceProfileChange();
-    location.assign("/");
+    location.assign(takeReturnTo());
   },
   pick: async (profileId) => {
     await api<SignedIn>("/api/auth/pick", { method: "POST", json: { profileId, client: "web" } });
     announceProfileChange();
-    location.assign("/");
+    location.assign(takeReturnTo());
   },
   setup: async (code, name, password) => {
     await api<SignedIn>("/api/auth/setup", { method: "POST", json: { code, name, password } });
     announceProfileChange();
-    location.assign("/");
+    location.assign(takeReturnTo());
   },
-  welcome: async (name, password) => {
-    await api<SignedIn>("/api/auth/welcome", { method: "POST", json: { name, password } });
+  welcome: async (name, password, code) => {
+    await api<SignedIn>("/api/auth/welcome", { method: "POST", json: { name, password, code } });
     announceProfileChange();
     location.assign("/");
   },
@@ -116,6 +121,7 @@ export const useAuth = create<AuthState>((set, get) => ({
   logout: async (everywhere = false) => {
     await api("/api/auth/logout", { method: "POST", json: { everywhere } });
     announceProfileChange();
+    forgetReturnTo();
     location.assign("/");
   },
   changePassword: async (current, password) => {

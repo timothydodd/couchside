@@ -96,6 +96,12 @@ const
 var
   PortPage: TInputQueryWizardPage;
   Gpus: String;
+  { The service ran as Local System before this install (0.18 and earlier). }
+  WasLocalSystem: Boolean;
+
+const
+  { The service's own account: no password, no admin rights, its own SID. }
+  ServiceAccount = 'NT SERVICE\{#ServiceName}';
 
 function EnvFile: String;
 begin
@@ -280,7 +286,10 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Code: Integer;
+  Account: String;
 begin
+  WasLocalSystem := RegQueryStringValue(HKLM, 'SYSTEM\CurrentControlSet\Services\{#ServiceName}', 'ObjectName', Account)
+    and (CompareText(Account, 'LocalSystem') = 0);
   Exec(ExpandConstant('{sys}\net.exe'), 'stop {#ServiceName}', '', SW_HIDE, ewWaitUntilTerminated, Code);
   Result := '';
 end;
@@ -313,7 +322,10 @@ var
   Bin: String;
   Code: Integer;
 begin
-  Bin := 'binPath= "\"' + ExpandConstant('{app}\couchside.exe') + '\"" start= delayed-auto DisplayName= "Couchside"';
+  { Its own virtual account rather than Local System: a media server that
+    runs ffmpeg on files from the network shouldn't run with the machine's
+    highest rights. Windows grants it "Log on as a service" by itself. }
+  Bin := 'binPath= "\"' + ExpandConstant('{app}\couchside.exe') + '\"" start= delayed-auto DisplayName= "Couchside" obj= "' + ServiceAccount + '"';
   Code := ServiceExec('create {#ServiceName} ' + Bin);
   if Code = ERROR_SERVICE_EXISTS then
     Code := ServiceExec('config {#ServiceName} ' + Bin);
@@ -326,6 +338,14 @@ begin
   { Restart after a crash or a failed start (failureflag counts a non-zero exit). }
   ServiceExec('failure {#ServiceName} reset= 86400 actions= restart/5000/restart/10000/restart/60000');
   ServiceExec('failureflag {#ServiceName} 1');
+  { The account writes the database, cache, logs and couchside.env (Settings
+    -> Server edits it), and reads the program folder. /T reaches files Local
+    System made before; (OI)(CI) makes new ones inherit. Only after create or
+    config, which gives the account its SID. }
+  Exec(ExpandConstant('{sys}\icacls.exe'), '"' + ExpandConstant('{commonappdata}\Couchside') + '" /grant "' + ServiceAccount + ':(OI)(CI)M" /T /Q',
+    '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Exec(ExpandConstant('{sys}\icacls.exe'), '"' + ExpandConstant('{app}') + '" /grant "' + ServiceAccount + ':(OI)(CI)RX" /Q',
+    '', SW_HIDE, ewWaitUntilTerminated, Code);
   Code := ServiceExec('start {#ServiceName}');
   if (Code <> 0) and (Code <> ERROR_SERVICE_ALREADY_RUNNING) then
     MsgBox('The Couchside service didn''t start (sc.exe error ' + IntToStr(Code) + '). ' +
@@ -351,4 +371,10 @@ begin
       'The first time it opens, Couchside asks for your name and where your media is: drives, folders, ' +
       'or network shares with the NAS''s user name and password.' + #13#10#13#10 +
       'Settings: ' + EnvFile;
+  if (CurPageID = wpFinished) and WasLocalSystem then
+    WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 +
+      'Couchside now runs as its own account (' + ServiceAccount + ') instead of Local System. ' +
+      'Network shares with a saved password need it typed again: Settings -> Server -> Media locations. ' +
+      'Local folders need to be readable by that account (they usually are), and writable where the DVR ' +
+      'records or where you delete files from Couchside.';
 end;

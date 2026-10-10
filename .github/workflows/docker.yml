@@ -24,5 +24,16 @@ jobs:
           context: .
           platforms: linux/amd64
           push: false
+          load: true
+          tags: couchside:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # Known vulnerabilities in the image's packages (Alpine, ffmpeg's
+      # libraries, comskip's). Reported, not failing the build: most need a
+      # base-image bump from Dependabot.
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: couchside:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"

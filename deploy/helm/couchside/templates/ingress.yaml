@@ -1,3 +1,6 @@
+{{- if and .Values.ingress.enabled (not .Values.auth.enabled) (not .Values.auth.allowOpenIngress) }}
+{{- fail "ingress.enabled=true can put Couchside on the internet: set auth.enabled=true (passwords required; the pod log prints a setup code), or auth.allowOpenIngress=true for an ingress only your LAN can reach." }}
+{{- end }}
 {{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress

@@ -4,8 +4,11 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -97,5 +100,51 @@ func TestUnreadableFileIsProbedAgain(t *testing.T) {
 	}
 	if st, _ := d.FileStamp(ctx, film); st == nil || st.Problem != "" {
 		t.Fatalf("rescan of an unchanged unreadable file: %+v, want it probed again and fine", st)
+	}
+}
+
+// Unchanged files are marked seen in batches (more than one here): none is
+// probed again or pruned, and files deleted from disk still are.
+func TestScanTouchesUnchangedFilesInBatches(t *testing.T) {
+	w, d, lib, root, ffprobe := probeWorker(t)
+	ctx := context.Background()
+	calls := filepath.Join(filepath.Dir(ffprobe), "calls")
+	setProbe(t, ffprobe, "echo x >> '"+calls+"'\n"+goodProbe)
+	const n = 520
+	var paths []string
+	for i := 0; i < n; i++ {
+		p := filepath.Join(root, fmt.Sprintf("Film %03d (2001).mkv", i))
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, p)
+	}
+	if err := w.scan(ctx, lib); err != nil {
+		t.Fatal(err)
+	}
+	ids := indexed(t, d, paths...)
+	backdate(t, d, ids...)
+	if err := w.scan(ctx, lib); err != nil {
+		t.Fatal(err)
+	}
+	if got := indexed(t, d, paths...); slices.Contains(got, 0) {
+		t.Fatal("an unchanged file was pruned: its batch wasn't marked seen")
+	}
+	b, _ := os.ReadFile(calls)
+	if probes := strings.Count(string(b), "x"); probes != n {
+		t.Fatalf("ffprobe ran %d times, want %d (unchanged files probed again)", probes, n)
+	}
+	backdate(t, d, ids...)
+	for _, p := range paths[:10] {
+		os.Remove(p)
+	}
+	if err := w.scan(ctx, lib); err != nil {
+		t.Fatal(err)
+	}
+	got := indexed(t, d, paths...)
+	for i, id := range got {
+		if (i < 10) != (id == 0) {
+			t.Fatalf("file %d: id %d after deleting the first 10", i, id)
+		}
 	}
 }

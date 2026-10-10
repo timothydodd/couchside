@@ -197,6 +197,7 @@ func (w *Worker) grabFrames(ctx context.Context, f db.File, height int, dir stri
 			break
 		}
 		args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
+		args = append(args, transcode.ThreadArgs(w.cfg.JobThreads())...)
 		if keyframesOnly {
 			args = append(args, "-skip_frame", "nokey")
 		}

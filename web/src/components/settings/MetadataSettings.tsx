@@ -1,5 +1,6 @@
 import { CheckCircle2, XCircle } from "lucide-react";
 import { useStatus } from "../../stores/status";
+import { WarningNote } from "../ui";
 
 /** Where titles, plots and artwork come from: TMDB first, OMDb as a fallback. */
 export default function MetadataSettings() {
@@ -9,6 +10,16 @@ export default function MetadataSettings() {
   return (
     <section className="card p-4">
       <div className="card-title mb-3">Metadata</div>
+      {!!status?.metadataDegraded?.length && (
+        <div className="mb-3">
+          <WarningNote>
+            {status.metadataDegraded.join(". ")}.{" "}
+            {status.tmdbKey === "builtin"
+              ? "Couchside's shared key is being refused, so new titles won't match. Set your own TMDB API key (free from themoviedb.org) in Settings → Server; titles match on the next scan."
+              : "Check the TMDB API key in Settings → Server."}
+          </WarningNote>
+        </div>
+      )}
       <div className="flex flex-col gap-4">
         <div className="flex items-start gap-3">
           {tmdb ? <CheckCircle2 size={18} className="mt-0.5 text-good" /> : <XCircle size={18} className="mt-0.5 text-content-muted" />}
@@ -18,7 +29,7 @@ export default function MetadataSettings() {
               {!tmdb
                 ? "Off. Set TMDB_API_KEY on the server (a free key from themoviedb.org), or remove TMDB_API_KEY=off."
                 : status?.tmdbKey === "builtin"
-                  ? "Connected with Couchside's built-in key: titles, plots, posters, backdrops and episode names, cached for up to 30 days. Set TMDB_API_KEY to use your own."
+                  ? "Connected with Couchside's shared key: titles, plots, posters, backdrops and episode names, cached for up to 30 days. Every Couchside without its own key uses it, so TMDB sees this server's address under it. Set your own TMDB API key in Settings → Server to stop relying on it."
                   : "Connected with your TMDB_API_KEY: titles, plots, posters, backdrops and episode names, cached for up to 30 days."}
             </p>
           </div>

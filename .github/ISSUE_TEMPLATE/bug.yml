@@ -1,0 +1,51 @@
+name: Bug report
+description: Something doesn't work as the docs say it should
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Couchside version
+      description: Settings → System shows it (or the image tag you run).
+      placeholder: "0.19.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: How it's running
+      options:
+        - Windows installer
+        - Docker / Docker Compose
+        - Kubernetes (Helm)
+        - Zip (Linux)
+        - Zip (macOS)
+        - Zip (Windows)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+      description: Steps to make it happen again, if you have them.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: |
+        Settings → System → Advanced → Diagnostics → **Download** gives a zip with the version, settings (API keys masked), ffmpeg and GPU detection, library counts, database health and the recent log. Look it over (it names your folders), then drag it in here.
+        If the server won't start, attach its log instead: `%ProgramData%\Couchside\data\logs\couchside.log` on Windows, `docker logs couchside`, or `kubectl logs deploy/couchside`.
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console (web UI problems)
+      description: F12 → Console; copy any red lines.
+      render: text
+  - type: input
+    id: client
+    attributes:
+      label: Browser or device
+      placeholder: "Chrome on Windows, Safari on iPhone, Roku Ultra"

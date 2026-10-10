@@ -202,3 +202,20 @@ func TestLaunchReportsACancelledCaller(t *testing.T) {
 		t.Fatalf("launch after the caller left = %v, want context.Canceled", err)
 	}
 }
+
+// A converted live stream gets the thread cap; a passthrough doesn't need one.
+func TestLiveArgsThreads(t *testing.T) {
+	m := &liveManager{enc: transcode.Encoder{FFmpeg: "ffmpeg", HW: "none", Threads: 3}}
+	conv := strings.Join(m.liveArgs([]string{"-i", "x"}, Spec{Height: 720, window: liveWindow}, false, "/d"), " ")
+	if !strings.Contains(conv, "-threads 3") {
+		t.Errorf("converted stream without -threads: %s", conv)
+	}
+	pass := strings.Join(m.liveArgs([]string{"-i", "x"}, Spec{CopyVideo: true, CopyAudio: true, window: liveWindow}, false, "/d"), " ")
+	if strings.Contains(pass, "-threads") {
+		t.Errorf("passthrough with -threads: %s", pass)
+	}
+	m.enc.Threads = 0
+	if s := strings.Join(m.liveArgs([]string{"-i", "x"}, Spec{Height: 720}, false, "/d"), " "); strings.Contains(s, "-threads") {
+		t.Errorf("threads 0 still caps: %s", s)
+	}
+}

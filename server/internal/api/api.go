@@ -3,6 +3,8 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,6 +39,12 @@ import (
 )
 
 type Server struct {
+	linkOK linkChecks // files that recently passed checkLink
+	// counts caches db.Counts for /api/status (see cachedCounts).
+	countsMu sync.Mutex
+	counts   db.Counts
+	countsAt time.Time
+
 	db        *db.DB
 	cfg       config.Config
 	worker    *worker.Worker
@@ -103,9 +111,16 @@ func (s *Server) Run(ctx context.Context) {
 			}
 		}
 	}()
-	// Print the setup code at start-up if there's no admin yet.
+	// Print the setup code at start-up if there's no admin yet, or (with
+	// passwordless sign-in) while the first run isn't done, for an owner
+	// setting up from outside the home network.
 	if _, err := s.setupNeeded(ctx); err != nil {
 		slog.Error("accounts", "err", err)
+	}
+	if first, err := s.firstRun(ctx); err != nil {
+		slog.Error("accounts", "err", err)
+	} else if on, _, _ := s.passwordless(ctx); first && on {
+		s.firstRunCode()
 	}
 	if s.cfg.Auth {
 		// Passwords are required now; sessions from passwordless days end.
@@ -138,25 +153,49 @@ func (s *Server) pruneTables(ctx context.Context) {
 	if jobs+cached+int64(len(people)) > 0 {
 		slog.Info("pruned old rows", "jobs", jobs, "providerResponses", cached, "people", len(people))
 	}
+	if err := s.db.Maintain(ctx); err != nil {
+		slog.Warn("database maintenance", "err", err)
+	}
 }
 
 // securityHeaders: nothing is sniffed into another type, and the UI can't be
 // framed by another site.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Referrer-Policy", "same-origin")
+		h.Set("X-Frame-Options", "SAMEORIGIN") // older browsers; the UI's CSP frame-ancestors is the rule
+		// Only once the browser reached us over HTTPS (directly, or through a
+		// trusted proxy), and never for the whole domain: a home server on
+		// media.example.com mustn't lock the rest of example.com to HTTPS.
+		if isHTTPS(r) {
+			h.Set("Strict-Transport-Security", "max-age=31536000")
+		}
 		next.ServeHTTP(w, r)
 	})
 }
 
+// uiCSP is the web UI's Content-Security-Policy. It has no inline scripts and
+// loads nothing from other sites; inline style attributes (React style={})
+// need 'unsafe-inline' for styles, and hls.js plays through blob: media and
+// runs its demuxer in a blob: worker.
+const uiCSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
+	"media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; " +
+	"base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+
 func (s *Server) Handler() http.Handler {
 	r := chi.NewRouter()
-	r.Use(s.realIP, middleware.Recoverer, securityHeaders)
+	r.Use(s.realIP, middleware.Recoverer, securityHeaders, keepConditional)
 
 	r.Get("/healthz", s.health)
+	r.Get("/livez", s.live)
 	r.Get("/api/discovery", s.discovery)
+	r.With(middleware.NoCache).Get("/api/server", s.serverInfo)
 	r.Route("/api", func(r chi.Router) {
-		r.Use(middleware.NoCache)
+		// JSON and playlists are gzipped when the client asks; segments
+		// (video/mp2t) pass through untouched.
+		r.Use(middleware.NoCache, middleware.Compress(5, "application/json", "application/vnd.apple.mpegurl"))
 		// Open: how to sign in, and signing in.
 		r.Get("/auth", s.authStatus)
 		r.Post("/auth/login", s.login)
@@ -209,7 +248,7 @@ func (s *Server) Handler() http.Handler {
 	r.Group(func(r chi.Router) {
 		r.Use(s.authenticate, s.passwordCurrent)
 		r.Get("/api/files/{id}/stream", s.stream)
-		r.Get("/api/files/{id}/subtitles/{key}", s.subtitleVTT)
+		r.With(middleware.Compress(5, "text/vtt")).Get("/api/files/{id}/subtitles/{key}", s.subtitleVTT)
 	})
 
 	switch {
@@ -285,6 +324,7 @@ func (s *Server) adminRoutes(r chi.Router) {
 	r.Get("/system", s.system)
 	r.Get("/system/history", s.systemHistory)
 	r.Get("/system/logs", s.systemLogs)
+	r.Get("/system/diagnostics", s.diagnostics)
 	r.Post("/items/{id}/intros", s.findIntros)
 	r.Put("/files/{id}/segments/{kind}", s.setSegment)
 	r.Delete("/files/{id}/segments/{kind}", s.setSegment)
@@ -365,8 +405,19 @@ func (s *Server) adminRoutes(r chi.Router) {
 	r.Post("/jobs/clear", s.clearJobs)
 }
 
+// live says the process is up and serving HTTP: the liveness probe. It
+// never touches the database, so a busy SQLite pool (a scan, a backup) can't
+// get the pod killed mid-recording.
+func (s *Server) live(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write([]byte("ok"))
+}
+
+// health says the database answers: the readiness and startup probe.
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
-	if err := s.db.Ping(r.Context()); err != nil {
+	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
+	defer cancel()
+	if err := s.db.Ping(ctx); err != nil {
 		slog.Error("health check", "err", err)
 		http.Error(w, "database unavailable", http.StatusServiceUnavailable)
 		return
@@ -375,6 +426,57 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- helpers -----------------------------------------------------------------
+
+type inmKey struct{}
+
+// keepConditional keeps If-None-Match for the handlers that answer 304:
+// middleware.NoCache deletes it from the request.
+func keepConditional(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if v := r.Header.Get("If-None-Match"); v != "" {
+			r = r.WithContext(context.WithValue(r.Context(), inmKey{}, v))
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// writeJSONRevalidated answers v with an ETag of its own bytes, and a 304
+// with no body when the client already has them. The browser keeps a copy
+// but asks every time (private, no-cache), so a poll that changed nothing
+// costs a hash instead of the whole list over the network and through
+// JSON.parse. Hashing the answer itself means no change can be missed.
+func writeJSONRevalidated(w http.ResponseWriter, r *http.Request, v any) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	sum := sha256.Sum256(b)
+	tag := `W/"` + hex.EncodeToString(sum[:12]) + `"`
+	h := w.Header()
+	h.Set("ETag", tag)
+	h.Set("Cache-Control", "private, no-cache")
+	h.Del("Expires")
+	h.Del("Pragma")
+	if inm, _ := r.Context().Value(inmKey{}).(string); etagMatches(inm, tag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	h.Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(append(b, '\n'))
+}
+
+// etagMatches: any entry of an If-None-Match list is tag, weak or not.
+func etagMatches(inm, tag string) bool {
+	tag = strings.TrimPrefix(tag, "W/")
+	for _, t := range strings.Split(inm, ",") {
+		if t = strings.TrimPrefix(strings.TrimSpace(t), "W/"); t == tag || t == "*" {
+			return true
+		}
+	}
+	return false
+}
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -455,7 +557,7 @@ func spa(fsys fs.FS) http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Content-Security-Policy", "frame-ancestors 'self'")
+		w.Header().Set("Content-Security-Policy", uiCSP)
 		http.ServeFileFS(w, r, fsys, "index.html")
 	}
 }

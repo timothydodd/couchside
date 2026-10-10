@@ -178,3 +178,6 @@ func ParsePidStat(b []byte) (float64, bool) {
 }
 
 func clamp(p float64) float64 { return max(0, min(100, p)) }
+
+// InContainer says whether the server runs in a container (cgroup v2 scope).
+func InContainer() bool { return inContainer() }

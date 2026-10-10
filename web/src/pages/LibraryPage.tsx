@@ -13,6 +13,7 @@ import { useRouter } from "../stores/router";
 import { useQueue, type QueueEntry } from "../stores/queue";
 import { useStatus } from "../stores/status";
 import type { ItemDetail, ItemKind, ItemSummary } from "../lib/types";
+import { useTitle } from "../lib/title";
 
 type Sort = "title" | "added" | "year" | "rating";
 type Filter = "all" | "unwatched" | "watched" | "list" | "unmatched";
@@ -31,7 +32,11 @@ const FILTER_LABELS: Record<Filter, string> = { all: "All", unwatched: "Unwatche
 const saved: Record<string, { q: string; sort: Sort; filter: Filter; genre: string }> = {};
 
 export default function LibraryPage({ kind }: { kind: ItemKind }) {
-  const { data, error, loading, reload } = useApi<ItemSummary[]>(`/api/items?kind=${kind}`, { pollMs: 20000 });
+  // Every 20s while the server is scanning or matching, else every minute.
+  // Unchanged, the list comes back as a 304 the browser answers from its cache.
+  const busy = useStatus((s) => !!s.status && s.status.jobs.queued + s.status.jobs.running > 0);
+  const { data, error, loading, reload } = useApi<ItemSummary[]>(`/api/items?kind=${kind}`, { pollMs: busy ? 20000 : 60000 });
+  useTitle(kind === "movie" ? "Movies" : "TV shows");
   const init = saved[kind] ?? { q: "", sort: "title", filter: "all", genre: "" };
   const [q, setQ] = useState(init.q);
   const [sort, setSort] = useState<Sort>(init.sort);

@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/timothydodd/couchside/internal/db"
+	"github.com/timothydodd/couchside/internal/diskfree"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 // Kinds of backup. Only scheduled ones are pruned by Prune's keep.
@@ -45,6 +47,9 @@ type Info struct {
 	At   int64  `json:"at"` // unix seconds
 }
 
+// freeSpace is diskfree.Of, swapped in tests.
+var freeSpace = diskfree.Of
+
 // Dir is where backups live.
 func Dir(dataDir string) string { return filepath.Join(dataDir, db.BackupDir) }
 
@@ -53,6 +58,14 @@ func Create(ctx context.Context, d *db.DB, dataDir, kind string) (Info, error) {
 	dir := Dir(dataDir)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return Info{}, err
+	}
+	// A copy of the database, then a zip of about the same size: refuse
+	// rather than fill the disk the database itself is on.
+	dbFile := filepath.Join(dataDir, "couchside.db")
+	need := 2 * diskfree.FileSizes(dbFile, dbFile+"-wal")
+	if sp, err := freeSpace(dir); err == nil && sp.Free < need {
+		return Info{}, usererr.New(fmt.Sprintf("not enough free space for a backup in %s: %s free, about %s needed",
+			dir, diskfree.Human(sp.Free), diskfree.Human(need)))
 	}
 	name := fmt.Sprintf("couchside-%s-%s.zip", kind, time.Now().Format("20060102-150405"))
 	copyDB := filepath.Join(dir, "."+name+".db")

@@ -35,6 +35,56 @@ type TMDB struct {
 
 	mu   sync.Mutex
 	next time.Time
+	// After a 401 nothing is sent until badKeyUntil, waiting longer each
+	// time, so a revoked key isn't hammered by every match job.
+	badKeyUntil   time.Time
+	badKeyBackoff time.Duration
+}
+
+// ErrRateLimited means TMDB asked us to slow down (HTTP 429): try again later.
+var ErrRateLimited = errors.New("tmdb: rate limited (HTTP 429); will retry")
+
+// ErrBadKey means TMDB refused the API key (HTTP 401). If the key is the one
+// built into Couchside, every server using it is refused at once.
+var ErrBadKey = errors.New("tmdb: the API key was refused (HTTP 401)")
+
+// BadKeyMessage is what to tell an admin when TMDB refuses the key: source
+// is config.Config.TMDBKeySource ("builtin" or "custom").
+func BadKeyMessage(source string) string {
+	if source == "builtin" {
+		return "TMDB refused Couchside's shared key. Set your own TMDB API key in Settings → Server (free from themoviedb.org); titles match again on the next scan."
+	}
+	return "TMDB refused your API key. Check TMDB API key in Settings → Server."
+}
+
+const (
+	badKeyFirstWait = 10 * time.Minute
+	badKeyMaxWait   = 6 * time.Hour
+)
+
+// Degraded says whether TMDB is refusing the key right now, and why.
+func (t *TMDB) Degraded() (bool, string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if time.Now().Before(t.badKeyUntil) {
+		return true, "TMDB refused the API key"
+	}
+	return false, ""
+}
+
+// keyRefused starts or lengthens the wait after a 401.
+func (t *TMDB) keyRefused() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.badKeyBackoff = min(max(t.badKeyBackoff*2, badKeyFirstWait), badKeyMaxWait)
+	t.badKeyUntil = time.Now().Add(t.badKeyBackoff)
+}
+
+// keyAccepted ends any wait once TMDB answers again.
+func (t *TMDB) keyAccepted() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.badKeyUntil, t.badKeyBackoff = time.Time{}, 0
 }
 
 func NewTMDB(key string, cache Cache) *TMDB {
@@ -559,6 +609,12 @@ func (t *TMDB) get(ctx context.Context, path string, q url.Values, ttl time.Dura
 	body, ok := t.cache.CacheGet(ctx, t.Name(), cacheKey, ttl)
 	fresh := false
 	if !ok {
+		t.mu.Lock()
+		waiting := time.Now().Before(t.badKeyUntil)
+		t.mu.Unlock()
+		if waiting {
+			return ErrBadKey
+		}
 		var status int
 		var err error
 		body, status, err = t.fetch(ctx, path, full)
@@ -570,12 +626,14 @@ func (t *TMDB) get(ctx context.Context, path string, q url.Values, ttl time.Dura
 			_ = t.cache.CachePut(ctx, t.Name(), cacheKey, []byte(`{"status_code":34}`))
 			return errNotFound
 		case status == http.StatusUnauthorized:
-			return errors.New("tmdb: the API key was refused (HTTP 401)")
+			t.keyRefused()
+			return ErrBadKey
 		case status == http.StatusTooManyRequests:
-			return errors.New("tmdb: rate limited (HTTP 429); will retry")
+			return ErrRateLimited
 		case status != http.StatusOK:
 			return fmt.Errorf("tmdb: HTTP %d", status)
 		}
+		t.keyAccepted()
 		fresh = true
 	}
 	var probe struct {

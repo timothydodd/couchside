@@ -12,10 +12,10 @@ import (
 
 func TestScanSummary(t *testing.T) {
 	var none skipLog
-	if got := scanSummary(0, 0, 0, &none); got != "No changes." {
+	if got := scanSummary(0, 0, 0, 0, &none); got != "No changes." {
 		t.Errorf("nothing = %q", got)
 	}
-	if got := scanSummary(0, 3, 0, &none); got != "3 changed." {
+	if got := scanSummary(0, 3, 0, 0, &none); got != "3 changed." {
 		t.Errorf("changed only = %q", got)
 	}
 	var s skipLog
@@ -24,7 +24,7 @@ func TestScanSummary(t *testing.T) {
 	}
 	s.add(skipSample, "Film/sample.mkv")
 	want := "2 added, 1 removed. Skipped 4: no season and episode in the name (a.mp4, b.mp4, c.mp4 and 1 more). Skipped 1: sample clips (Film/sample.mkv)."
-	if got := scanSummary(2, 0, 1, &s); got != want {
+	if got := scanSummary(2, 0, 1, 0, &s); got != want {
 		t.Errorf("summary = %q\nwant      %q", got, want)
 	}
 }

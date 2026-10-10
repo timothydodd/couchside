@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/timothydodd/couchside/internal/db"
+	"github.com/timothydodd/couchside/internal/fsx"
 	"github.com/timothydodd/couchside/internal/parse"
 	"github.com/timothydodd/couchside/internal/probe"
 	"github.com/timothydodd/couchside/internal/usererr"
@@ -42,6 +43,7 @@ const (
 	skipNoEpisode = "no season and episode in the name"
 	skipSample    = "sample clips"
 	skipTimeout   = "ffprobe timed out (tried again next scan)"
+	skipLink      = "links that lead outside the library to something that isn't a video"
 )
 
 // skipLog counts skipped files per reason, keeping a few names to show.
@@ -74,12 +76,12 @@ func (s *skipLog) total() int {
 
 // scanSummary is a scan's result line in Activity: "Added 2, removed 1.
 // Skipped 3: no season and episode in the name (a.mp4, b.mp4 and 1 more)."
-func scanSummary(added, changed, removed int, skips *skipLog) string {
+func scanSummary(added, changed, removed, renamed int, skips *skipLog) string {
 	var parts []string
 	for _, c := range []struct {
 		n    int
 		verb string
-	}{{added, "added"}, {changed, "changed"}, {removed, "removed"}} {
+	}{{added, "added"}, {changed, "changed"}, {renamed, "renamed"}, {removed, "removed"}} {
 		if c.n > 0 {
 			parts = append(parts, fmt.Sprintf("%d %s", c.n, c.verb))
 		}
@@ -123,6 +125,21 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 		}
 	}
 
+	// Every file the library had, read once: an unchanged file then costs
+	// no query, and is marked seen in batches.
+	stamps, err := w.db.FileStamps(ctx, lib.ID)
+	if err != nil {
+		return "", err
+	}
+	var touched []int64
+	touch := func(id int64) error {
+		touched = append(touched, id)
+		if len(touched) >= 500 {
+			return flushTouched(ctx, w.db, &touched, start)
+		}
+		return nil
+	}
+
 	walkErr := filepath.WalkDir(lib.Path, func(path string, d fs.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -158,6 +175,20 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 			}
 		}
 		info, err := d.Info()
+		if err == nil && d.Type()&fs.ModeSymlink != 0 {
+			// A link can point anywhere ("Film.mkv -> /data/auth.key"). Index
+			// it only when it leads to a video, and describe the video, not
+			// the link.
+			if aerr := fsx.Allowed(path, lib.Path, parse.IsVideo); errors.Is(aerr, fsx.ErrRefused) {
+				slog.Warn("scan: skipping a link", "path", path)
+				skips.add(skipLink, relPath(lib, path))
+				return nil
+			} else if aerr != nil {
+				err = aerr // dangling: treated like a file deleted mid-walk below
+			} else {
+				info, err = os.Stat(path)
+			}
+		}
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil // deleted since the folder was listed (keep-last-N, Manage): it's gone, not unreadable
 		}
@@ -171,9 +202,12 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 			skips.add(skipSample, relPath(lib, path))
 			return nil
 		}
-		stamp, err := w.db.FileStamp(ctx, path)
-		if err != nil {
-			return err
+		stamp := stamps[path]
+		if stamp == nil {
+			// New, or rowed under another library (nested library folders).
+			if stamp, err = w.db.FileStamp(ctx, path); err != nil {
+				return err
+			}
 		}
 		// A file once unreadable is probed again: the failure may have been the share, not the file.
 		if stamp != nil && stamp.Size == info.Size() && stamp.Mtime == info.ModTime().Unix() && stamp.Problem != "unreadable" &&
@@ -181,7 +215,7 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 			if err := w.refreshRole(ctx, lib, path, stamp); err != nil {
 				return err
 			}
-			return w.db.TouchFile(ctx, stamp.ID, start)
+			return touch(stamp.ID)
 		}
 		ok, err := w.indexFile(ctx, lib, path, info, start)
 		if errors.Is(err, errProbeTimeout) {
@@ -190,7 +224,7 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 			slog.Warn("scan: ffprobe timed out; will try again next scan", "path", path)
 			skips.add(skipTimeout, relPath(lib, path))
 			if stamp != nil {
-				return w.db.TouchFile(ctx, stamp.ID, start)
+				return touch(stamp.ID)
 			}
 			return nil
 		}
@@ -211,9 +245,13 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 		// Don't prune after a partial walk: missing files may just be unvisited.
 		return "", walkErr
 	}
+	// Before anything can prune: an unflushed file would look unseen.
+	if err := flushTouched(ctx, w.db, &touched, start); err != nil {
+		return "", err
+	}
 	if unreadable != "" {
 		slog.Warn("scan incomplete, nothing removed", "library", lib.Name, "unreadable", unreadable, "added", added, "changed", changed)
-		return scanSummary(added, changed, 0, &skips), fmt.Errorf("couldn't read %s, so nothing was removed", unreadable)
+		return scanSummary(added, changed, 0, 0, &skips), fmt.Errorf("couldn't read %s, so nothing was removed", unreadable)
 	}
 	// An unmounted share is usually an empty folder. Someone who really
 	// emptied a library removes it in Libraries.
@@ -221,12 +259,17 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 		slog.Warn("scan found no files, nothing removed", "library", lib.Name, "path", lib.Path)
 		return "", fmt.Errorf("library folder %s is empty; is the share mounted? Nothing was removed", lib.Path)
 	}
-	removed, err := w.db.PruneLibrary(ctx, lib.ID, start)
+	pr, err := w.db.PruneLibrary(ctx, lib.ID, start)
 	if err != nil {
 		return "", err
 	}
-	slog.Info("scan complete", "library", lib.Name, "added", added, "changed", changed, "removed", removed, "skipped", skips.total())
-	summary := scanSummary(added, changed, int(removed), &skips)
+	TidyCache(w.cfg.CacheDir, pr)
+	// A renamed file was counted as added; it's neither added nor removed.
+	renamed := len(pr.Renamed)
+	added -= renamed
+	removed := int(pr.Files) - renamed
+	slog.Info("scan complete", "library", lib.Name, "added", added, "changed", changed, "removed", removed, "renamed", renamed, "skipped", skips.total())
+	summary := scanSummary(added, changed, removed, renamed, &skips)
 	if err := w.retryMatches(ctx, lib); err != nil {
 		return summary, err
 	}
@@ -234,6 +277,45 @@ func (w *Worker) scanLibrary(ctx context.Context, libID int64) (string, error) {
 		return summary, err
 	}
 	return summary, w.db.MarkLibraryScanned(ctx, lib.ID, time.Now().Unix())
+}
+
+// flushTouched marks the batched unchanged files seen.
+func flushTouched(ctx context.Context, d *db.DB, ids *[]int64, seen int64) error {
+	if len(*ids) == 0 {
+		return nil
+	}
+	err := d.TouchFiles(ctx, *ids, seen)
+	*ids = (*ids)[:0]
+	return err
+}
+
+// TidyCache brings the cache in line with a prune or a library delete. A renamed file's folder
+// (its still and preview thumbnails, still valid since a rename keeps size
+// and mtime) moves to its new id. A deleted file's folder and optimized copy
+// and a deleted title's artwork go: ids are reused, so a folder left behind
+// would show the old file's pictures for a new one.
+func TidyCache(cacheDir string, pr db.Pruned) {
+	if cacheDir == "" {
+		return
+	}
+	for oldID, newID := range pr.Renamed {
+		from := filepath.Dir(FileStillPath(cacheDir, oldID))
+		to := filepath.Dir(FileStillPath(cacheDir, newID))
+		if _, err := os.Stat(from); err != nil {
+			continue
+		}
+		_ = os.RemoveAll(to) // anything the new row has made so far
+		if err := os.Rename(from, to); err != nil {
+			slog.Warn("couldn't move a renamed file's pictures", "from", from, "to", to, "err", err)
+		}
+	}
+	for _, id := range pr.FileIDs {
+		_ = os.RemoveAll(filepath.Dir(FileStillPath(cacheDir, id)))
+		_ = os.Remove(OptimizedFile(cacheDir, id))
+	}
+	for _, id := range pr.Items {
+		_ = os.RemoveAll(ItemArtDir(cacheDir, id))
+	}
 }
 
 // retryMatches queues a match for items whose last one failed on the way to
@@ -337,46 +419,28 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 	if err != nil {
 		return false, err
 	}
+	// Parse the name first: a file that isn't an episode is skipped unread.
 	var (
-		itemID  int64
-		created bool
-		label   string
-		role    = parse.Role{Kind: "copy"}
+		r    parse.Result
+		role = parse.Role{Kind: "copy"}
 	)
 	if lib.Kind == "tv" {
 		rel, _ := filepath.Rel(lib.Path, path)
-		r, ok := parse.Episode(rel)
-		if !ok {
+		var ok bool
+		if r, ok = parse.Episode(rel); !ok {
 			slog.Info("scan: no episode number, skipping", "path", path)
 			return false, nil
 		}
-		if prev != nil && prev.ItemPinned {
-			// Merged under another show by hand: UpsertFile keeps its title and episode.
-			itemID, label = prev.MediaItemID, r.Title
-		} else if itemID, created, err = w.db.EnsureItem(ctx, lib.ID, "series", r.Title, r.Year); err != nil {
-			return false, err
-		}
-		if prev == nil || !prev.ItemPinned {
-			epID, err := w.db.EnsureEpisode(ctx, itemID, r.Season, r.Episode, r.EpisodeTitle, r.AirDate)
-			if err != nil {
-				return false, err
-			}
-			f.EpisodeID = &epID
-		}
-		label = r.Title
 	} else {
 		rel := relPath(lib, path)
-		r := parse.MovieIn(rel, videosIn(lib))
-		if prev != nil && prev.ItemPinned {
-			itemID = prev.MediaItemID
-		} else if itemID, created, err = w.db.EnsureItem(ctx, lib.ID, "movie", r.Title, r.Year); err != nil {
-			return false, err
-		}
-		label = r.Title
+		r = parse.MovieIn(rel, videosIn(lib))
 		role = parse.MovieRoleIn(rel, r.Title, videosIn(lib))
 	}
-	f.MediaItemID = itemID
+	label := r.Title
 
+	// Probe before making the title: it takes seconds, and an item or episode
+	// made before then has no file yet, so another library's scan finishing
+	// meanwhile would tidy it away.
 	if p, err := probe.Probe(ctx, w.cfg.FFprobe, path); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return false, err
@@ -398,10 +462,11 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 		}
 	}
 
-	fileID, err := w.db.UpsertFile(ctx, f, seen)
+	fileID, created, err := w.writeFile(ctx, lib, &f, prev, r, seen)
 	if err != nil {
 		return false, err
 	}
+	itemID := f.MediaItemID
 	if lib.Kind != "tv" {
 		if err := w.db.SetDetectedRole(ctx, fileID, role.Kind, role.Part, role.Extra); err != nil {
 			return false, err
@@ -414,7 +479,7 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 	// because its name parses differently, or re-scanned by hand, keeps it.
 	if prev == nil || prev.Size != f.Size || prev.Mtime != f.Mtime {
 		if old, err := w.db.DeleteOptimized(ctx, fileID); err == nil && old != "" {
-			_ = os.Remove(old)
+			_ = os.Remove(ResolveCache(w.cfg.CacheDir, old))
 		}
 	}
 	if created {
@@ -440,6 +505,34 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 		}
 	}
 	return true, nil
+}
+
+// writeFile makes (or finds) the file's title and episode and writes its row,
+// holding off the tidy-up in between so they can't be deleted first.
+func (w *Worker) writeFile(ctx context.Context, lib db.Library, f *db.File, prev *db.FileStamp, r parse.Result, seen int64) (fileID int64, created bool, err error) {
+	release := w.db.HoldItems()
+	defer release()
+	pinned := prev != nil && prev.ItemPinned
+	switch {
+	case pinned:
+		// Merged under another title by hand: UpsertFile keeps its title and episode.
+		f.MediaItemID = prev.MediaItemID
+	case lib.Kind == "tv":
+		if f.MediaItemID, created, err = w.db.EnsureItem(ctx, lib.ID, "series", r.Title, r.Year); err != nil {
+			return 0, false, err
+		}
+		epID, err := w.db.EnsureEpisode(ctx, f.MediaItemID, r.Season, r.Episode, r.EpisodeTitle, r.AirDate)
+		if err != nil {
+			return 0, false, err
+		}
+		f.EpisodeID = &epID
+	default:
+		if f.MediaItemID, created, err = w.db.EnsureItem(ctx, lib.ID, "movie", r.Title, r.Year); err != nil {
+			return 0, false, err
+		}
+	}
+	fileID, err = w.db.UpsertFile(ctx, *f, seen)
+	return fileID, created, err
 }
 
 // RescanFile reads one file again the way a scan reads a new one (probe,

@@ -240,6 +240,7 @@ func (m *liveManager) virtualArgs(p db.PlayoutPiece, v pieceVideo, hwDecode bool
 	vIn, vOut := m.enc.Video(transcode.VideoOpts{MaxHeight: spec.Height, BitrateK: transcode.BitrateFor(spec.Height),
 		Deinterlace: true, Live: true, HDR: v.HDR, HWDecode: hwDecode, Exact: true})
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
+	args = append(args, transcode.ThreadArgs(m.enc.Threads)...)
 	args = append(args, vIn...)
 	if realtime {
 		args = append(args, "-re")

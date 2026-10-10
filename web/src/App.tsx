@@ -4,6 +4,7 @@ import Sidebar from "./components/Sidebar";
 import StatusBar from "./components/StatusBar";
 import { EmptyState, Loading } from "./components/ui";
 import { lazyPage } from "./lib/lazyPage";
+import { viewTransitions } from "./lib/transition";
 import HomePage from "./pages/HomePage";
 import ItemPage from "./pages/ItemPage";
 import LibraryPage from "./pages/LibraryPage";
@@ -128,7 +129,7 @@ function Signed() {
           ref={main}
           onScroll={(e) => scrollMemory.set(path, e.currentTarget.scrollTop)}
           key={route.name === "livetv" || route.name === "search" ? route.name : path}
-          className={`anim-page min-w-0 flex-1 ${route.name === "movies" || route.name === "tv" || route.name === "livetv" ? "overflow-hidden" : "overflow-auto"}`}
+          className={`${viewTransitions ? "page-view" : "anim-page"} min-w-0 flex-1 ${route.name === "movies" || route.name === "tv" || route.name === "livetv" ? "overflow-hidden" : "overflow-auto"}`}
         >
           <Suspense
             fallback={

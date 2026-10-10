@@ -375,8 +375,21 @@ func (s *Server) setOIDC(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, badRequest("the issuer is the provider's address, like https://auth.example.com"))
 			return
 		}
+		if u.Scheme == "http" && !onHomeNetwork(u.Hostname()) {
+			writeErr(w, badRequest("the issuer must use https unless it's on your own network: over plain http anyone in between could sign in as anyone"))
+			return
+		}
 		// Check it now, so a typo shows here and not as a broken sign-in page.
-		if _, err := s.oidcEndpoints(ctx, in.Issuer); err != nil {
+		ep, err := s.oidcEndpoints(ctx, in.Issuer)
+		if err == nil {
+			// The ID token is trusted because it comes from the token endpoint
+			// over TLS, so that endpoint must be https too.
+			if t, perr := url.Parse(ep.Token); perr != nil || (t.Scheme != "https" && !onHomeNetwork(t.Hostname())) {
+				writeErr(w, badRequest("the provider's token endpoint ("+ep.Token+") must use https unless it's on your own network"))
+				return
+			}
+		}
+		if err != nil {
 			writeErr(w, badRequest("couldn't read the provider's configuration at "+in.Issuer+"/.well-known/openid-configuration: "+err.Error()))
 			return
 		}
@@ -405,4 +418,26 @@ func (s *Server) setOIDC(w http.ResponseWriter, r *http.Request) {
 	}
 	slog.Info("single sign-on settings changed", "issuer", in.Issuer, "by", currentUser(ctx).ID)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// onHomeNetwork says a host is this machine or on the local network: a
+// loopback or private address, localhost, a name without a dot, or a local
+// suffix (.local, .lan, .home.arpa, .internal). Plain http is accepted there.
+func onHomeNetwork(host string) bool {
+	host = strings.ToLower(strings.TrimSuffix(host, "."))
+	if host == "localhost" {
+		return true
+	}
+	if _, ok := addrOf(host); ok {
+		return !publicAddr(host)
+	}
+	if !strings.Contains(host, ".") {
+		return true
+	}
+	for _, s := range []string{".local", ".lan", ".home.arpa", ".internal"} {
+		if strings.HasSuffix(host, s) {
+			return true
+		}
+	}
+	return false
 }

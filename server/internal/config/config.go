@@ -5,6 +5,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -35,6 +36,7 @@ type Config struct {
 	MaxTranscodes  int    // COUCHSIDE_MAX_TRANSCODES: concurrent live transcode sessions
 	EncodeWorkers  int    // COUCHSIDE_ENCODE_WORKERS: concurrent background "optimize" encodes
 	OptimizeHeight int    // COUCHSIDE_OPTIMIZE_HEIGHT: max height of optimized copies
+	FFmpegThreads  int    // COUCHSIDE_FFMPEG_THREADS: threads per ffmpeg; 0 shares the CPUs out (LiveThreads, JobThreads)
 
 	HDHomeRun     string        // COUCHSIDE_HDHOMERUN: tuner IP/host; empty disables Live TV and DVR
 	RecordingsDir string        // COUCHSIDE_RECORDINGS_DIR: where the DVR writes (must be writable)
@@ -106,6 +108,7 @@ func LoadWith(o map[string]string) Config {
 		MaxTranscodes:  envInt("COUCHSIDE_MAX_TRANSCODES", 2),
 		EncodeWorkers:  envInt("COUCHSIDE_ENCODE_WORKERS", 1),
 		OptimizeHeight: envInt("COUCHSIDE_OPTIMIZE_HEIGHT", 1080),
+		FFmpegThreads:  envInt("COUCHSIDE_FFMPEG_THREADS", 0),
 
 		HDHomeRun:     getenv("COUCHSIDE_HDHOMERUN"),
 		RecordingsDir: filepath.Clean(env("COUCHSIDE_RECORDINGS_DIR", filepath.Join(data, "recordings"))),
@@ -145,6 +148,25 @@ func envDur(key string, def time.Duration) time.Duration {
 		return d
 	}
 	return def
+}
+
+// LiveThreads is -threads for a playback or live TV encode: the CPUs shared
+// out over the streams converted at once, so two 1080p encodes don't each
+// try to take every core.
+func (c Config) LiveThreads() int {
+	if c.FFmpegThreads > 0 {
+		return c.FFmpegThreads
+	}
+	return max(1, runtime.NumCPU()/max(1, c.MaxTranscodes))
+}
+
+// JobThreads is -threads for background encodes (optimized copies, preview
+// thumbnails): two, so they leave the CPU to playback.
+func (c Config) JobThreads() int {
+	if c.FFmpegThreads > 0 {
+		return c.FFmpegThreads
+	}
+	return 2
 }
 
 func envInt(key string, def int) int {

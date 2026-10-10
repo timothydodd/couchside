@@ -43,7 +43,9 @@ func restore(args []string) error {
 	return nil
 }
 
-// serverRunning reports whether a Couchside server answers on addr.
+// serverRunning reports whether a Couchside server answers on addr. Any
+// HTTP answer counts: a server whose database is busy (503 from /healthz)
+// or an older one without /livez (404) is still using the database.
 func serverRunning(addr string) bool {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -53,10 +55,10 @@ func serverRunning(addr string) bool {
 		host = "127.0.0.1"
 	}
 	c := http.Client{Timeout: 2 * time.Second}
-	res, err := c.Get("http://" + net.JoinHostPort(host, port) + "/healthz")
+	res, err := c.Get("http://" + net.JoinHostPort(host, port) + "/livez")
 	if err != nil {
 		return false
 	}
 	res.Body.Close()
-	return res.StatusCode == http.StatusOK
+	return true
 }

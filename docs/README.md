@@ -7,4 +7,5 @@
 - [Live TV and DVR](live-tv.md): HDHomeRun, the guide, recording, series, commercial skipping.
 - [Profiles and accounts](accounts.md): profiles, sign-in, roles and sessions.
 - [Development](development.md): running locally, checks, icons, releasing.
+- [API compatibility](api-compat.md): `/api/server`, feature names, and what may change between releases.
 - [Style guide](style.md): colours, tokens and contrast.

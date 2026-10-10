@@ -4,9 +4,13 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net"
+	"os"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/timothydodd/couchside/internal/config"
@@ -14,6 +18,7 @@ import (
 	"github.com/timothydodd/couchside/internal/imaging"
 	"github.com/timothydodd/couchside/internal/metadata"
 	"github.com/timothydodd/couchside/internal/transcode"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 const (
@@ -156,10 +161,44 @@ func (w *Worker) loop(ctx context.Context, encode bool) {
 			}
 			continue
 		}
+		if err != nil && transient(err) && job.Attempts < maxRetries {
+			delay := retryDelay(job.Attempts)
+			why := fmt.Sprintf("%v (trying again in %s)", err, delay)
+			if rerr := w.db.RetryJobLater(context.WithoutCancel(ctx), job.ID, delay, why); rerr == nil {
+				slog.Info("job will retry", "kind", job.Kind, "ref", job.RefID, "in", delay, "attempt", job.Attempts)
+				continue
+			} else {
+				slog.Error("retry job", "err", rerr)
+			}
+		}
 		if ferr := w.db.FinishJob(context.WithoutCancel(ctx), job.ID, err); ferr != nil {
 			slog.Error("finish job", "err", ferr)
 		}
 	}
+}
+
+// maxRetries is how many times a job is tried in all when it keeps failing
+// for passing reasons (retryDelay apart) before it's failed for good.
+const maxRetries = 5
+
+// retryDelay waits a minute after the first failure, doubling each time,
+// at most an hour.
+func retryDelay(attempts int) time.Duration {
+	return min(time.Minute<<max(attempts-1, 0), time.Hour)
+}
+
+// transient says an error is likely to pass by itself: the network or a
+// share dropping, a timeout, a provider asking us to slow down. A message
+// written for the user (usererr) is final, and so is a refused API key.
+func transient(err error) bool {
+	if usererr.Is(err) || errors.Is(err, metadata.ErrBadKey) {
+		return false
+	}
+	var ne net.Error
+	return errors.As(err, &ne) || errors.Is(err, metadata.ErrRateLimited) || errors.Is(err, errProbeTimeout) ||
+		errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded) ||
+		errors.Is(err, syscall.EIO) || errors.Is(err, syscall.ENOTCONN) || errors.Is(err, syscall.ETIMEDOUT) ||
+		errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.EHOSTUNREACH)
 }
 
 func (w *Worker) handle(ctx context.Context, j *db.Job) error {

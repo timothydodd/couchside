@@ -101,22 +101,42 @@ func pathInUse(err error) error {
 
 // DeleteLibrary removes a library and its files. A title that also has
 // files in another library stays, re-homed there; the rest go.
-func (d *DB) DeleteLibrary(ctx context.Context, id int64) error {
+// DeleteLibrary removes a library, its files and the items left without
+// files. The result names them so the caller can clear their cache.
+func (d *DB) DeleteLibrary(ctx context.Context, id int64) (Pruned, error) {
+	var out Pruned
+	itemsMu.Lock() // tidyItems: see HoldItems
+	defer itemsMu.Unlock()
 	tx, err := d.sql.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return out, err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM files WHERE library_id = ?`, id); err != nil {
-		return err
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM files WHERE library_id = ?`, id)
+	if err != nil {
+		return out, err
 	}
-	if _, err := tidyItems(ctx, tx); err != nil {
-		return err
+	for rows.Next() {
+		var f int64
+		if err := rows.Scan(&f); err != nil {
+			rows.Close()
+			return out, err
+		}
+		out.FileIDs = append(out.FileIDs, f)
+	}
+	rows.Close()
+	res, err := tx.ExecContext(ctx, `DELETE FROM files WHERE library_id = ?`, id)
+	if err != nil {
+		return out, err
+	}
+	out.Files, _ = res.RowsAffected()
+	if out.Items, err = tidyItems(ctx, tx); err != nil {
+		return out, err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM libraries WHERE id = ?`, id); err != nil {
-		return err
+		return out, err
 	}
-	return tx.Commit()
+	return out, tx.Commit()
 }
 
 func (d *DB) MarkLibraryScanned(ctx context.Context, id, at int64) error {

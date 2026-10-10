@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 type File struct {
@@ -167,23 +168,68 @@ type FileStamp struct {
 	MediaItemID int64
 }
 
-func (d *DB) FileStamp(ctx context.Context, path string) (*FileStamp, error) {
+const stampSelect = `SELECT f.path, f.id, f.size, f.mtime, m.parsed_title, m.parsed_year,
+	COALESCE(e.season, 0), COALESCE(e.episode, 0),
+	f.role, f.part_no, f.extra_title, f.role_pinned, f.problem, f.edition, f.item_pinned, f.media_item_id
+	FROM files f JOIN media_items m ON m.id = f.media_item_id LEFT JOIN episodes e ON e.id = f.episode_id `
+
+func scanStamp(r interface{ Scan(...any) error }, path *string) (*FileStamp, error) {
 	var s FileStamp
-	err := d.sql.QueryRowContext(ctx, `SELECT f.id, f.size, f.mtime, m.parsed_title, m.parsed_year,
-		COALESCE(e.season, 0), COALESCE(e.episode, 0),
-		f.role, f.part_no, f.extra_title, f.role_pinned, f.problem, f.edition, f.item_pinned, f.media_item_id
-		FROM files f JOIN media_items m ON m.id = f.media_item_id LEFT JOIN episodes e ON e.id = f.episode_id
-		WHERE f.path = ?`, path).Scan(&s.ID, &s.Size, &s.Mtime, &s.ParsedTitle, &s.ParsedYear, &s.Season, &s.Episode,
+	err := r.Scan(path, &s.ID, &s.Size, &s.Mtime, &s.ParsedTitle, &s.ParsedYear, &s.Season, &s.Episode,
 		&s.Role, &s.PartNo, &s.ExtraTitle, &s.RolePinned, &s.Problem, &s.Edition, &s.ItemPinned, &s.MediaItemID)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
 	return &s, err
 }
 
+func (d *DB) FileStamp(ctx context.Context, path string) (*FileStamp, error) {
+	var p string
+	s, err := scanStamp(d.sql.QueryRowContext(ctx, stampSelect+`WHERE f.path = ?`, path), &p)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return s, err
+}
+
+// FileStamps is FileStamp for every file of a library, keyed by path, so a
+// scan asks once instead of once per file.
+func (d *DB) FileStamps(ctx context.Context, libraryID int64) (map[string]*FileStamp, error) {
+	rows, err := d.sql.QueryContext(ctx, stampSelect+`WHERE f.library_id = ?`, libraryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]*FileStamp{}
+	for rows.Next() {
+		var p string
+		s, err := scanStamp(rows, &p)
+		if err != nil {
+			return nil, err
+		}
+		out[p] = s
+	}
+	return out, rows.Err()
+}
+
 func (d *DB) TouchFile(ctx context.Context, id, seen int64) error {
-	_, err := d.sql.ExecContext(ctx, `UPDATE files SET last_seen = ? WHERE id = ?`, seen, id)
-	return err
+	return d.TouchFiles(ctx, []int64{id}, seen)
+}
+
+// TouchFiles marks files seen, many per statement: one write lock and one
+// commit for hundreds of unchanged files instead of one each.
+func (d *DB) TouchFiles(ctx context.Context, ids []int64, seen int64) error {
+	for len(ids) > 0 {
+		n := min(len(ids), 500)
+		args := make([]any, 0, n+1)
+		args = append(args, seen)
+		for _, id := range ids[:n] {
+			args = append(args, id)
+		}
+		q := `UPDATE files SET last_seen = ? WHERE id IN (?` + strings.Repeat(",?", n-1) + `)`
+		if _, err := d.sql.ExecContext(ctx, q, args...); err != nil {
+			return err
+		}
+		ids = ids[n:]
+	}
+	return nil
 }
 
 // UpsertFile inserts or refreshes a file row keyed by path and returns its id.
@@ -255,23 +301,116 @@ func (d *DB) SetFileStill(ctx context.Context, id int64, has bool) error {
 	return err
 }
 
-// PruneLibrary removes files not seen since scanStart, then any items and
-// episodes left without files. Returns how many files were removed.
-func (d *DB) PruneLibrary(ctx context.Context, libraryID, scanStart int64) (int64, error) {
+// PruneLibrary removes files not seen since scanStart (after handing a
+// renamed file's data to its new row, carryRenamed), then any items and
+// episodes left without files.
+func (d *DB) PruneLibrary(ctx context.Context, libraryID, scanStart int64) (Pruned, error) {
+	var out Pruned
+	itemsMu.Lock() // tidyItems: see HoldItems
+	defer itemsMu.Unlock()
 	tx, err := d.sql.BeginTx(ctx, nil)
 	if err != nil {
-		return 0, err
+		return out, err
 	}
 	defer tx.Rollback()
+	if out.Renamed, err = carryRenamed(ctx, tx, libraryID, scanStart); err != nil {
+		return out, err
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM files WHERE library_id = ? AND last_seen < ?`, libraryID, scanStart)
+	if err != nil {
+		return out, err
+	}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return out, err
+		}
+		if _, moved := out.Renamed[id]; !moved {
+			out.FileIDs = append(out.FileIDs, id)
+		}
+	}
+	rows.Close()
 	res, err := tx.ExecContext(ctx, `DELETE FROM files WHERE library_id = ? AND last_seen < ?`, libraryID, scanStart)
 	if err != nil {
-		return 0, err
+		return out, err
 	}
-	n, _ := res.RowsAffected()
-	if _, err := tidyItems(ctx, tx); err != nil {
-		return 0, err
+	out.Files, _ = res.RowsAffected()
+	if out.Items, err = tidyItems(ctx, tx); err != nil {
+		return out, err
 	}
-	return n, tx.Commit()
+	return out, tx.Commit()
+}
+
+// Pruned is what a prune did: the rows removed, the ids of files that are
+// gone and of items left without files (their cache folders are the
+// caller's to delete), and files whose row moved to a renamed copy, old id
+// to new (the caller moves cache/files/<old> to <new>).
+type Pruned struct {
+	Files   int64
+	FileIDs []int64
+	Items   []int64
+	Renamed map[int64]int64
+}
+
+// carryRenamed keeps what belongs to a file across a rename. A file's path
+// is its identity, so a renamed file is a new row and the old one is about
+// to be pruned, taking every profile's progress, its commercials, intro
+// marks and optimized copy with it. A stale row with exactly one twin added
+// by this scan (same library, title, episode and size), which no other
+// stale row also matches, hands all of that over first. Anything ambiguous
+// (two copies of an episode that both moved) is left alone.
+func carryRenamed(ctx context.Context, tx *sql.Tx, libraryID, scanStart int64) (map[int64]int64, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT o.id, MIN(n.id) FROM files o
+		JOIN files n ON n.library_id = o.library_id AND n.media_item_id = o.media_item_id
+		            AND n.episode_id IS o.episode_id AND n.size = o.size AND n.id <> o.id
+		            AND n.last_seen >= ?2 AND n.added_at >= ?2
+		WHERE o.library_id = ?1 AND o.last_seen < ?2
+		GROUP BY o.id HAVING COUNT(*) = 1`, libraryID, scanStart)
+	if err != nil {
+		return nil, err
+	}
+	pairs := map[int64]int64{}
+	claims := map[int64]int{}
+	for rows.Next() {
+		var oldID, newID int64
+		if err := rows.Scan(&oldID, &newID); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		pairs[oldID] = newID
+		claims[newID]++
+	}
+	rows.Close()
+	for oldID, newID := range pairs {
+		if claims[newID] > 1 {
+			delete(pairs, oldID)
+		}
+	}
+	for oldID, newID := range pairs {
+		for _, q := range []string{
+			`UPDATE OR IGNORE watch_state SET file_id = ?2 WHERE file_id = ?1`,
+			`UPDATE OR IGNORE optimized SET file_id = ?2 WHERE file_id = ?1`,
+			`UPDATE OR IGNORE commercials SET file_id = ?2 WHERE file_id = ?1`,
+			`UPDATE OR IGNORE commercial_dismissals SET file_id = ?2 WHERE file_id = ?1`,
+			`UPDATE OR IGNORE file_segments SET file_id = ?2 WHERE file_id = ?1`,
+			`UPDATE OR IGNORE segment_checks SET file_id = ?2 WHERE file_id = ?1`,
+			`UPDATE OR IGNORE intro_checks SET file_id = ?2 WHERE file_id = ?1`,
+			`UPDATE OR IGNORE profile_versions SET file_id = ?2 WHERE file_id = ?1`,
+			// Not "recently added", and the still comes along with its folder.
+			`UPDATE files SET added_at = (SELECT added_at FROM files WHERE id = ?1),
+			     has_still = (SELECT has_still FROM files WHERE id = ?1) WHERE id = ?2`,
+			// A role picked by hand stays; a detected one was detected again.
+			`UPDATE files SET role = o.role, part_no = o.part_no, extra_title = o.extra_title, role_pinned = 1
+			   FROM (SELECT role, part_no, extra_title FROM files WHERE id = ?1 AND role_pinned = 1) AS o
+			  WHERE files.id = ?2`,
+		} {
+			if _, err := tx.ExecContext(ctx, q, oldID, newID); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return pairs, nil
 }
 
 // tidyItems is the housekeeping after files go: items and episodes left

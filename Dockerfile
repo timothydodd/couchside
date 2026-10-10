@@ -91,6 +91,10 @@ RUN apk add --no-cache ffmpeg ca-certificates tzdata \
 COPY --from=comskip /comskip/comskip /usr/local/bin/comskip
 COPY --from=comskip /src/ /usr/share/src/
 COPY LICENSE THIRD_PARTY_NOTICES.txt /usr/share/licenses/couchside/
+# The exact ffmpeg build in this image (version, configure flags, package
+# version), so the GPL source offer in THIRD_PARTY_NOTICES.txt can be checked.
+RUN ffmpeg -hide_banner -version > /usr/share/licenses/couchside/ffmpeg-configuration.txt \
+ && apk info -v ffmpeg >> /usr/share/licenses/couchside/ffmpeg-configuration.txt
 COPY --from=server /out/couchside /usr/local/bin/couchside
 
 ENV COUCHSIDE_ADDR=:8080 \
@@ -98,13 +102,20 @@ ENV COUCHSIDE_ADDR=:8080 \
     COUCHSIDE_CACHE_DIR=/cache \
     COUCHSIDE_MEDIA_ROOT=/media \
     COUCHSIDE_RECORDINGS_DIR=/recordings \
-    COUCHSIDE_HWACCEL=none
+    COUCHSIDE_HWACCEL=none \
+    GOMEMLIMIT=1GiB
 
 USER 1000:1000
 EXPOSE 8080 1900/udp
-VOLUME ["/data", "/cache", "/recordings"]
-# For Docker and compose (Kubernetes uses the chart's probes). The port is
+# /recordings isn't a VOLUME: an anonymous volume per container would collect
+# orphaned recordings for anyone running the quick start. Mount one
+# (-v couchside-recordings:/recordings) for the DVR, or record into a writable
+# /media folder chosen in Settings.
+VOLUME ["/data", "/cache"]
+# For Docker and compose (Kubernetes uses the chart's probes, with the
+# database-free /livez for liveness). Marks the container unhealthy when the
+# database can't be reached; Docker doesn't restart it for that. The port is
 # whatever COUCHSIDE_ADDR ends in.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=5 \
     CMD wget -qO /dev/null "http://127.0.0.1:${COUCHSIDE_ADDR##*:}/healthz" || exit 1
 ENTRYPOINT ["couchside"]

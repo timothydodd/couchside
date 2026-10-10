@@ -6,6 +6,7 @@ import { fmtAgo, fmtClock } from "../lib/format";
 import type { Job, JobCounts, TranscodeSession } from "../lib/types";
 import { attempt } from "../lib/notices";
 import { confirmDialog } from "../lib/ask";
+import { useTitle } from "../lib/title";
 
 const KINDS: Record<string, { label: string; Icon: LucideIcon }> = {
   scan: { label: "Scan", Icon: ScanSearch },
@@ -28,6 +29,7 @@ const STATUS: Record<Job["status"], { label: string; tone: Tone }> = {
 /** Background work (scans, metadata, thumbnails, encodes) and live streams. */
 export default function ActivityPage() {
   const { data, error, reload } = useApi<{ jobs: Job[]; counts: JobCounts }>("/api/jobs", { pollMs: 2500 });
+  useTitle("Activity");
   const c = data?.counts;
 
   const cancel = attempt("Couldn't cancel the job", async (id: number) => {

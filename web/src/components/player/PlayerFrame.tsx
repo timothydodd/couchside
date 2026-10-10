@@ -252,11 +252,11 @@ export default function PlayerFrame(p: PlayerFrameProps) {
     el?.pause();
     setMenu(false);
     setQueueOpen(true);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- v reads a ref
   const closeQueue = useCallback(() => {
     setQueueOpen(false);
     if (resumeAfterQueue.current) void v()?.play().catch(() => {});
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- v reads a ref
 
   {
     keyHandler.current = (e: KeyboardEvent) => {

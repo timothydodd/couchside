@@ -21,6 +21,28 @@ func (s *Server) firstRun(ctx context.Context) (bool, error) {
 	return v != "1", err
 }
 
+// msgFirstRunRemote is why an unclaimed server refuses a visitor from the
+// internet: until setup is done, anyone who can reach it could claim it.
+const msgFirstRunRemote = "Couchside can only be set up from your home network. Open it on a device on the same network as the server, or enter the setup code from the server log."
+
+func refuseRemoteFirstRun(w http.ResponseWriter, ip string) {
+	slog.Warn("first run: refused a visitor from the internet", "ip", ip)
+	writeJSON(w, http.StatusForbidden, map[string]string{"error": msgFirstRunRemote, "code": "private_only"})
+}
+
+// firstRunCode makes and logs, once, the code that lets the owner finish the
+// first run from outside the home network. It shares the setup code with
+// setupNeeded (used when passwords are required).
+func (s *Server) firstRunCode() {
+	s.auth.mu.Lock()
+	defer s.auth.mu.Unlock()
+	if s.auth.setupCode == "" {
+		s.auth.setupCode = auth.SetupCode()
+		slog.Warn("Couchside isn't set up yet: open it in a browser on your home network, or from anywhere else enter this setup code",
+			"code", s.auth.setupCode)
+	}
+}
+
 // welcome is the first-run "who are you": it names the server's admin
 // profile, gives it a password if one is typed, and signs this browser in.
 // Only while setup isn't done and sign-in is passwordless, when anyone who
@@ -55,10 +77,36 @@ func (s *Server) welcome(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name     string `json:"name"`
 		Password string `json:"password"`
+		Code     string `json:"code"` // the setup code, needed from outside the home network
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, err)
 		return
+	}
+	remote := !localClient(r)
+	if remote {
+		if strings.TrimSpace(in.Code) == "" {
+			refuseRemoteFirstRun(w, ip)
+			return
+		}
+		done, ok := s.attempt(w, ip, "setup")
+		if !ok {
+			return
+		}
+		s.auth.mu.Lock()
+		code := s.auth.setupCode
+		s.auth.mu.Unlock()
+		wrong := code == "" || !auth.SameCode(in.Code, code)
+		done(wrong)
+		if wrong {
+			slog.Warn("wrong setup code", "ip", ip)
+			writeErr(w, httpError{http.StatusUnauthorized, "that setup code isn't right; it's in the server log"})
+			return
+		}
+		if in.Password == "" {
+			writeErr(w, badRequest("choose a password: this server can be reached from the internet"))
+			return
+		}
 	}
 	pi := profileInput{Name: strings.TrimSpace(in.Name)}
 	if err := pi.validate(); err != nil {
@@ -107,7 +155,10 @@ func (s *Server) welcome(w http.ResponseWriter, r *http.Request) {
 		}
 		p.HasPassword = true
 	}
-	slog.Info("first run: admin named", "profile", p.Name, "password", in.Password != "", "ip", ip)
+	s.auth.mu.Lock()
+	s.auth.setupCode = "" // claimed: the code is spent
+	s.auth.mu.Unlock()
+	slog.Info("first run: admin named", "profile", p.Name, "password", in.Password != "", "remote", remote, "ip", ip)
 	s.startSession(w, r, p, "web", "")
 }
 

@@ -2,11 +2,14 @@ import { useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import AuthShell from "../components/auth/AuthShell";
 import NewPassword from "../components/auth/NewPassword";
+import SetupCodeField from "../components/auth/SetupCodeField";
 import { ErrorNote } from "../components/ui";
 import { authError, useAuth } from "../stores/auth";
+import { useTitle } from "../lib/title";
 
 /** First run with accounts on: the setup code from the server log creates the first admin. */
 export default function SetupPage() {
+  useTitle("Set up Couchside");
   const setup = useAuth((s) => s.setup);
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -35,14 +38,7 @@ export default function SetupPage() {
           void submit();
         }}
       >
-        <label className="block">
-          <span className="field-label">Setup code</span>
-          <input className="field mono w-full uppercase" autoFocus autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} placeholder="XXXX-XXXX-XXXX" />
-          <span className="mt-1 block text-xs text-content-muted">
-            Printed in the server log when it started (<span className="mono">kubectl logs deploy/couchside</span> or{" "}
-            <span className="mono">docker compose logs</span>).
-          </span>
-        </label>
+        <SetupCodeField value={code} onChange={setCode} autoFocus />
         <label className="block">
           <span className="field-label">Your name</span>
           <input className="field w-full" autoComplete="username" maxLength={30} value={name} onChange={(e) => setName(e.target.value)} />

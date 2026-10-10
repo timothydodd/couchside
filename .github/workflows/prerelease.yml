@@ -16,6 +16,11 @@ on:
 permissions:
   contents: read
 
+# Never cancel a release half-way; a second push of the same tag waits.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
 
@@ -29,7 +34,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: "1.27" # the Dockerfile's
+          go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
       - run: go vet ./...
       - run: GOOS=windows go vet ./...

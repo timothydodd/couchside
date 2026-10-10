@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -20,7 +19,7 @@ type Setting struct {
 	Group       string   `json:"group"`
 	Label       string   `json:"label"`
 	Help        string   `json:"help"`
-	Kind        string   `json:"kind"` // text | dir | file | int | duration | choice | bool | secret
+	Kind        string   `json:"kind"` // text | dir | int | duration | choice | bool | secret
 	Options     []string `json:"options,omitempty"`
 	Default     string   `json:"default"` // what an unset value means, in words or as a value
 	Placeholder string   `json:"placeholder,omitempty"`
@@ -31,7 +30,10 @@ type Setting struct {
 // out on purpose: the port and data/cache folders (needed before the
 // database opens), COUCHSIDE_AUTH (a lock admins mustn't lift from the web),
 // the DVR folder and padding (already in Settings → Live TV / Advanced), and
-// COUCHSIDE_MEDIA_ROOT (media locations have their own list).
+// COUCHSIDE_MEDIA_ROOT (media locations have their own list), and the
+// ffmpeg, ffprobe and comskip programs and comskip.ini: choosing a program is
+// choosing what the server runs, so an admin's browser session mustn't be
+// able to; set them in the environment or the settings file.
 var Editable = func() []Setting {
 	s := []Setting{
 		{Key: "COUCHSIDE_SCAN_INTERVAL", Group: "Libraries", Label: "Rescan libraries every", Kind: "duration",
@@ -49,17 +51,11 @@ var Editable = func() []Setting {
 			Help: "Background \"optimize\" and commercial-detection jobs.", Default: "1"},
 		{Key: "COUCHSIDE_OPTIMIZE_HEIGHT", Group: "Encoding", Label: "Optimized copy size", Kind: "choice",
 			Options: []string{"480", "720", "1080"}, Help: "The tallest picture an optimized copy keeps.", Default: "1080"},
-		{Key: "COUCHSIDE_FFMPEG", Advanced: true, Group: "Encoding", Label: "ffmpeg", Kind: "file",
-			Help: "Leave empty for the ffmpeg beside Couchside, else the one on the PATH.", Default: "Bundled or on the PATH"},
-		{Key: "COUCHSIDE_FFPROBE", Advanced: true, Group: "Encoding", Label: "ffprobe", Kind: "file",
-			Help: "Leave empty for the ffprobe beside Couchside, else the one on the PATH.", Default: "Bundled or on the PATH"},
+		{Key: "COUCHSIDE_FFMPEG_THREADS", Advanced: true, Group: "Encoding", Label: "Threads per ffmpeg", Kind: "int",
+			Help: "CPU threads each conversion may use. Empty shares the CPUs out: cores divided by streams converted at once for playback, 2 for background jobs.", Default: "Automatic"},
 
 		{Key: "COUCHSIDE_HDHOMERUN", Group: "Live TV", Label: "HDHomeRun tuner", Kind: "text",
 			Help: "The tuner's IP address or host name. Empty turns off broadcast TV and recording (your own channels still work).", Default: "None", Placeholder: "192.168.1.50"},
-		{Key: "COUCHSIDE_COMSKIP", Advanced: true, Group: "Live TV", Label: "comskip", Kind: "file",
-			Help: "Commercial detection for recordings. Off when it can't be found.", Default: "comskip on the PATH"},
-		{Key: "COUCHSIDE_COMSKIP_INI", Advanced: true, Group: "Live TV", Label: "comskip.ini", Kind: "file",
-			Help: "Your own comskip settings. Empty uses Couchside's, which find the same breaks as Plex.", Default: "Couchside's own"},
 
 		{Key: "TMDB_API_KEY", Group: "Metadata", Label: "TMDB API key", Kind: "secret",
 			Help: "Your own key from themoviedb.org. Empty uses this build's key; \"off\" turns TMDB off.", Default: "This build's key"},
@@ -150,11 +146,6 @@ func (s Setting) Check(v string) (string, error) {
 		v = filepath.Clean(v)
 		if st, err := os.Stat(v); err != nil || !st.IsDir() {
 			return "", fmt.Errorf("%s: the server can't open %s", s.Label, v)
-		}
-	case "file":
-		// A bare name is looked up on the PATH, as the variable is.
-		if _, err := exec.LookPath(v); err != nil {
-			return "", fmt.Errorf("%s: the server can't find %s", s.Label, v)
 		}
 	}
 	if s.Key == "COUCHSIDE_TRUSTED_PROXIES" {

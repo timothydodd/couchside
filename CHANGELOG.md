@@ -1,0 +1,53 @@
+# Changelog
+
+Each release lists **Breaking changes and upgrade notes** first (when there
+are any), then what's new and what's fixed. The GitHub release links here;
+its own notes list every merged change.
+
+## Unreleased
+
+### Breaking changes and upgrade notes
+
+- **Helm:** `ingress.enabled=true` now needs `auth.enabled=true` (passwords
+  required), or `auth.allowOpenIngress=true` for an ingress only your LAN can
+  reach. The chart refuses to render otherwise.
+- **Helm:** `hwaccel.dri.privileged` defaults to `false`. If you mount
+  `/dev/dri` (`hwaccel.dri.enabled=true`), set `privileged=true` yourself, or
+  move to a GPU device plugin with `hwaccel.dri.resource`. `hwaccel.mode`
+  offers `none` and `vaapi` (the image's ffmpeg has no NVENC or Quick Sync).
+- **Helm:** liveness now checks `/livez`; there's a 60s
+  `terminationGracePeriodSeconds`, and `GOMEMLIMIT` is set (`goMemLimit`).
+- **Windows:** the service runs as its own account, `NT SERVICE\Couchside`,
+  instead of Local System. Type network-share passwords again once (Settings
+  → Server → Media locations), and grant the account Modify on any local
+  folder the DVR records into.
+- **Docker:** `/recordings` is no longer a volume of its own: mount one
+  (`-v couchside-recordings:/recordings`) for the DVR.
+- **Compose:** `docker-compose.yml` now runs with media from a local folder;
+  the NAS/SMB setup moved to `docker-compose.smb.yml`.
+- **First run:** until setup is done, only the home network can claim a new
+  server; from anywhere else it needs the setup code from the log, and a
+  password.
+- **Settings → Server:** the ffmpeg, ffprobe and comskip programs can no
+  longer be chosen from the web; set them in the environment or the
+  settings file. Values saved from the web are dropped, with a warning.
+- **Going back:** an older version refuses to open a database this one has
+  upgraded; restore `backups/couchside-upgrade-<time>.db` to go back.
+
+### Added
+
+- `GET /api/server`: version, API version and features, for apps to check
+  before signing in (docs/api-compat.md).
+- Diagnostics download for bug reports (Settings → System → Advanced).
+- Renamed files keep their watch history, optimized copy, commercial
+  breaks and intro marks.
+- The Helm chart is published at `oci://ghcr.io/timothydodd/charts/couchside`.
+- Releases attach the source of the ffmpeg in the Windows installer.
+
+### Fixed
+
+- A link in a media folder could serve any file the server could read.
+- Security headers: a full Content-Security-Policy for the web UI, HSTS
+  over HTTPS, Referrer-Policy.
+- Big libraries: the Movies and TV lists, status polls, scans, job claims,
+  search and HLS disk use are much lighter (see the release notes).

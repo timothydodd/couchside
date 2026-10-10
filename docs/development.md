@@ -1,8 +1,9 @@
 # Development
 
 - **Backend:** one static Go binary (`server/`), pure-Go SQLite (no CGO), and
-  ffmpeg/ffprobe for probing, stills and transcoding. Go 1.26; the `go`
-  command fetches it automatically.
+  ffmpeg/ffprobe for probing, stills and transcoding. Go as pinned in
+  `server/go.mod` (1.27; CI, the Dockerfile and the release follow it); the
+  `go` command fetches it automatically.
 - **Frontend:** React 19, Vite and Tailwind v4 (`web/`). Colours and component
   styles are in [style.md](style.md).
 - **Deploy:** a Helm chart in `deploy/helm/couchside`.
@@ -36,10 +37,15 @@ cd web && npx tsc --noEmit && npx vite build
 
 CI (`.github/workflows/ci.yml`) runs both on pushes and pull requests.
 
+The UI runs under a strict Content-Security-Policy (`uiCSP` in
+`server/internal/api/api.go`): no inline scripts and nothing loaded from other
+sites. Inline `style={}` attributes, `blob:` media and hls.js's `blob:` worker
+are allowed. A new kind of resource needs a matching directive there.
+
 Dependabot (`.github/dependabot.yml`) opens weekly update pull requests for Go,
 npm, GitHub Actions and the Dockerfile's base images. When a push to main
 changes `go.sum` or `package-lock.json`, `notices.yml` regenerates
-`THIRD_PARTY_NOTICES.txt` and commits it. To do it by hand:
+`THIRD_PARTY_NOTICES.txt` and opens a pull request with it. To do it by hand:
 `python3 scripts/third-party-notices.py` (with `web/node_modules` installed).
 
 ## Icons
@@ -55,6 +61,10 @@ amd64/arm64, Windows amd64), publishes the container to
 `ghcr.io/<owner>/couchside` (`:v<version>`, `:<version>`, `:<major>.<minor>`, `:latest`), and
 creates a GitHub Release with checksums. Tags with a hyphen, such as
 `v0.2.0-rc1`, become pre-releases and don't move `:latest`.
+
+Before tagging, rename `## Unreleased` in `CHANGELOG.md` to `## <version>`
+(without the `v`; the release fails without it) and set the chart's `version`
+and `appVersion` to the same version.
 
 ```bash
 git tag -a v0.2.0 -m "v0.2.0: …" && git push origin v0.2.0

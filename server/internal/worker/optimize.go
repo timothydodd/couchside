@@ -21,8 +21,24 @@ import (
 // cache. The player then direct-plays it instead of transcoding live.
 const KindOptimize = "optimize" // ref: file id
 
+// OptimizedRel is where a file's optimized copy goes, relative to the cache
+// folder and with forward slashes: what the database stores, so a cache that
+// moves (another COUCHSIDE_CACHE_DIR, Windows to Linux) keeps its copies.
+func OptimizedRel(fileID int64) string { return fmt.Sprintf("optimized/%d.mp4", fileID) }
+
+// OptimizedFile is the full path of a file's optimized copy.
 func OptimizedFile(cacheDir string, fileID int64) string {
-	return filepath.Join(cacheDir, "optimized", fmt.Sprintf("%d.mp4", fileID))
+	return ResolveCache(cacheDir, OptimizedRel(fileID))
+}
+
+// ResolveCache turns a stored cache path into a full one. Rows from before
+// 0.19 hold absolute paths until cleanupOptimized rewrites them; those are
+// kept as they are.
+func ResolveCache(cacheDir, p string) string {
+	if p == "" || filepath.IsAbs(p) {
+		return p
+	}
+	return filepath.Join(cacheDir, filepath.FromSlash(p))
 }
 
 func (w *Worker) optimize(ctx context.Context, jobID, fileID int64) error {
@@ -55,6 +71,7 @@ func (w *Worker) optimize(ctx context.Context, jobID, fileID int64) error {
 	height := transcode.OutputHeight(w.cfg.OptimizeHeight, srcH)
 
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-y"}
+	args = append(args, transcode.ThreadArgs(w.cfg.JobThreads())...)
 	var vIn, vOut []string
 	if !copyVideo {
 		vIn, vOut = w.enc.Video(transcode.VideoOpts{MaxHeight: height, SrcHeight: srcH,
@@ -117,25 +134,61 @@ func (w *Worker) optimize(ctx context.Context, jobID, fileID int64) error {
 		outH = srcH
 	}
 	_ = w.db.SetJobProgress(ctx, jobID, 1)
-	return w.db.SetOptimized(ctx, fileID, out, st.Size(), outH)
+	return w.db.SetOptimized(ctx, fileID, OptimizedRel(fileID), st.Size(), outH)
 }
 
-// cleanupOptimized removes optimized copies whose file no longer exists
-// (pruned, or replaced by a changed file) and leftovers from killed encodes.
+// cleanupOptimized records older absolute paths relative to the cache, then
+// removes optimized copies whose file no longer exists (pruned, or replaced
+// by a changed file) and leftovers from killed encodes.
 func (w *Worker) cleanupOptimized(ctx context.Context) {
-	known, err := w.db.OptimizedPaths(ctx)
+	stored, err := w.db.OptimizedPaths(ctx)
 	if err != nil {
 		return
+	}
+	known := map[string]bool{}
+	for id, p := range stored {
+		if rel := relativeOptimized(w.cfg.CacheDir, p); rel != p {
+			if err := w.db.SetOptimizedPath(ctx, id, rel); err == nil {
+				slog.Info("optimized copy now recorded relative to the cache folder", "file", id, "path", rel)
+				p = rel
+			}
+		}
+		known[filepath.Clean(ResolveCache(w.cfg.CacheDir, p))] = true
 	}
 	entries, _ := os.ReadDir(filepath.Join(w.cfg.CacheDir, "optimized"))
 	for _, e := range entries {
 		p := filepath.Join(w.cfg.CacheDir, "optimized", e.Name())
-		if !known[p] {
+		if !known[filepath.Clean(p)] {
 			if err := os.Remove(p); err == nil {
 				slog.Info("removed orphaned optimized file", "path", p)
 			}
 		}
 	}
+}
+
+// relativeOptimized turns an absolute optimized path from before 0.19 into
+// the cache-relative form: one under today's cache folder, or one whose old
+// folder is gone but whose copy is in today's (the cache was moved). Anything
+// else comes back unchanged.
+func relativeOptimized(cacheDir, p string) string {
+	if !filepath.IsAbs(p) || cacheDir == "" {
+		return p
+	}
+	if rel, err := filepath.Rel(filepath.Clean(cacheDir), filepath.Clean(p)); err == nil && !strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel) {
+		return filepath.ToSlash(rel)
+	}
+	if _, err := os.Stat(p); err == nil {
+		return p
+	}
+	if rel := "optimized/" + filepath.Base(p); fileExists(ResolveCache(cacheDir, rel)) {
+		return rel
+	}
+	return p
+}
+
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
 }
 
 func lastLine(s string) string {

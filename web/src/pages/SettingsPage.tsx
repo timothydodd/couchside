@@ -2,6 +2,7 @@ import { useRef } from "react";
 import Link from "../components/Link";
 import AccountManager from "../components/settings/AccountManager";
 import AdvancedArea from "../components/settings/AdvancedArea";
+import Diagnostics from "../components/settings/Diagnostics";
 import SingleSignOn from "../components/settings/SingleSignOn";
 import AccountSettings from "../components/settings/AccountSettings";
 import Console from "../components/settings/Console";
@@ -23,6 +24,7 @@ import { useIsAdmin } from "../stores/auth";
 import { useRouter } from "../stores/router";
 import { useStatus } from "../stores/status";
 import { fmtVersion } from "../lib/format";
+import { useTitle } from "../lib/title";
 
 /**
  * Settings. /settings is your own preferences and account, for every profile;
@@ -36,6 +38,7 @@ export default function SettingsPage() {
   // Users only have their own settings; any other section shows those.
   const id = admin && route.name === "settings" ? route.section : "you";
   const section = SECTIONS.find((s) => s.id === id)!;
+  useTitle(id === "you" ? "Settings" : `${section.label} · Settings`);
   const wide = id === "system" || id === "console";
   const tabs = useRef<HTMLElement>(null);
   useScrollEdges(tabs); // fades the end of the phone tab bar that has more
@@ -64,8 +67,9 @@ export default function SettingsPage() {
             <ServerNow />
             <SystemHistory />
             <ServerInfo />
-            <AdvancedArea what="Backups of the database">
+            <AdvancedArea what="Backups of the database, and diagnostics for a bug report">
               <BackupSettings />
+              <Diagnostics />
             </AdvancedArea>
           </>
         )}
@@ -98,9 +102,11 @@ export default function SettingsPage() {
 /** Version, license and the third-party notices, at the bottom of Settings. */
 function About() {
   const version = useStatus((s) => s.status?.version);
+  const apiVersion = useStatus((s) => s.status?.apiVersion);
   return (
     <p className="px-1 text-xs text-content-muted">
-      Couchside {version && fmtVersion(version)} &middot; free, open-source software under the{" "}
+      Couchside {version && fmtVersion(version)}
+      {apiVersion ? ` (API ${apiVersion})` : ""} &middot; free, open-source software under the{" "}
       <a href="https://github.com/timothydodd/couchside/blob/main/LICENSE" target="_blank" rel="noreferrer" className="hover:text-accent hover:underline">
         MIT License
       </a>{" "}

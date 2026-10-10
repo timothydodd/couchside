@@ -31,7 +31,7 @@ func TestRecordDoesNotTakeOverOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	recs, _ := d.Recordings(ctx)
+	recs, _ := d.Recordings(ctx, 0, 0)
 	ruleRec := map[int64]db.Recording{} // start → the rule's row
 	for _, r := range recs {
 		ruleRec[r.StartAt] = r

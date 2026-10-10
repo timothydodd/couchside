@@ -20,9 +20,11 @@ import { featureFiles, nextEpisode } from "../lib/items";
 import { attempt } from "../lib/notices";
 import RangeChip from "../components/RangeChip";
 import { rangeLabel } from "../lib/quality";
+import { useTitle } from "../lib/title";
 
 export default function ItemPage({ id, season, edit }: { id: number; season?: number; edit?: boolean }) {
   const { data, error, loading, reload } = useApi<ItemDetail>(`/api/items/${id}`);
+  useTitle(data && (season !== undefined && data.item.kind === "series" ? `${data.item.title} · Season ${season}` : data.item.title));
   const admin = useIsAdmin();
   // The Edit panel: open from the button, from "Fix match", or by ?edit=1 (the library table links here).
   const [editing, setEditing] = useState<PanelSection | null>(edit ? "details" : null);
@@ -97,7 +99,7 @@ export default function ItemPage({ id, season, edit }: { id: number; season?: nu
 
       <div className="relative -mt-24 flex flex-col gap-6 gutter sm:-mt-40 md:flex-row">
         {/* On phones the backdrop above is the picture; the poster would push everything below the fold. */}
-        <div className="poster hidden w-44 shrink-0 self-start shadow-[var(--shadow-poster)] sm:block md:w-56">
+        <div className="poster hidden w-44 shrink-0 self-start shadow-[var(--shadow-poster)] sm:block md:w-56" data-hero={item.id} data-hero-page>
           <PosterArt item={item} size="full" />
         </div>
         <div className="min-w-0 flex-1 md:pt-16">

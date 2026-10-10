@@ -19,6 +19,7 @@ import (
 	"github.com/timothydodd/couchside/internal/keylock"
 	"github.com/timothydodd/couchside/internal/metadata"
 	"github.com/timothydodd/couchside/internal/remoteimg"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 func (w *Worker) match(ctx context.Context, itemID int64) error {
@@ -42,6 +43,10 @@ func (w *Worker) match(ctx context.Context, itemID int64) error {
 		pinned = item.ImdbID
 	}
 	d, p, skipped, err := w.providers.Lookup(ctx, kind, item.ParsedTitle, item.ParsedYear, pinned)
+	if errors.Is(err, metadata.ErrBadKey) {
+		// The item stays pending, so the next scan queues it again.
+		return usererr.New(metadata.BadKeyMessage(w.cfg.TMDBKeySource()))
+	}
 	if err != nil {
 		return err
 	}
@@ -233,15 +238,11 @@ func (w *Worker) episodeStill(ctx context.Context, url string, fileID int64) err
 	return w.db.SetFileStill(ctx, fileID, true)
 }
 
-// stillFromProvider reports whether a file's still came from the provider
-// (its .src names the link) and is still on disk.
-func stillFromProvider(dst string) bool {
-	src, err := os.ReadFile(filepath.Join(filepath.Dir(dst), "still.src"))
-	if err != nil || len(src) == 0 {
-		return false
-	}
-	_, err = os.Stat(dst)
-	return err == nil
+// stillFromProvider reports whether a file's still is the provider's still
+// want (its .src names that link) and is on disk. A .src naming another link
+// was left by an earlier file with the same id.
+func stillFromProvider(dst, want string) bool {
+	return want != "" && fetchedFrom(filepath.Dir(dst), "still", want)
 }
 
 // fetchedFrom records which link an artwork file came from, so a re-match
@@ -366,10 +367,19 @@ func (w *Worker) still(ctx context.Context, fileID int64) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
-	if stillFromProvider(dst) {
+	want := ""
+	if f.EpisodeID != nil {
+		if want, err = w.db.EpisodeStillURL(ctx, *f.EpisodeID); err != nil {
+			return err
+		}
+	}
+	if stillFromProvider(dst, want) {
 		// The provider's still is already there (the file was re-scanned); keep it.
 		return w.db.SetFileStill(ctx, fileID, true)
 	}
+	// A frame grab replaces whatever is there, so a .src left beside it
+	// mustn't vouch for it later.
+	_ = os.Remove(filepath.Join(filepath.Dir(dst), "still.src"))
 	if err := w.ff.FrameGrab(ctx, f.Path, dst, imaging.GrabOffset(f.DurationSec, 0.25), 480); err != nil {
 		return err
 	}

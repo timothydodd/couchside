@@ -30,7 +30,7 @@ func scanFixture(t *testing.T) (*Worker, *db.DB, int64, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w := &Worker{db: d, cfg: config.Config{FFprobe: filepath.Join(dir, "no-ffprobe")},
+	w := &Worker{db: d, cfg: config.Config{FFprobe: filepath.Join(dir, "no-ffprobe"), CacheDir: filepath.Join(dir, "cache")},
 		wake: make(chan struct{}, 1), wakeEnc: make(chan struct{}, 1)}
 	return w, d, lib, root
 }
@@ -182,6 +182,130 @@ func TestScanPrunesDeletedFile(t *testing.T) {
 	}
 }
 
+// A deleted file's still folder and a deleted title's artwork go with them:
+// ids are reused, and a folder left behind would show the old pictures.
+func TestScanPruneRemovesCache(t *testing.T) {
+	w, d, lib, root := scanFixture(t)
+	ctx := context.Background()
+	alien := filepath.Join(root, "Alien (1979).mkv")
+	writeVideo(t, alien)
+	writeVideo(t, filepath.Join(root, "Heat (1995).mkv"))
+	if err := w.scan(ctx, lib); err != nil {
+		t.Fatal(err)
+	}
+	id := indexed(t, d, alien)[0]
+	f, err := d.File(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	still := FileStillPath(w.cfg.CacheDir, id)
+	art := filepath.Join(ItemArtDir(w.cfg.CacheDir, f.MediaItemID), "poster.webp")
+	writeVideo(t, still)
+	writeVideo(t, art)
+	backdate(t, d, indexed(t, d, alien)...)
+	os.Remove(alien)
+	if err := w.scan(ctx, lib); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{filepath.Dir(still), filepath.Dir(art)} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("%s survived the prune", p)
+		}
+	}
+}
+
+// A renamed file keeps every profile's progress and its still: the new row
+// takes over from the old one instead of starting from nothing.
+func TestScanKeepsWatchStateAcrossRename(t *testing.T) {
+	w, d, lib, root := scanFixture(t)
+	me, err := d.SetupAdmin(context.Background(), "Me", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := db.WithProfile(context.Background(), me.ID)
+	old := filepath.Join(root, "Heat (1995)", "Heat.mkv")
+	writeVideo(t, old)
+	if err := w.scan(ctx, lib); err != nil {
+		t.Fatal(err)
+	}
+	oldID := indexed(t, d, old)[0]
+	if err := d.SaveProgress(ctx, oldID, 600, 6000); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetFileStill(ctx, oldID, true); err != nil {
+		t.Fatal(err)
+	}
+	writeVideo(t, FileStillPath(w.cfg.CacheDir, oldID))
+	backdate(t, d, oldID)
+	renamed := filepath.Join(root, "Heat (1995)", "Heat (1995) Remux.mkv")
+	if err := os.Rename(old, renamed); err != nil {
+		t.Fatal(err)
+	}
+	summary, err := w.scanLibrary(ctx, lib)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newID := indexed(t, d, renamed)[0]
+	if newID == 0 || newID == oldID {
+		t.Fatalf("renamed file not indexed as a new row: %d", newID)
+	}
+	if _, err := d.File(ctx, oldID); err != db.ErrNotFound {
+		t.Fatalf("old row still there: %v", err)
+	}
+	f, err := d.File(ctx, newID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.PositionSec != 600 || !f.HasStill {
+		t.Errorf("renamed file lost its progress or still: position %v, still %v", f.PositionSec, f.HasStill)
+	}
+	if _, err := os.Stat(FileStillPath(w.cfg.CacheDir, newID)); err != nil {
+		t.Errorf("still didn't move to the new id: %v", err)
+	}
+	if _, err := os.Stat(filepath.Dir(FileStillPath(w.cfg.CacheDir, oldID))); !os.IsNotExist(err) {
+		t.Errorf("old id's folder is still there")
+	}
+	if !strings.Contains(summary, "1 renamed") || strings.Contains(summary, "added") || strings.Contains(summary, "removed") {
+		t.Errorf("summary = %q, want one rename and nothing added or removed", summary)
+	}
+}
+
+// Two copies of a title that both move with the same size can't be told
+// apart, so neither inherits anything: no guessing.
+func TestScanRenameAmbiguousKeepsNothing(t *testing.T) {
+	w, d, lib, root := scanFixture(t)
+	me, _ := d.SetupAdmin(context.Background(), "Me", "hash")
+	ctx := db.WithProfile(context.Background(), me.ID)
+	a, b := filepath.Join(root, "Heat (1995)", "a.mkv"), filepath.Join(root, "Heat (1995)", "b.mkv")
+	writeVideo(t, a)
+	writeVideo(t, b)
+	if err := w.scan(ctx, lib); err != nil {
+		t.Fatal(err)
+	}
+	ids := indexed(t, d, a, b)
+	for _, id := range ids {
+		if err := d.SaveProgress(ctx, id, 600, 6000); err != nil {
+			t.Fatal(err)
+		}
+	}
+	backdate(t, d, ids...)
+	a2, b2 := filepath.Join(root, "Heat (1995)", "c.mkv"), filepath.Join(root, "Heat (1995)", "d.mkv")
+	os.Rename(a, a2)
+	os.Rename(b, b2)
+	if err := w.scan(ctx, lib); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range indexed(t, d, a2, b2) {
+		f, err := d.File(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if f.PositionSec != 0 {
+			t.Errorf("file %d inherited progress from an ambiguous rename", id)
+		}
+	}
+}
+
 func TestRescanFileKeepsOptimizedCopyUnlessChanged(t *testing.T) {
 	w, d, lib, root := scanFixture(t)
 	ctx := context.Background()
@@ -259,5 +383,54 @@ func TestScanKeepsMergedFilesWhereTheyWerePut(t *testing.T) {
 		if f.Path == making && (f.Role != "extra" || f.ExtraTitle == "") {
 			t.Fatalf("the merged file lost its role: %+v", f)
 		}
+	}
+}
+
+// A link in the library that leads to something other than a video (the
+// server's own auth.key, say) is never indexed; one that leads to a video on
+// another disk is, and is described by its target.
+func TestScanSkipsLinksToNonVideos(t *testing.T) {
+	w, d, libID, root := scanFixture(t)
+	outside := t.TempDir()
+	secret := filepath.Join(outside, "auth.key")
+	if err := os.WriteFile(secret, []byte("not a film, but a long secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	elsewhere := filepath.Join(outside, "Alien (1979).mkv")
+	writeVideo(t, elsewhere)
+	heat := filepath.Join(root, "Heat (1995).mkv")
+	writeVideo(t, heat)
+	planted := filepath.Join(root, "Planted (2001).mkv")
+	if err := os.Symlink(secret, planted); err != nil {
+		t.Skipf("symlinks unavailable here: %v", err)
+	}
+	alien := filepath.Join(root, "Alien (1979).mkv")
+	if err := os.Symlink(elsewhere, alien); err != nil {
+		t.Fatal(err)
+	}
+	dangling := filepath.Join(root, "Gone (2002).mkv")
+	if err := os.Symlink(filepath.Join(outside, "nothing.mkv"), dangling); err != nil {
+		t.Fatal(err)
+	}
+	summary, err := w.scanLibrary(context.Background(), libID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := indexed(t, d, heat, planted, alien, dangling)
+	if ids[0] == 0 || ids[2] == 0 {
+		t.Errorf("real video and link to a video should be indexed: %v", ids)
+	}
+	if ids[1] != 0 || ids[3] != 0 {
+		t.Errorf("link to a non-video and dangling link must not be indexed: %v", ids)
+	}
+	if !strings.Contains(summary, "Planted (2001).mkv") {
+		t.Errorf("summary should name the skipped link: %q", summary)
+	}
+	f, err := d.File(context.Background(), ids[2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Size != 1 {
+		t.Errorf("linked video's size = %d, want its target's (1)", f.Size)
 	}
 }

@@ -407,6 +407,12 @@ export interface Status {
   scanEvery: string;
   workers: number;
   comskip?: boolean; // commercial detection is available
+  /** The server's API version (docs/api-compat.md); absent on servers before 0.19. */
+  apiVersion?: number;
+  /** What the server can do now (docs/api-compat.md); absent on servers before 0.19. */
+  features?: string[];
+  /** Why metadata lookups fail right now (TMDB refusing the key); empty when they don't. */
+  metadataDegraded?: string[];
   transcode?: {
     hwaccel: string;
     requested: string; // COUCHSIDE_HWACCEL: auto, none, vaapi, qsv or nvenc
@@ -444,7 +450,7 @@ export interface ServerSetting {
   group: string;
   label: string;
   help: string;
-  kind: "text" | "dir" | "file" | "int" | "duration" | "choice" | "bool" | "secret";
+  kind: "text" | "dir" | "int" | "duration" | "choice" | "bool" | "secret";
   options?: string[];
   default: string;
   placeholder?: string;
@@ -737,6 +743,8 @@ export interface AuthInfo {
   setupRequired: boolean;
   /** The first-run setup (your name, your media) isn't done. */
   firstRun: boolean;
+  /** First run, and this browser isn't on the server's home network: claiming it needs the setup code. */
+  remoteFirstRun?: boolean;
   user: Profile | null;
   accessExpiresAt?: number;
   /** Seconds until the access token runs out. */

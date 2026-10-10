@@ -28,9 +28,14 @@ rules and server settings are shared. Switch profiles from the sidebar.
   It suits a demo server, where visitors needn't see the admin account. It
   only keeps the account out of sight, so give it a password.
 - **First run.** A new server is passwordless with one admin profile, "Me".
-  With `COUCHSIDE_AUTH=true` and no admin password yet, the server log prints a
-  one-time setup code; open the UI and enter it with your name and a password.
-  Use an existing profile's name to keep its watch history.
+  Until the first run is finished, only a browser on the home network (or the
+  server itself, a VPN or Tailscale) can claim it. From anywhere else it asks
+  for the one-time setup code printed in the server log, and a password.
+  Behind a reverse proxy, set `COUCHSIDE_TRUSTED_PROXIES` so the server sees
+  visitors' real addresses (or every visitor looks like the proxy, which is on
+  the home network). With `COUCHSIDE_AUTH=true` and no admin password yet, the
+  log prints the setup code too; open the UI and enter it with your name and a
+  password. Use an existing profile's name to keep its watch history.
 - **Roles.** Admins reach Settings, Libraries, file management, Activity and the
   account manager. Users watch and change their own preferences and password.
   Recording is a per-account switch an admin turns on. So is "can set and
@@ -70,7 +75,9 @@ rules and server settings are shared. Switch profiles from the sidebar.
   a name can keep that account locked by failing on purpose; that's the price
   of stopping password guessing from many addresses. Passwordless picks are
   limited to 20 per address per 10 minutes.
-- **Open without a session:** `/healthz`, `/api/discovery` (name, version and
+- **Open without a session:** `/healthz` (the database answers), `/livez`
+  (the process is up), `/api/server` (version, API version and features),
+  `/api/discovery` (name, version and
   sign-in mode, for TV apps finding the server), the sign-in endpoints, and
   artwork (posters, backdrops, episode stills, cast photos and
   `/api/artwork/remote`, the cache of guide and provider images), so TV apps
@@ -111,7 +118,10 @@ or a hosted one), Couchside can use it for signing in on the web.
    address is shown in Settings → Accounts → Single sign-on; it's
    `https://<your couchside>/api/auth/oidc/callback`.
 2. In that card, enter the provider's address, the client id and the secret.
-   Saving checks the provider can be reached.
+   Saving checks the provider can be reached. The provider (and its token
+   endpoint) must use https unless it's on your own network (a private
+   address, `localhost`, or a name like `auth.lan` or `sso.home.arpa`):
+   Couchside trusts the identity it gets back because of that connection.
 3. Choose which claim holds the profile name (`preferred_username` by
    default; `email` or `name` also work). Someone is signed in to the profile
    with that name. Tick "Make a profile…" to create one for people who don't

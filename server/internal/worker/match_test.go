@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -91,5 +92,25 @@ func TestMatchKeepsCreditsWhenAProviderIsDown(t *testing.T) {
 	}
 	if status, backdrop, cast := state(); status != "matched" || backdrop != "" || cast != 0 {
 		t.Fatalf("after recovery: %s, backdrop %q, cast %d", status, backdrop, cast)
+	}
+}
+
+// A still.src naming another link was left by an earlier file with this id:
+// it doesn't vouch for the still.
+func TestStillIgnoresForeignSrc(t *testing.T) {
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "still.webp")
+	writeVideo(t, dst)
+	if err := os.WriteFile(filepath.Join(dir, "still.src"), []byte("https://image.tmdb.org/t/p/w780/other.jpg"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if stillFromProvider(dst, "https://image.tmdb.org/t/p/w780/mine.jpg") {
+		t.Error("trusted another episode's still")
+	}
+	if stillFromProvider(dst, "") {
+		t.Error("trusted a still for a file with no provider still")
+	}
+	if !stillFromProvider(dst, "https://image.tmdb.org/t/p/w780/other.jpg") {
+		t.Error("didn't keep the matching provider still")
 	}
 }

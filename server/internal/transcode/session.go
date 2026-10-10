@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -30,6 +31,8 @@ const SegDur = 4
 
 const (
 	aheadLimit  = 30               // segments (2 min) ffmpeg may run ahead before it's paused
+	remuxAhead  = 10               // the same for a remux, whose segments follow the source's keyframes and run long
+	keepBehind  = 15               // segments (1 min) kept behind the player for a short seek back
 	resumeAt    = 15               // resume once the player is within this many segments
 	restartGap  = 5                // a request further ahead than this restarts ffmpeg at that segment
 	idleKill    = 90 * time.Second // stop ffmpeg when nobody has asked for a segment
@@ -66,8 +69,9 @@ type Request struct {
 	// track with more than two channels is converted to one, 5.1, instead of
 	// being mixed down to stereo AAC.
 	AudioCodecs  []string
-	AudioIndex   int // which audio track (0:a:N)
-	BurnSubtitle int // image subtitle track to burn into the video, -1 for none
+	AudioIndex   int   // which audio track (0:a:N)
+	BurnSubtitle int   // image subtitle track to burn into the video, -1 for none
+	Owner        int64 // the profile that asked; only it (or an admin) uses the session
 }
 
 // Session is one live stream of one file at one quality.
@@ -87,6 +91,7 @@ type Session struct {
 	HW        string    `json:"hw"`
 	HWDecode  bool      `json:"hwDecode"` // VAAPI: decoding and scaling on the GPU too
 	Created   time.Time `json:"created"`
+	Owner     int64     `json:"-"` // the profile that made it (Request.Owner)
 
 	src       string
 	dir       string
@@ -109,6 +114,7 @@ type Session struct {
 	lastReq    int
 	lastAccess time.Time
 	paused     bool
+	ahead      int // aheadLimit, or remuxAhead for a remux
 }
 
 // SessionInfo is the Activity page view of a session.
@@ -232,7 +238,10 @@ func (m *Manager) Create(ctx context.Context, r Request) (*Session, error) {
 		Audio: r.AudioIndex, BurnSub: r.BurnSubtitle,
 		HDR: info.HDR() && !copyVideo, HW: m.enc.HW, Created: time.Now(),
 		src: r.Path, duration: r.Duration, srcHeight: srcH, enc: m.enc,
-		lastAccess: time.Now(), hi: -1,
+		lastAccess: time.Now(), hi: -1, ahead: aheadLimit, Owner: r.Owner,
+	}
+	if copyVideo {
+		s.ahead = remuxAhead
 	}
 	if copyVideo {
 		s.Mode, s.Height, s.HW = "remux", srcH, ""
@@ -452,7 +461,10 @@ func (m *Manager) ensureRun(s *Session, n int) error {
 			return nil
 		}
 		s.refreshHi()
-		if s.running() && n >= s.startSeg && n <= s.hi+restartGap {
+		// Covered by the run: just ahead of what it has written. A missing
+		// segment at or below hi was written and then trimmed behind the
+		// player (trimBehind), so it needs a run started there.
+		if s.running() && n > s.hi && n >= s.startSeg && n <= s.hi+restartGap {
 			if s.paused {
 				resume(s.cmd.Process)
 				s.paused = false
@@ -525,6 +537,7 @@ func (s *Session) start(n int) error {
 	var vIn, vCodec []string
 	var chain string
 	if !s.CopyVideo {
+		args = append(args, ThreadArgs(s.enc.Threads)...)
 		vIn, chain, vCodec = s.enc.VideoParts(VideoOpts{MaxHeight: s.Height, SrcHeight: s.srcHeight, BitrateK: s.BitrateK, HDR: s.HDR,
 			HWDecode: s.HWDecode})
 	}
@@ -663,6 +676,41 @@ func (s *Session) running() bool {
 	}
 }
 
+// aheadLimit is how far ffmpeg may run ahead of the player before it's
+// paused. A remux's segments can be 10s or more of a big source, so it's
+// kept closer.
+func (s *Session) aheadLimit() int {
+	if s.ahead > 0 {
+		return s.ahead
+	}
+	return aheadLimit
+}
+
+var reSegFile = regexp.MustCompile(`^seg(\d+)\.ts$`)
+
+// trimBehind deletes segments more than a minute behind the player, so a
+// two-hour film doesn't leave gigabytes in the cache while its session lives
+// (3h after the last request). A deleted segment is made again if asked for:
+// ensureRun starts ffmpeg there, as for a seek forward. Called with mu held.
+func (s *Session) trimBehind() {
+	// hi past everything written first, so a trimmed segment is always at
+	// or below hi, which is how ensureRun knows to restart for it.
+	s.refreshHi()
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		m := reSegFile.FindStringSubmatch(e.Name())
+		if m == nil {
+			continue
+		}
+		if n, _ := strconv.Atoi(m[1]); n < s.lastReq-keepBehind {
+			_ = os.Remove(filepath.Join(s.dir, e.Name()))
+		}
+	}
+}
+
 // refreshHi advances hi over segments the current run has finished.
 func (s *Session) refreshHi() {
 	if s.hi < s.startSeg-1 {
@@ -708,13 +756,16 @@ func (m *Manager) Run(ctx context.Context) {
 				switch {
 				case idle > idleKill:
 					s.stop()
-				case !s.paused && s.hi-s.lastReq > aheadLimit:
+				case !s.paused && s.hi-s.lastReq > s.aheadLimit():
 					suspend(s.cmd.Process)
 					s.paused = true
 				case s.paused && s.hi-s.lastReq < resumeAt:
 					resume(s.cmd.Process)
 					s.paused = false
 				}
+			}
+			if !expired {
+				s.trimBehind()
 			}
 			s.mu.Unlock()
 			s.restartMu.Unlock()

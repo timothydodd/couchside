@@ -173,11 +173,9 @@ func TestBackupBeforeUpgrade(t *testing.T) {
 	if got := copies(); len(got) != 0 {
 		t.Fatalf("a new database was backed up: %v", got)
 	}
-	// Pretend the newest migration hasn't run yet.
-	if _, err := d.sql.Exec(`DROP INDEX jobs_ref; DELETE FROM schema_migrations WHERE version = '0022_jobs_ref.sql'`); err != nil {
-		t.Fatal(err)
-	}
 	d.Close()
+	// The next release brings a new migration.
+	withExtraMigration(t, "9998_next_release.sql", "CREATE TABLE next_release (x INTEGER);")
 	if d, err = Open(path); err != nil {
 		t.Fatal(err)
 	}

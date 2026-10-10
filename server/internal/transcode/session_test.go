@@ -319,3 +319,104 @@ func TestSurroundAudio(t *testing.T) {
 		t.Fatalf("aac args = %s", got)
 	}
 }
+
+// Segments more than a minute behind the player go; the rest, the ffmpeg
+// playlist and a half-written segment stay.
+func TestTrimKeepsAMinuteBehind(t *testing.T) {
+	m, _ := newTestManager(t, 2)
+	s, err := m.Create(context.Background(), Request{FileID: 1, Path: "/x.mkv", Duration: 600, BurnSubtitle: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i <= 40; i++ {
+		os.WriteFile(s.segPath(i), nil, 0o644)
+	}
+	os.WriteFile(filepath.Join(s.dir, "seg5.ts.tmp"), nil, 0o644)
+	os.WriteFile(filepath.Join(s.dir, "ffmpeg.m3u8"), nil, 0o644)
+	s.mu.Lock()
+	s.lastReq = 30
+	s.trimBehind()
+	s.mu.Unlock()
+	for i := 0; i <= 40; i++ {
+		_, err := os.Stat(s.segPath(i))
+		if gone := os.IsNotExist(err); gone != (i < 30-keepBehind) {
+			t.Errorf("seg%d gone = %v", i, gone)
+		}
+	}
+	for _, n := range []string{"seg5.ts.tmp", "ffmpeg.m3u8"} {
+		if _, err := os.Stat(filepath.Join(s.dir, n)); err != nil {
+			t.Errorf("%s was removed", n)
+		}
+	}
+}
+
+// A segment the current run wrote and the trim deleted is made again: ffmpeg
+// restarts there, instead of the request waiting for a file that never comes.
+func TestMissingTrimmedSegmentRestartsFfmpeg(t *testing.T) {
+	m, pids := newTestManager(t, 2)
+	s, err := m.Create(context.Background(), Request{FileID: 1, Path: "/x.mkv", Duration: 600, BurnSubtitle: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	m.Segment(ctx, s.ID, 20) // starts a run at 20; the fake writes nothing
+	cancel()
+	if started(pids) != 1 {
+		t.Fatalf("runs = %d, want 1", started(pids))
+	}
+	for i := 20; i <= 45; i++ {
+		os.WriteFile(s.segPath(i), nil, 0o644)
+	}
+	s.mu.Lock()
+	s.lastReq = 40 // the player is at 40: 20 to 24 are trimmed
+	s.trimBehind()
+	s.mu.Unlock()
+	if _, err := os.Stat(s.segPath(22)); !os.IsNotExist(err) {
+		t.Fatal("segment 22 wasn't trimmed")
+	}
+	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	go func() {
+		// The restarted run "writes" segment 22.
+		deadline := time.Now().Add(2 * time.Second)
+		for started(pids) < 2 && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		os.WriteFile(s.segPath(22), nil, 0o644)
+	}()
+	if _, err := m.Segment(ctx, s.ID, 22); err != nil {
+		t.Fatalf("segment 22: %v (runs %d, hi %d, startSeg %d, running %v)", err, started(pids), s.hi, s.startSeg, s.running())
+	}
+	if started(pids) != 2 {
+		t.Fatalf("runs = %d, want a restart at the trimmed segment", started(pids))
+	}
+}
+
+// A remux is paused closer to the player than a transcode.
+func TestRemuxRunsLessFarAhead(t *testing.T) {
+	m, _ := newTestManager(t, 4)
+	req := Request{FileID: 1, Path: "/x.mkv", Duration: 600, Height: 1080, AllowCopyVideo: true, BurnSubtitle: -1}
+	s, err := m.Create(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.CopyVideo || s.aheadLimit() != aheadLimit {
+		t.Fatalf("transcode: copy %v, ahead %d", s.CopyVideo, s.aheadLimit())
+	}
+	req.VideoCodecs = []string{"hevc"}
+	if s, err = m.Create(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	if !s.CopyVideo || s.aheadLimit() != remuxAhead {
+		t.Fatalf("remux: copy %v, ahead %d", s.CopyVideo, s.aheadLimit())
+	}
+}
+
+func TestThreadArgs(t *testing.T) {
+	if ThreadArgs(0) != nil || ThreadArgs(-1) != nil {
+		t.Error("0 must add nothing")
+	}
+	if got := strings.Join(ThreadArgs(4), " "); got != "-threads 4" {
+		t.Errorf("ThreadArgs(4) = %q", got)
+	}
+}

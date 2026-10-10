@@ -89,7 +89,7 @@ export default function ServerSettings() {
         <MediaLocations />
       </section>
       {cards(false)}
-      <AdvancedArea what="ffmpeg and comskip files, VAAPI device, discovery address and trusted proxies">{cards(true)}</AdvancedArea>
+      <AdvancedArea what="VAAPI device, discovery address and trusted proxies">{cards(true)}</AdvancedArea>
       {(changed || msg) && (
         <div className="card sticky bottom-4 z-10 flex flex-wrap items-center gap-3 p-3" style={{ boxShadow: "var(--shadow-md)" }}>
           {changed && (

@@ -102,7 +102,7 @@ func (s *Server) listBackups(w http.ResponseWriter, r *http.Request) {
 func (s *Server) createBackup(w http.ResponseWriter, r *http.Request) {
 	b, err := backup.Create(r.Context(), s.db, s.cfg.DataDir, backup.Manual)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, userFault(err)) // "not enough free space" is for the admin to read
 		return
 	}
 	slog.Info("backed up the database", "file", b.Name, "bytes", b.Size, "by", currentUser(r.Context()).ID)

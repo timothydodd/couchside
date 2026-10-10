@@ -5,6 +5,14 @@ image:
 
 imagePullSecrets: []
 
+# Extra pod metadata (a log agent, a backup operator). Don't set
+# app.kubernetes.io/name or /instance in podLabels: the selector uses them.
+podAnnotations: {}
+podLabels: {}
+# Keeps the server (and its recordings) ahead of batch pods when the node is
+# short of resources; "" uses the cluster's default.
+priorityClassName: ""
+
 # TMDB (The Movie Database) is the main metadata source: titles, plots,
 # posters, backdrops and episode names. Release images carry Couchside's own
 # key, so it works with nothing set. To use your own key instead, put it in a
@@ -15,7 +23,8 @@ tmdb:
   existingSecretKey: tmdb-api-key
 
 # OMDb API key (free at https://www.omdbapi.com/apikey.aspx): an optional
-# second source for titles TMDB can't place.
+# second source for titles TMDB can't place. Its data is CC BY-NC: not for
+# commercial use.
 # Prefer existingSecret so the key never lands in a values file.
 omdb:
   apiKey: ""
@@ -30,6 +39,11 @@ omdb:
 #   kubectl exec -it deploy/couchside -- couchside reset-password -admin <name>
 auth:
   enabled: false
+  # An Ingress puts Couchside where people outside your home may reach it, so
+  # the chart refuses ingress.enabled=true unless auth.enabled is true too.
+  # For an ingress only your LAN can reach, allowOpenIngress: true keeps
+  # passwordless sign-in.
+  allowOpenIngress: false
   # Reverse proxies whose X-Forwarded-For / X-Forwarded-Proto Couchside
   # believes (CIDRs or addresses). Behind the ingress, that's the ingress
   # controller's pods: on k3s with Traefik, the pod network, 10.42.0.0/16.
@@ -78,21 +92,31 @@ config:
   encodeWorkers: 1      # background "optimize" encodes at once
   optimizeHeight: 1080
 
-# Hardware transcoding. vaapi = Intel/AMD iGPU via /dev/dri (drivers for Intel
-# are in the image); qsv and nvenc need an ffmpeg built with them. Anything
-# unusable falls back to software with a warning in the log.
+# Hardware transcoding. vaapi = an Intel or AMD GPU through /dev/dri (Intel's
+# drivers are in the image). The stock image's ffmpeg has no NVENC or Quick
+# Sync: for those, build an image whose ffmpeg has them and set
+# image.repository; mode is passed straight through as COUCHSIDE_HWACCEL.
+# Anything unusable falls back to software with a warning in the log.
 hwaccel:
-  mode: none            # none | vaapi | qsv | nvenc
+  mode: none            # none | vaapi
   # The VAAPI render node, when the node has more than one GPU
   # (COUCHSIDE_VAAPI_DEVICE); "" uses /dev/dri/renderD128.
   device: ""
   dri:
-    enabled: false      # mount /dev/dri from the node
-    # Host gids owning /dev/dri/renderD128 and card* (ls -ln /dev/dri on the node)
+    # How the pod gets the GPU. Pick one:
+    #  - resource: a device plugin hands it to an unprivileged pod. Intel's
+    #    (github.com/intel/intel-device-plugins-for-kubernetes): gpu.intel.com/i915;
+    #    generic-device-plugin with a "dri" device: squat.ai/dri.
+    #  - enabled + privileged: /dev/dri mounted from the node. containerd only
+    #    lets a privileged container open it, which turns off most of the
+    #    pod's hardening (it still runs as 1000:1000). The last resort.
+    resource: ""        # e.g. gpu.intel.com/i915
+    resourceCount: 1
+    enabled: false      # mount /dev/dri from the node (needs privileged: true)
+    privileged: false
+    # Host gids owning /dev/dri/renderD128 and card* (ls -ln /dev/dri on the
+    # node), so the unprivileged user can open the device either way.
     groups: []
-    # containerd blocks GPU device access for unprivileged pods unless a GPU
-    # device plugin is installed; set false if you use Intel's device plugin.
-    privileged: true
 
 # Where your media lives, mounted at /media; libraries are added in the UI as
 # folders under /media (e.g. /media/Movies).
@@ -117,7 +141,9 @@ persistence:
     size: 1Gi
     storageClass: ""    # "" = cluster default (local-path on k3s)
     existingClaim: ""
-  # Artwork, stills, subtitles, optimized copies and live TV segments.
+  # Artwork, stills, subtitles, preview thumbnails, optimized copies and
+  # live TV segments. 20Gi suits a mid-size library; optimized copies are
+  # full MP4s (a few GB each), so size it for how much you optimize.
   cache:
     size: 20Gi
     storageClass: ""
@@ -132,8 +158,11 @@ persistence:
     existingClaim: ""
 
 service:
-  type: ClusterIP
+  type: ClusterIP        # ClusterIP | NodePort | LoadBalancer
   port: 8080
+  # With type NodePort: a fixed port (30000-32767), so TV apps keep the same
+  # address; "" lets Kubernetes pick.
+  nodePort: ""
 
 ingress:
   enabled: false
@@ -144,6 +173,11 @@ ingress:
     enabled: false
     secretName: couchside-tls
     clusterIssuer: ""   # e.g. letsencrypt; adds the cert-manager annotation
+
+# A soft limit for the server's own Go heap (GOMEMLIMIT): near it the garbage
+# collector works harder and hands memory back, leaving room under the pod's
+# limit for ffmpeg and comskip, which aren't counted. "" leaves it unset.
+goMemLimit: 1GiB
 
 resources:
   requests:
@@ -165,17 +199,25 @@ podSecurityContext:
   seccompProfile:
     type: RuntimeDefault
 # The container drops every capability and can't gain privileges (the image
-# runs as 1000:1000). With hwaccel.dri.privileged it runs privileged instead.
+# runs as 1000:1000). With hwaccel.dri.privileged it is privileged (to open
+# /dev/dri from the node) but still runs as 1000:1000 with no capabilities asked for.
 
 # Mount the container's root filesystem read-only. /tmp (and /recordings when
 # it isn't persisted) become emptyDir volumes.
 readOnlyRootFilesystem: false
 
 # Liveness only starts once the server has answered. Hardware detection and
-# database migrations run before it listens, so allow a few minutes.
+# database migrations run before it listens, so allow a few minutes. The
+# startup and readiness probes ask the database (/healthz); liveness only asks
+# whether the process answers (/livez).
 startupProbe:
   periodSeconds: 5
   failureThreshold: 60
+
+# How long a stopping pod has to finish requests, leave its job for the next
+# start and close the database. A recording in progress is cut either way and
+# resumed by the next pod.
+terminationGracePeriodSeconds: 60
 
 nodeSelector: {}
 tolerations: []

@@ -302,6 +302,7 @@ func (m *liveManager) liveArgs(input []string, spec Spec, hwDecode bool, dir str
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
 	var vIn, vOut []string
 	if !spec.CopyVideo {
+		args = append(args, transcode.ThreadArgs(m.enc.Threads)...)
 		// A chosen height is a cap (the picture is never scaled up); none
 		// keeps the broadcast's size. The bitrate is for the smaller of the
 		// cap and what the broadcast is (or probably is, from the HD flag).

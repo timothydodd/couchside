@@ -67,6 +67,9 @@ func TestServerSettings(t *testing.T) {
 	if c := web.do("PUT", "/api/settings/server", map[string]any{"COUCHSIDE_AUTH": "false"}, nil); c != 400 {
 		t.Fatalf("COUCHSIDE_AUTH from the web = %d", c)
 	}
+	if c := web.do("PUT", "/api/settings/server", map[string]any{"COUCHSIDE_FFMPEG": "/bin/sh"}, nil); c != 400 {
+		t.Fatalf("COUCHSIDE_FFMPEG from the web = %d", c)
+	}
 	if c := web.do("PUT", "/api/settings/server", map[string]any{"COUCHSIDE_MEDIA_ROOT": t.TempDir()}, nil); c != 400 {
 		t.Fatalf("media folder as a setting = %d (media locations have their own list)", c)
 	}

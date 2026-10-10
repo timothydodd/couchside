@@ -64,6 +64,7 @@ func (s *Server) createLibrary(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	s.dropCounts()
 	writeJSON(w, http.StatusCreated, lib)
 }
 
@@ -200,10 +201,13 @@ func (s *Server) deleteLibrary(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	if err := s.db.DeleteLibrary(r.Context(), id); err != nil {
+	pr, err := s.db.DeleteLibrary(r.Context(), id)
+	if err != nil {
 		writeErr(w, err)
 		return
 	}
+	worker.TidyCache(s.cfg.CacheDir, pr)
+	s.dropCounts()
 	w.WriteHeader(http.StatusNoContent)
 }
 

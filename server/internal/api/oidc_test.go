@@ -199,3 +199,15 @@ func TestDeviceCodeSignIn(t *testing.T) {
 		t.Fatalf("a second session from one code = %d", code)
 	}
 }
+
+func TestOnHomeNetwork(t *testing.T) {
+	for host, want := range map[string]bool{
+		"127.0.0.1": true, "192.168.1.5": true, "10.0.0.2": true, "localhost": true, "authentik": true,
+		"auth.home.lan": true, "sso.home.arpa": true, "idp.local": true,
+		"auth.example.com": false, "203.0.113.4": false, "accounts.google.com": false,
+	} {
+		if got := onHomeNetwork(host); got != want {
+			t.Errorf("onHomeNetwork(%q) = %v, want %v", host, got, want)
+		}
+	}
+}

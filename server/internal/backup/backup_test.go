@@ -5,10 +5,13 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/timothydodd/couchside/internal/db"
+	"github.com/timothydodd/couchside/internal/diskfree"
+	"github.com/timothydodd/couchside/internal/usererr"
 )
 
 func openData(t *testing.T, dir string) *db.DB {
@@ -149,5 +152,23 @@ func TestPruneAndPath(t *testing.T) {
 		if _, err := Path(dir, bad); err == nil {
 			t.Fatalf("Path accepted %q", bad)
 		}
+	}
+}
+
+// A backup that wouldn't fit says so, for the admin to read, instead of
+// filling the disk the database is on.
+func TestBackupRefusesWithoutFreeSpace(t *testing.T) {
+	dir := t.TempDir()
+	d := openData(t, dir)
+	t.Cleanup(func() { d.Close() })
+	old := freeSpace
+	freeSpace = func(string) (diskfree.Space, error) { return diskfree.Space{Free: 10, Total: 100}, nil }
+	t.Cleanup(func() { freeSpace = old })
+	_, err := Create(context.Background(), d, dir, Manual)
+	if err == nil || !usererr.Is(err) || !strings.Contains(err.Error(), "not enough free space") {
+		t.Fatalf("Create = %v, want a user error about free space", err)
+	}
+	if list, _ := List(dir); len(list) != 0 {
+		t.Fatalf("a backup was made anyway: %v", list)
 	}
 }

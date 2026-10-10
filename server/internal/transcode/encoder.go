@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -32,6 +33,19 @@ type Encoder struct {
 	// Note says why no GPU is used, when one was asked for (or "auto" tried
 	// some): each encoder tried and ffmpeg's reason it failed.
 	Note string
+	// Threads caps each playback or live TV ffmpeg that converts video
+	// (config.LiveThreads); 0 lets ffmpeg take every core.
+	Threads int
+}
+
+// ThreadArgs is ffmpeg's -threads for n, nothing for 0. As a global option
+// (before -i) it caps the decoder as well as the encoder, which is what keeps
+// a 4K software decode from starving a second stream.
+func ThreadArgs(n int) []string {
+	if n <= 0 {
+		return nil
+	}
+	return []string{"-threads", strconv.Itoa(n)}
 }
 
 // HWDecodable lists codecs worth handing to the GPU's decoder. Anything it
