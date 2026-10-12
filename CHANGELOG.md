@@ -4,6 +4,16 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## 0.19.6
+
+### Fixed
+
+- Opening a title from a list for the first time no longer stalls for about
+  four seconds and logs "Transition was aborted because of timeout in DOM
+  update". The page change waited for the title's poster by asking for an
+  animation frame, which the browser doesn't give while a view transition
+  is updating the page.
+
 ## 0.19.5
 
 ### New
