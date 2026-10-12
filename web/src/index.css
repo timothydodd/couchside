@@ -779,8 +779,7 @@ video::cue {
 
 /* Page changes (lib/transition.ts): <main> is its own layer, so the sidebar
    holds still while the page slides the way you're going (data-nav on
-   <html>: forward into a title, back out, or a swap between sections), and a
-   clicked poster (view-transition-name "hero") grows into the next page's. */
+   <html>: forward into a title, back out, or a swap between sections). */
 .page-view {
   view-transition-name: page;
 }
@@ -843,15 +842,6 @@ video::cue {
 }
 [data-nav="back"]::view-transition-new(page) {
   animation: page-in-left 300ms cubic-bezier(0.2, 0, 0, 1) 40ms both;
-}
-::view-transition-group(hero) {
-  animation-duration: 380ms;
-  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
-}
-::view-transition-old(hero),
-::view-transition-new(hero) {
-  height: 100%;
-  animation-duration: 380ms;
 }
 
 @media (prefers-reduced-motion: reduce) {
