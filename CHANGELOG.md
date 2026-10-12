@@ -4,6 +4,13 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## 0.19.7
+
+### Changed
+
+- Opening a title no longer grows the clicked poster into the title page's.
+  Pages still slide in going forward and back, and fade between sections.
+
 ## 0.19.6
 
 ### Fixed
