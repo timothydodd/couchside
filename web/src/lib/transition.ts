@@ -47,7 +47,10 @@ export function transition(update: () => void, kind: NavKind) {
     to = await findHero(id, from?.hasAttribute("data-hero-page") ? HERO_WAIT_BACK_MS : HERO_WAIT_MS);
     if (to) to.style.viewTransitionName = "hero";
   });
-  void t.finished.finally(() => {
+  // A rejected transition (skipped, or the update ran too long) still applied
+  // the route change; there's nothing to report.
+  t.ready.catch(() => {});
+  void t.finished.catch(() => {}).finally(() => {
     if (to) to.style.viewTransitionName = "";
     delete root.dataset.nav;
   });
@@ -72,7 +75,9 @@ async function findHero(id: string, waitMs: number): Promise<HTMLElement | null>
       return ok ? el : null;
     }
     if (performance.now() >= deadline) return null;
-    await new Promise(requestAnimationFrame);
+    // Not requestAnimationFrame: the browser holds back frames while this
+    // callback runs, so a frame never comes and the transition times out.
+    await wait(16);
   }
 }
 
