@@ -4,6 +4,15 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## 0.19.10
+
+### Fixed
+
+- The very end of a converted stream no longer fails with a server error.
+  When a file's last moment was a fraction of a second of sound after the
+  last picture, asking for it started a conversion with nothing to convert,
+  which the GPU encoder refused; the stream now just ends there.
+
 ## 0.19.9
 
 ### Fixed
