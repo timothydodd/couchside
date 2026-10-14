@@ -1,9 +1,12 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -18,6 +21,12 @@ import (
 // own lines about the same stream.
 
 const (
+	// Playback-test reports (the LG debug build's playtest_*) are also kept
+	// in this file in the data folder: the log goes with the pod on an
+	// upgrade, and a run lasts 20 minutes. It rolls to playtest.jsonl.1 here.
+	playtestFile = "playtest.jsonl"
+	playtestMax  = 5 << 20
+
 	reportBody    = 16 << 10 // bytes
 	reportKeys    = 40       // details kept per report
 	reportValue   = 300      // characters kept per detail
@@ -98,7 +107,40 @@ func (s *Server) clientLog(w http.ResponseWriter, r *http.Request) {
 		attrs = append(attrs, clip(oneLine(k), 40), clip(oneLine(detailText(in.Details[k])), reportValue))
 	}
 	slog.Log(r.Context(), level, "client report", attrs...)
+	if strings.HasPrefix(in.Event, "playtest_") {
+		s.keepPlaytest(attrs, level)
+	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+var playtestMu sync.Mutex
+
+// keepPlaytest appends a playback-test report, as one JSON object of the
+// log line's keys, to the data folder's playtest.jsonl.
+func (s *Server) keepPlaytest(attrs []any, level slog.Level) {
+	rec := map[string]any{"time": time.Now().Format(time.RFC3339Nano), "level": level.String()}
+	for i := 0; i+1 < len(attrs); i += 2 {
+		if k, ok := attrs[i].(string); ok {
+			rec[k] = attrs[i+1]
+		}
+	}
+	line, err := json.Marshal(rec)
+	if err != nil {
+		return
+	}
+	path := filepath.Join(s.cfg.DataDir, playtestFile)
+	playtestMu.Lock()
+	defer playtestMu.Unlock()
+	if fi, err := os.Stat(path); err == nil && fi.Size() > playtestMax {
+		_ = os.Rename(path, path+".1")
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		slog.Warn("couldn't keep a playback-test report", "err", err)
+		return
+	}
+	defer f.Close()
+	_, _ = f.Write(append(line, '\n'))
 }
 
 // detailText is a detail's value as text: nested objects (a Roku player's

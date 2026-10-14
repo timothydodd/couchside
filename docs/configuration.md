@@ -35,7 +35,7 @@ locations too, fixed by the environment.
 | --- | --- | --- |
 | `COUCHSIDE_MEDIA_ROOT` | none | Media locations from the environment (containers), one or more separated like `PATH` (`:`, or `;` on Windows); more can be added in the web app |
 | `COUCHSIDE_ADDR` | `:8080` | Listen address |
-| `COUCHSIDE_DATA_DIR` | `./data` | SQLite database, plus `auth.key` (signs sessions) and `server.id`: back up all three. The Windows service defaults to `%ProgramData%\Couchside\data` |
+| `COUCHSIDE_DATA_DIR` | `./data` | SQLite database, plus `auth.key` (signs sessions) and `server.id`: back up all three. Playback-test results from the LG app's debug build go to `playtest.jsonl` here. The Windows service defaults to `%ProgramData%\Couchside\data` |
 | `COUCHSIDE_CONFIG` | see above | Settings file to read |
 | `COUCHSIDE_CACHE_DIR` | `$DATA_DIR/cache` | Artwork, stills, subtitles, optimized copies |
 | `COUCHSIDE_WEB_DIR` | none | Serve the UI from this folder instead of the one built into release binaries |

@@ -2,8 +2,10 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"log/slog"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -65,6 +67,48 @@ func TestClientLog(t *testing.T) {
 		if !strings.Contains(line, want) {
 			t.Errorf("log line %q lacks %q", line, want)
 		}
+	}
+}
+
+// Playback-test reports are also kept in the data folder, one JSON object a
+// line, so a run outlives the pod's log; other reports aren't.
+func TestPlaytestReportsKept(t *testing.T) {
+	dir := t.TempDir()
+	d, err := db.Open(filepath.Join(dir, "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	s, err := New(d, config.Config{DataDir: dir}, nil, nil, nil, nil, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	tv := newClient(t, ts.URL)
+	if c := tv.do("POST", "/api/auth/welcome", map[string]string{"name": "Tim"}, nil); c != 200 {
+		t.Fatalf("welcome = %d", c)
+	}
+	for _, ev := range []string{"playtest_result", "playback_started"} {
+		r := map[string]any{"level": "warn", "event": ev, "message": "ok clip", "details": map[string]any{"runId": "r1", "n": 3}}
+		if c := tv.do("POST", "/api/client/log", r, nil); c != 204 {
+			t.Fatalf("%s = %d", ev, c)
+		}
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "playtest.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("kept %d lines, want only the playtest one: %s", len(lines), b)
+	}
+	var rec map[string]any
+	if err := json.Unmarshal([]byte(lines[0]), &rec); err != nil {
+		t.Fatal(err)
+	}
+	if rec["event"] != "playtest_result" || rec["runId"] != "r1" || rec["n"] != "3" || rec["level"] != "WARN" {
+		t.Fatalf("kept %v", rec)
 	}
 }
 
