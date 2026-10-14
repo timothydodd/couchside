@@ -392,6 +392,26 @@ func TestMissingTrimmedSegmentRestartsFfmpeg(t *testing.T) {
 	}
 }
 
+// A last segment that's only a sliver past the last frame ends the stream
+// rather than starting ffmpeg where there's no picture (seen as a 500 from
+// h264_vaapi at the end of every 60.04s test clip).
+func TestEndSliverIsPastTheEnd(t *testing.T) {
+	m, pids := newTestManager(t, 2)
+	s, err := m.Create(context.Background(), Request{FileID: 1, Path: "/x.mkv", Duration: 60.04, BurnSubtitle: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := s.segCount(); n != 16 {
+		t.Fatalf("segments = %d, want 16 (the last 0.04s long)", n)
+	}
+	if _, err := m.Segment(context.Background(), s.ID, 15); !errors.Is(err, ErrPastEnd) {
+		t.Fatalf("segment 15: %v, want ErrPastEnd", err)
+	}
+	if started(pids) != 0 {
+		t.Fatalf("runs = %d, want none for the sliver", started(pids))
+	}
+}
+
 // A remux is paused closer to the player than a transcode.
 func TestRemuxRunsLessFarAhead(t *testing.T) {
 	m, _ := newTestManager(t, 4)

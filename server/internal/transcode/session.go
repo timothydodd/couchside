@@ -41,6 +41,9 @@ const (
 	evictAfter  = 20 * time.Second // at the limit, sessions idle this long give up their slot
 	stderrKeep  = 4096
 	seekPreroll = 10.0 // seconds decoded before a restart point and trimmed (see start)
+	// A last segment shorter than this is past the last picture: a file's
+	// duration runs a few hundredths past its last frame on the sound.
+	endSliver = 0.5
 )
 
 var (
@@ -413,6 +416,12 @@ func (m *Manager) Segment(ctx context.Context, id string, n int) (string, error)
 		s.lastAccess, s.lastReq = time.Now(), n
 		s.mu.Unlock()
 		return path, nil
+	}
+	// A run started in that sliver has no picture to encode (the GPU
+	// encoders fail to open, and the player got a 500 at the very end):
+	// the stream has simply ended.
+	if n == s.segCount()-1 && s.duration-float64(n*SegDur) < endSliver {
+		return "", ErrPastEnd
 	}
 	if err := m.ensureRun(s, n); err != nil {
 		return "", err
