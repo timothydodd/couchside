@@ -478,11 +478,18 @@ func BitrateFor(height int) int {
 }
 
 // OutputHeight clamps a requested height to the source, capped at 1080p
-// (H.264 4K is heavy to encode and few browsers need it).
-func OutputHeight(requested, src int) int {
+// (H.264 4K is heavy to encode and few browsers need it). The source counts
+// as tall as it would be in a 16:9 frame: a 1920×818 scope film is a 1080p
+// picture, so Auto gives it 1080p (fitSize's 1920×1080 box, which it
+// fits), not an 818-high box that shrank it to 1455×620 at 720p's bitrate.
+func OutputHeight(requested, srcW, srcH int) int {
 	h := requested
 	if h <= 0 || h > 1080 {
 		h = 1080
+	}
+	src := srcH
+	if srcW > 0 {
+		src = max(src, (srcW*9+15)/16)
 	}
 	if src > 0 && src < h {
 		h = src

@@ -71,7 +71,7 @@ func (w *Worker) optimize(ctx context.Context, jobID, fileID int64) error {
 	// Already-browsable H.264 that just sits in the wrong container (MKV) or
 	// has the wrong audio only needs a remux: fast and lossless.
 	copyVideo := info.VideoCodec == "h264" && info.EightBit420() && !info.HDR() && (srcH == 0 || srcH <= w.cfg.OptimizeHeight)
-	height := transcode.OutputHeight(w.cfg.OptimizeHeight, srcH)
+	height := transcode.OutputHeight(w.cfg.OptimizeHeight, srcW, srcH)
 
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-y"}
 	args = append(args, transcode.ThreadArgs(w.cfg.JobThreads())...)

@@ -174,3 +174,31 @@ func TestFitSize(t *testing.T) {
 		t.Errorf("cpu chain = %q", chain)
 	}
 }
+
+func TestOutputHeight(t *testing.T) {
+	cases := []struct {
+		req, srcW, srcH, want int
+	}{
+		{0, 1920, 818, 1080}, // a scope film is a 1080p picture: kept whole, not boxed at 818
+		{0, 1920, 1080, 1080},
+		{0, 1440, 1080, 1080}, // 4:3 at full height
+		{0, 3840, 1608, 1080}, // 4K is capped
+		{720, 1920, 818, 720},
+		{0, 1280, 544, 720}, // 720p scope
+		{0, 720, 306, 405},  // small: as tall as its 16:9 frame, so never shrunk
+		{0, 0, 576, 576},    // width unknown: the height as before
+		{0, 0, 0, 1080},
+		{2160, 3840, 2160, 1080},
+	}
+	for _, c := range cases {
+		if got := OutputHeight(c.req, c.srcW, c.srcH); got != c.want {
+			t.Errorf("OutputHeight(%d, %dx%d) = %d, want %d", c.req, c.srcW, c.srcH, got, c.want)
+		}
+		// The 1080p box takes a 1920-wide scope film as it is.
+		if c.srcW == 1920 && c.srcH == 818 && c.req == 0 {
+			if _, _, fit := fitSize(VideoOpts{MaxHeight: OutputHeight(c.req, c.srcW, c.srcH), SrcWidth: c.srcW, SrcHeight: c.srcH}); fit {
+				t.Error("a 1920x818 film was scaled at Auto")
+			}
+		}
+	}
+}

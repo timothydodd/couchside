@@ -269,7 +269,7 @@ func (m *Manager) Create(ctx context.Context, r Request) (*Session, error) {
 		s.Mode, s.Height, s.HW = "remux", srcH, ""
 	} else {
 		s.Mode = "transcode"
-		s.Height = OutputHeight(r.Height, srcH)
+		s.Height = OutputHeight(r.Height, srcW, srcH)
 		s.BitrateK = BitrateFor(s.Height)
 		if r.BitrateK > 0 {
 			s.BitrateK = min(max(r.BitrateK, 300), 40000)
