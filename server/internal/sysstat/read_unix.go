@@ -42,6 +42,12 @@ func take(inContainer bool) (*sample, bool) {
 			s.procs[pid] = p
 		}
 	}
+	if b, err := os.ReadFile("/proc/net/dev"); err == nil {
+		s.net = ParseNetDev(b)
+	}
+	if b, err := os.ReadFile("/proc/self/mountstats"); err == nil {
+		s.nfs = ParseMountstats(b)
+	}
 	return s, true
 }
 

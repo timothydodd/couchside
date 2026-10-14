@@ -18,6 +18,9 @@ type Point struct {
 	EncMem    uint64  `json:"encMem"`
 	Encoders  int     `json:"encoders"` // ffmpeg/comskip processes
 	Streams   int     `json:"streams"`  // HLS and live TV sessions
+	NetRx     float64 `json:"netRx"`    // bytes/s
+	NetTx     float64 `json:"netTx"`
+	NFSRead   float64 `json:"nfsRead"`
 }
 
 const (
@@ -38,6 +41,7 @@ type History struct {
 	cores   float64
 	memMax  uint64
 	scope   string
+	nfs     bool // an NFS mount was seen, so the chart has a line for it
 }
 
 // NewHistory records with its own Sampler, so it doesn't change what Read
@@ -64,6 +68,7 @@ func (h *History) Run(ctx context.Context) {
 			p := Point{
 				T: now.Unix(), CPU: st.CPUPercent, ServerCPU: st.Server.CPUPercent, EncCPU: st.Encoders.CPUPercent,
 				Mem: st.MemUsed, ServerMem: st.Server.RSS, EncMem: st.Encoders.RSS, Encoders: st.Encoders.Count,
+				NetRx: st.NetRx, NetTx: st.NetTx, NFSRead: st.NFSRead,
 			}
 			if h.streams != nil {
 				p.Streams = h.streams()
@@ -77,6 +82,7 @@ func (h *History) add(p Point, st Stats) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.cores, h.memMax, h.scope = st.Cores, st.MemTotal, st.Scope
+	h.nfs = h.nfs || st.NFS
 	if n := len(h.pending); n > 0 && h.pending[n-1].T/60 != p.T/60 {
 		h.coarse = keepSince(append(h.coarse, average(h.pending)), p.T-int64(coarseKeep/time.Second))
 		h.pending = h.pending[:0]
@@ -91,6 +97,7 @@ type Window struct {
 	Cores    float64 `json:"cores"`
 	MemTotal uint64  `json:"memTotal"`
 	Scope    string  `json:"scope"`
+	NFS      bool    `json:"nfs"` // nfsRead means something
 	Points   []Point `json:"points"`
 }
 
@@ -100,7 +107,7 @@ func (h *History) Points(d time.Duration, now time.Time) Window {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	since := now.Add(-d).Unix()
-	w := Window{Cores: h.cores, MemTotal: h.memMax, Scope: h.scope, Points: []Point{}}
+	w := Window{Cores: h.cores, MemTotal: h.memMax, Scope: h.scope, NFS: h.nfs, Points: []Point{}}
 	if d <= fineKeep {
 		w.Every = int(Every / time.Second)
 		w.Points = append(w.Points, keepSince(h.fine, since)...)
@@ -136,10 +143,14 @@ func average(ps []Point) Point {
 		emem += float64(p.EncMem)
 		a.Encoders = max(a.Encoders, p.Encoders)
 		a.Streams = max(a.Streams, p.Streams)
+		a.NetRx += p.NetRx
+		a.NetTx += p.NetTx
+		a.NFSRead += p.NFSRead
 	}
 	n := float64(len(ps))
 	a.T = ps[0].T / 60 * 60
 	a.CPU, a.ServerCPU, a.EncCPU = a.CPU/n, a.ServerCPU/n, a.EncCPU/n
+	a.NetRx, a.NetTx, a.NFSRead = a.NetRx/n, a.NetTx/n, a.NFSRead/n
 	a.Mem, a.ServerMem, a.EncMem = uint64(mem/n), uint64(smem/n), uint64(emem/n)
 	return a
 }

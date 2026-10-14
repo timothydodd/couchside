@@ -2,7 +2,7 @@ import { useState } from "react";
 import LineChart, { type ChartSeries } from "../LineChart";
 import { ErrorNote, Segmented } from "../ui";
 import { useApi } from "../../lib/api";
-import { fmtBytes } from "../../lib/format";
+import { fmtBytes, fmtRate } from "../../lib/format";
 import type { HistoryPoint, HistoryWindow } from "../../lib/types";
 
 const RANGES = [
@@ -54,6 +54,16 @@ export default function SystemHistory() {
     { label: "Encoder processes", color: ENCODE, value: (p) => p.encoders },
   ];
   const workMax = Math.max(4, ...pts.map((p) => Math.max(p.streams, p.encoders)));
+  // Sent is what reaches the players; read from NFS is what the library's
+  // storage delivers. A stream that stalls while both stay low is held up
+  // past the server (the player's link or decoder).
+  const net: ChartSeries<HistoryPoint>[] = [
+    { label: "Sent", color: SERVER, value: (p) => p.netTx, area: true },
+    { label: "Received", color: TOTAL, value: (p) => p.netRx },
+    ...(data?.nfs ? [{ label: "Read from NFS", color: ENCODE, value: (p: HistoryPoint) => p.nfsRead }] : []),
+  ];
+  const netPeak = Math.max(0, ...pts.map((p) => Math.max(p.netTx, p.netRx, p.nfsRead)));
+  const netMax = netPeak > 0 ? niceMax(netPeak * 1.1, Infinity) : 1 << 20;
   // Scale to what was used, so a quiet server isn't a flat line along the bottom.
   const cpuMax = niceMax(Math.max(5, ...pts.map((p) => p.cpu)) * 1.1, 100);
   const memMax = niceMax(Math.max(...pts.map((p) => p.mem)) * 1.1, data?.memTotal || 1);
@@ -76,7 +86,8 @@ export default function SystemHistory() {
       )}
       {!data ? null : pts.length < 2 ? (
         <p className="py-6 text-center text-xs text-content-muted">
-          Collecting readings… the first points show up within a few seconds. (CPU and memory are measured on Linux and Windows.)
+          Collecting readings… the first points show up within a few seconds. (CPU and memory are measured on Linux and Windows, network traffic on
+          Linux.)
         </p>
       ) : (
         <div className="flex flex-col gap-6">
@@ -88,6 +99,15 @@ export default function SystemHistory() {
           </ChartBlock>
           <ChartBlock title="Transcoding" sub="streams the server is producing, and ffmpeg/comskip running" series={work} last={last} format={count}>
             <LineChart label="Streams over time" points={pts} series={work} from={from} to={to} max={workMax} every={data.every} format={count} height={90} />
+          </ChartBlock>
+          <ChartBlock
+            title="Network"
+            sub={data.nfs ? "what the server sends to players, and reads from the library over NFS" : "what the server sends to players and receives"}
+            series={net}
+            last={last}
+            format={fmtRate}
+          >
+            <LineChart label="Network over time" points={pts} series={net} from={from} to={to} max={netMax} every={data.every} format={fmtRate} />
           </ChartBlock>
         </div>
       )}

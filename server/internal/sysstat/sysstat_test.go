@@ -20,6 +20,31 @@ func TestParsers(t *testing.T) {
 	if v, ok := ParsePidStat([]byte(stat)); !ok || v != 3 {
 		t.Errorf("ParsePidStat = %v %v", v, ok)
 	}
+	netdev := "Inter-|   Receive                                                |  Transmit\n" +
+		" face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed\n" +
+		"    lo:  290176    2266    0    0    0     0          0         0   290176    2266    0    0    0     0       0          0\n" +
+		"  eth0: 970980008  825370    0    0    0     0          0       161 48948954  299441    0    0    0     0       0          0\n" +
+		"  eth1:    1000       1    0    0    0     0          0         0    2000       1    0    0    0     0       0          0\n"
+	if c := ParseNetDev([]byte(netdev)); !c.ok || c.in != 970981008 || c.out != 48950954 {
+		t.Errorf("ParseNetDev = %+v", c)
+	}
+	if c := ParseNetDev([]byte("Inter-|\n face |\n")); c.ok {
+		t.Errorf("ParseNetDev of no interfaces = %+v", c)
+	}
+	mounts := "device proc mounted on /proc with fstype proc\n" +
+		"device 10.0.0.5:/media mounted on /media with fstype nfs4 statvers=1.1\n" +
+		"\topts:\trw,vers=4.2\n" +
+		"\tbytes:\t5000 10 0 0 4000 20 1 2\n" +
+		"device 10.0.0.6:/tv mounted on /tv with fstype nfs statvers=1.1\n" +
+		"\tbytes:\t100 0 0 0 60 0 0 0\n" +
+		"device /dev/sda1 mounted on /data with fstype ext4\n" +
+		"\tbytes:\t1 1 1 1 1 1 1 1\n"
+	if c := ParseMountstats([]byte(mounts)); !c.ok || c.in != 4060 || c.out != 20 {
+		t.Errorf("ParseMountstats = %+v", c)
+	}
+	if c := ParseMountstats([]byte("device /dev/sda1 mounted on /data with fstype ext4\n")); c.ok {
+		t.Errorf("ParseMountstats without NFS = %+v", c)
+	}
 }
 
 func TestRead(t *testing.T) {

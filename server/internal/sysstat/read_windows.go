@@ -11,7 +11,8 @@ import (
 
 // Windows: the machine's CPU from GetSystemTimes, memory from
 // GlobalMemoryStatusEx, and Couchside's and its encoders' CPU and working
-// set from a process snapshot. There are no containers to look inside.
+// set from a process snapshot. There are no containers to look inside, and
+// network and NFS traffic aren't counted (the charts leave them at 0).
 
 var (
 	kernel32           = windows.NewLazySystemDLL("kernel32.dll")

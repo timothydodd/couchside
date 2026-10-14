@@ -2,7 +2,9 @@
 // container's (cgroup v2) when Couchside runs in one, otherwise the host's,
 // plus Couchside's own process and its ffmpeg/comskip children. Linux reads
 // /proc and /sys (read_unix.go), Windows asks the system (read_windows.go);
-// elsewhere Available is false.
+// elsewhere Available is false. Linux also counts network traffic and what
+// is read over NFS, so the System page shows where a stuttering stream is
+// held up: the link to the player, or the library's storage.
 package sysstat
 
 import (
@@ -25,6 +27,10 @@ type Stats struct {
 	MemTotal   uint64  `json:"memTotal"`
 	Server     Procs   `json:"server"`   // the Couchside process
 	Encoders   Procs   `json:"encoders"` // ffmpeg and comskip processes
+	NetRx      float64 `json:"netRx"`    // bytes/s received on every interface but loopback (Linux)
+	NetTx      float64 `json:"netTx"`    // bytes/s sent
+	NFS        bool    `json:"nfs"`      // an NFS mount is visible (Linux)
+	NFSRead    float64 `json:"nfsRead"`  // bytes/s read from NFS servers
 }
 
 // Procs is a group of processes.
@@ -49,6 +55,14 @@ type sample struct {
 	at    time.Time
 	busy  float64            // CPU seconds used by the scope
 	procs map[int]procSample // per pid
+	net   counters           // bytes received and sent, when the OS tells us
+	nfs   counters           // bytes read from NFS servers (in), when there's a mount
+}
+
+// counters is a pair of running byte totals; ok is false when they couldn't be read.
+type counters struct {
+	in, out uint64
+	ok      bool
 }
 
 type procSample struct {
@@ -111,7 +125,83 @@ func (s *Sampler) Read() Stats {
 		}
 	}
 	st.Encoders.CPUPercent = clamp(st.Encoders.CPUPercent)
+	if cur.net.ok && prev.net.ok {
+		st.NetRx, st.NetTx = rate(cur.net.in, prev.net.in, wall), rate(cur.net.out, prev.net.out, wall)
+	}
+	if cur.nfs.ok {
+		st.NFS = true
+		if prev.nfs.ok {
+			st.NFSRead = rate(cur.nfs.in, prev.nfs.in, wall)
+		}
+	}
 	return st
+}
+
+// rate is bytes per second between two counter readings (0 when the counter reset).
+func rate(cur, prev uint64, wall float64) float64 {
+	if cur < prev || wall <= 0 {
+		return 0
+	}
+	return float64(cur-prev) / wall
+}
+
+// ParseNetDev sums the bytes received and sent on every interface in
+// /proc/net/dev but loopback. In a container that's the pod's own interface;
+// on a host, bridges and virtual interfaces count too.
+func ParseNetDev(b []byte) counters {
+	var c counters
+	for _, line := range strings.Split(string(b), "\n") {
+		name, rest, found := strings.Cut(line, ":")
+		name = strings.TrimSpace(name)
+		if !found || name == "" || name == "lo" || strings.ContainsAny(name, " |") {
+			continue
+		}
+		f := strings.Fields(rest)
+		if len(f) < 9 {
+			continue
+		}
+		rx, err1 := strconv.ParseUint(f[0], 10, 64)
+		tx, err2 := strconv.ParseUint(f[8], 10, 64)
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		c.in += rx
+		c.out += tx
+		c.ok = true
+	}
+	return c
+}
+
+// ParseMountstats sums the bytes fetched from NFS servers over every NFS
+// mount in /proc/self/mountstats: the fifth number on a mount's "bytes:"
+// line (serverreadbytes), which excludes what the page cache answered. ok is
+// false when no NFS mount is visible.
+func ParseMountstats(b []byte) counters {
+	var c counters
+	nfs := false
+	for _, line := range strings.Split(string(b), "\n") {
+		if strings.HasPrefix(line, "device ") {
+			nfs = strings.Contains(line, " fstype nfs")
+			continue
+		}
+		v, found := strings.CutPrefix(strings.TrimSpace(line), "bytes:")
+		if !nfs || !found {
+			continue
+		}
+		f := strings.Fields(v)
+		if len(f) < 6 {
+			continue
+		}
+		read, err1 := strconv.ParseUint(f[4], 10, 64)
+		wrote, err2 := strconv.ParseUint(f[5], 10, 64)
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		c.in += read
+		c.out += wrote
+		c.ok = true
+	}
+	return c
 }
 
 // ParseCgroupCPU reads usage_usec from a cgroup v2 cpu.stat file, in seconds.

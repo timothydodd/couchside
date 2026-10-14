@@ -80,7 +80,10 @@ server's pages, listed under Settings in the sidebar (tabs on a phone).
   **Your account** below it changes your password and signs out devices.
 - **System:** CPU and memory right now, ffmpeg's share, and **Connected**
   (who has the app open and what they're watching); the same **over time**
-  (15 minutes to 24 hours, kept in memory since the server started); which
+  (15 minutes to 24 hours, kept in memory since the server started), with
+  network traffic and, when the library is on NFS, what's read from it (on
+  Linux), so a stuttering stream can be traced to the storage, the server or
+  the player's link; which
   encoder is in use and whether GPU decoding passed its start-up test; and
   the server's folders and version.
 - **Console:** the server's log as it happens (the last 2000 lines), filtered

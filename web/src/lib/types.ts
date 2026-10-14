@@ -306,6 +306,9 @@ export interface HistoryPoint {
   encMem: number;
   encoders: number;
   streams: number;
+  netRx: number; // bytes/s received (Linux; 0 on Windows)
+  netTx: number; // bytes/s sent
+  nfsRead: number; // bytes/s read from NFS servers, when the window says nfs
 }
 
 export interface HistoryWindow {
@@ -313,6 +316,7 @@ export interface HistoryWindow {
   cores: number;
   memTotal: number;
   scope: string;
+  nfs: boolean; // an NFS mount is visible, so nfsRead is drawn
   points: HistoryPoint[];
 }
 

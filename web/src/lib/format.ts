@@ -36,6 +36,18 @@ export function fmtBytes(n: number): string {
   return `${n.toFixed(i > 1 ? 1 : 0)} ${units[i]}`;
 }
 
+/** Bytes per second as a link speed: 10_000_000 → "80 Mbps". */
+export function fmtRate(bytesPerSec: number): string {
+  const units = ["bps", "Kbps", "Mbps", "Gbps"];
+  let n = bytesPerSec * 8;
+  let i = 0;
+  while (n >= 1000 && i < units.length - 1) {
+    n /= 1000;
+    i++;
+  }
+  return `${n.toFixed(i > 0 && n < 10 ? 1 : 0)} ${units[i]}`;
+}
+
 export function fmtResolution(w: number | null, h: number | null): string {
   if (!w || !h) return "";
   if (w >= 3200 || h >= 2000) return "4K";
