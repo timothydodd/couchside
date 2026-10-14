@@ -331,7 +331,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
     if (now - since < STALL_MIN_MS) return;
     stalls.current = [...stalls.current.filter((t) => now - t < STALL_WINDOW_MS), now];
     if (stalls.current.length < STALLS_TO_STEP) return;
-    const next = stepDown(source, info.height);
+    const next = stepDown(source, info.height, session?.height);
     if (next == null) return;
     flash(`Playback kept buffering, so it switched to ${next}p. Pick a quality in Settings to override.`);
     switchTo(() => {

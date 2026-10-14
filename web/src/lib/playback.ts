@@ -111,14 +111,18 @@ export function presetSource(id: string): Source {
   return p ? { kind: "hls", height: p.height, bitrateK: p.bitrateK } : { kind: "hls", height: 0 };
 }
 
-/** Next rung down the ladder when auto mode keeps buffering, or null at the bottom. */
-export function stepDown(current: Source, srcHeight: number | null): number | null {
+/**
+ * Next rung down the ladder when auto mode keeps buffering, or null at the
+ * bottom. playing is the height the server is sending in auto: a 4K film
+ * whose picture it copies steps to a 1080p conversion first, not 720p.
+ */
+export function stepDown(current: Source, srcHeight: number | null, playing?: number | null): number | null {
   const ladder = [1080, 720, 480];
   if (current.kind !== "hls") {
     const top = srcHeight && srcHeight < 1080 ? ladder.find((h) => h <= srcHeight) ?? 480 : 1080;
     return top;
   }
-  const h = current.height || Math.min(srcHeight ?? 1080, 1080);
+  const h = current.height || playing || Math.min(srcHeight ?? 1080, 1080);
   return ladder.find((l) => l < h) ?? null;
 }
 
