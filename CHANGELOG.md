@@ -4,6 +4,15 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## 0.19.9
+
+### Fixed
+
+- A letterboxed film converted at Auto quality keeps its full picture. A
+  1920×818 film was boxed by its own height and shrunk to 1455×620, at
+  720p's bitrate; it now converts at 1080p (1920×818, 8 Mbps). Optimized
+  copies of such films had the same fault.
+
 ## 0.19.8
 
 ### New
