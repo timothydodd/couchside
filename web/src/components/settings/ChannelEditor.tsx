@@ -192,8 +192,8 @@ export default function ChannelEditor({ channel, onClose, onSaved }: { channel?:
                 />
               </label>
               <p className="mt-2 text-xs text-content-muted">
-                An HLS playlist (.m3u8) or an MPEG-TS stream over http or https that this server can reach: an IPTV feed, a camera behind a restreamer, another
-                program's output. Couchside connects only while someone is watching and converts the picture like a tuner channel, so it counts as one
+                An HLS playlist (.m3u8) or an MPEG-TS stream over http or https that this server can reach: a camera behind a restreamer, an IPTV service you subscribe to, another
+                program's output. Add only streams you have the right to watch. Couchside connects only while someone is watching and converts the picture like a tuner channel, so it counts as one
                 conversion. The guide shows the channel's name around the clock. It can't be recorded.
               </p>
             </section>

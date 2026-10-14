@@ -2,6 +2,8 @@
 web/dist
 server/data
 deploy
+# ...except the GPL texts the image ships with ffmpeg and comskip.
+!deploy/licenses
 .git
 .github
 *.md

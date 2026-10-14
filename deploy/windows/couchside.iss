@@ -5,7 +5,7 @@
 ;   ISCC /DAppVersion=v0.13.0 /DNumVersion=0.13.0 /DStage=<folder> /DOutputDir=<folder> couchside.iss
 ;
 ; <Stage> holds couchside.exe, ffmpeg.exe, ffprobe.exe, LICENSE,
-; THIRD_PARTY_NOTICES.txt and FFMPEG.txt. Data (database, cache, logs) lives
+; THIRD_PARTY_NOTICES.txt, FFMPEG.txt and GPL-3.0.txt. Data (database, cache, logs) lives
 ; in %ProgramData%\Couchside and is kept on uninstall.
 
 #ifndef AppVersion
@@ -65,6 +65,7 @@ Source: "couchside.ico"; DestDir: "{app}"
 Source: "{#Stage}\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"
 Source: "{#Stage}\THIRD_PARTY_NOTICES.txt"; DestDir: "{app}"
 Source: "{#Stage}\FFMPEG.txt"; DestDir: "{app}"
+Source: "{#Stage}\GPL-3.0.txt"; DestDir: "{app}"
 
 [INI]
 Filename: "{app}\Couchside.url"; Section: "InternetShortcut"; Key: "URL"; String: "http://localhost:{code:GetPort}/"

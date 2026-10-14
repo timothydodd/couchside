@@ -66,6 +66,7 @@
   footer a { color: var(--text-muted); }
   footer .credits { max-width: 34rem; }
   footer img { vertical-align: middle; }
+  footer .legal { flex-basis: 100%; margin: 0; font-size: 0.8rem; }
   .policy { max-width: 46rem; padding-bottom: 56px; }
   .policy h1 { font-size: clamp(1.8rem, 5vw, 2.4rem); }
   .policy h2 { margin: 32px 0 8px; font-size: 1.15rem; }
@@ -81,7 +82,7 @@
 <main class="wrap policy">
   <a class="home" href="/"><img src="/icons/logo-256.png" alt=""><span class="brand">Couchside</span></a>
   <h1>Privacy policy</h1>
-  <p class="updated">Last updated 2 October 2026</p>
+  <p class="updated">Last updated 14 October 2026</p>
 
   <p>Couchside is software you run on your own computer or server. There is no
   Couchside service: we don't run servers for your media, you don't make an
@@ -116,7 +117,9 @@
     <li><strong>Live TV and DVR:</strong> the channel guide, scheduled and
     finished recordings, and series recording rules.</li>
     <li><strong>Logs:</strong> the server's log records sign-ins (name, IP
-    address and device) and errors. It goes wherever you run the server, and
+    address and device) and errors, plus playback reports from the TV apps:
+    how each file was played and the device's model, software version,
+    display and connection. It goes wherever you run the server, and
     the server keeps its last 2000 lines in memory so admins can read them in
     Settings &rarr; Console.</li>
   </ul>
@@ -140,6 +143,9 @@
     <li><strong>SiliconDust</strong>, only if you connect an HDHomeRun tuner:
     your tuner's own guide request to SiliconDust's guide service, and
     channel logos and programme images from its image servers.</li>
+    <li><strong>Addresses an admin adds</strong>: a single sign-on
+    provider, if one is set up, sees the sign-ins that go through it, and a
+    stream channel's address is opened while someone watches it.</li>
   </ul>
   <p>Nothing else is sent: no usage statistics, crash reports, update checks
   or information about what you watch.</p>
@@ -166,6 +172,7 @@
   <div class="wrap">
     <span class="credits">Free and open source (<a href="https://github.com/timothydodd/couchside/blob/main/LICENSE">MIT</a>).</span>
     <span><a href="/">Home</a> · <a href="/support.html">Support</a> · <a href="https://github.com/timothydodd/couchside">GitHub</a></span>
+    <p class="legal">Couchside doesn't provide or find any content: use it only with media you have the right to play. It comes with no warranty (see the license). Roku, HDHomeRun, Plex and other product names here are trademarks of their owners; Couchside isn't affiliated with or endorsed by any of them.</p>
   </div>
 </footer>
 </body>

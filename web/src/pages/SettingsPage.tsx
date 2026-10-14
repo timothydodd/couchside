@@ -99,21 +99,48 @@ export default function SettingsPage() {
   );
 }
 
-/** Version, license and the third-party notices, at the bottom of Settings. */
+/** Version, license, credits and the third-party notices, at the bottom of Settings. */
 function About() {
   const version = useStatus((s) => s.status?.version);
   const apiVersion = useStatus((s) => s.status?.apiVersion);
+  const providers = useStatus((s) => s.status?.providers);
+  const link = "hover:text-accent hover:underline";
   return (
-    <p className="px-1 text-xs text-content-muted">
-      Couchside {version && fmtVersion(version)}
-      {apiVersion ? ` (API ${apiVersion})` : ""} &middot; free, open-source software under the{" "}
-      <a href="https://github.com/timothydodd/couchside/blob/main/LICENSE" target="_blank" rel="noreferrer" className="hover:text-accent hover:underline">
-        MIT License
-      </a>{" "}
-      &middot;{" "}
-      <a href="/third-party-notices.txt" target="_blank" rel="noreferrer" className="hover:text-accent hover:underline">
-        Open-source licenses
-      </a>
-    </p>
+    <div className="flex flex-col gap-2 px-1 text-xs text-content-muted">
+      <p>
+        Couchside {version && fmtVersion(version)}
+        {apiVersion ? ` (API ${apiVersion})` : ""} &middot; free, open-source software under the{" "}
+        <a href="https://github.com/timothydodd/couchside/blob/main/LICENSE" target="_blank" rel="noreferrer" className={link}>
+          MIT License
+        </a>
+        , with no warranty &middot;{" "}
+        <a href="/third-party-notices.txt" target="_blank" rel="noreferrer" className={link}>
+          Open-source licenses
+        </a>
+      </p>
+      <p>Couchside doesn't provide or find any content. Use it only with media you have the right to play.</p>
+      {providers?.includes("tmdb") && (
+        <p className="flex items-center gap-2">
+          <a href="https://www.themoviedb.org" target="_blank" rel="noreferrer" className="shrink-0" aria-label="The Movie Database">
+            <img src="/brand/tmdb.svg" alt="TMDB" className="h-3" />
+          </a>
+          <span>This product uses the TMDB API but is not endorsed or certified by TMDB.</span>
+        </p>
+      )}
+      {providers?.includes("omdb") && (
+        <p>
+          Some details from{" "}
+          <a href="https://www.omdbapi.com" target="_blank" rel="noreferrer" className={link}>
+            OMDb
+          </a>{" "}
+          under{" "}
+          <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noreferrer" className={link}>
+            CC BY-NC 4.0
+          </a>
+          .
+        </p>
+      )}
+      <p>Product names such as Roku, HDHomeRun and Dolby Vision are trademarks of their owners, who don't endorse Couchside.</p>
+    </div>
   );
 }

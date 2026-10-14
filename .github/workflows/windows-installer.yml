@@ -133,7 +133,7 @@ jobs:
           Move-Item "jellyfin-ffmpeg-$v-src.tar.gz" ffmpeg-src/
           @"
           ffmpeg.exe and ffprobe.exe are jellyfin-ffmpeg $v (portable win64 GPL build),
-          licensed under the GNU General Public License version 3.
+          licensed under the GNU General Public License version 3 (GPL-3.0.txt beside them).
 
           Their complete source is attached to this Couchside release on GitHub as
           jellyfin-ffmpeg-$v-src.tar.gz (https://github.com/timothydodd/couchside/releases).
@@ -141,7 +141,7 @@ jobs:
           Release: https://github.com/jellyfin/jellyfin-ffmpeg/releases/tag/v$v
           Source:  https://github.com/jellyfin/jellyfin-ffmpeg/tree/v$v
           "@ | Set-Content stage/FFMPEG.txt
-          Copy-Item LICENSE, THIRD_PARTY_NOTICES.txt stage/
+          Copy-Item LICENSE, THIRD_PARTY_NOTICES.txt, deploy/licenses/GPL-3.0.txt stage/
       - name: Inno Setup
         shell: pwsh
         run: |

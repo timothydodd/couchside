@@ -59,13 +59,19 @@ media from `./media`. Zips for Linux, macOS and Windows are on the
 
 ## License and credits
 
-[MIT](LICENSE). Bundled software keeps its own licenses; see
-[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
+[MIT](LICENSE), with no warranty. Bundled software keeps its own licenses; see
+[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt). The web app shows them too,
+at the bottom of Settings.
+
+Couchside doesn't provide or find any content. Use it only with media you
+have the right to play, and share it only with people that right covers.
 
 <a href="https://www.themoviedb.org"><img src="web/public/brand/tmdb.svg" alt="TMDB" height="16"></a>
 This product uses the TMDB API but is not endorsed or certified by TMDB.
 
 Fallback metadata from [OMDb](https://www.omdbapi.com) ([CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)), optional: its data is for non-commercial use, so leave `OMDB_API_KEY` unset where Couchside is used commercially.
 Video by [FFmpeg](https://ffmpeg.org) and commercial detection by
-[Comskip](https://github.com/erikkaashoek/Comskip) (both GPL, shipped in the image).
-HDHomeRun is a trademark of SiliconDust USA Inc.; Couchside isn't affiliated with them.
+[Comskip](https://github.com/erikkaashoek/Comskip) (both GPL; FFmpeg ships in the image and the Windows installer, Comskip in the image).
+HDHomeRun is a trademark of SiliconDust USA Inc. Roku, LG, webOS, Plex, Dolby Vision and the other
+product names here are trademarks of their owners. Couchside isn't affiliated with or endorsed by any of them.
+The MIT licence covers the code, not the Couchside name or logo: a fork that's published needs its own name and icon.

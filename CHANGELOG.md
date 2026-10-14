@@ -4,6 +4,20 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## Unreleased
+
+### Changed
+
+- The About block at the bottom of Settings is shown to every profile and
+  now carries the TMDB and OMDb credits, a trademark line and a reminder
+  that Couchside provides no content: use it with media you have the right
+  to play.
+- The full GPL-2.0 and GPL-3.0 texts ship with FFmpeg and Comskip, in the
+  image (`/usr/share/licenses/couchside/`) and the Windows installer.
+- The privacy policy now covers the TV apps' playback reports and the
+  outside addresses an admin sets up (single sign-on, stream channels).
+- The stream-channel help asks for streams you have the right to watch.
+
 ## 0.19.11
 
 ### Changed

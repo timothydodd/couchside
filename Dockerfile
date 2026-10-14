@@ -91,6 +91,8 @@ RUN apk add --no-cache ffmpeg ca-certificates tzdata \
 COPY --from=comskip /comskip/comskip /usr/local/bin/comskip
 COPY --from=comskip /src/ /usr/share/src/
 COPY LICENSE THIRD_PARTY_NOTICES.txt /usr/share/licenses/couchside/
+# The GPL texts, which must travel with the ffmpeg and comskip binaries.
+COPY deploy/licenses/ /usr/share/licenses/couchside/
 # The exact ffmpeg build in this image (version, configure flags, package
 # version), so the GPL source offer in THIRD_PARTY_NOTICES.txt can be checked.
 RUN ffmpeg -hide_banner -version > /usr/share/licenses/couchside/ffmpeg-configuration.txt \
