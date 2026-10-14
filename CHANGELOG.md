@@ -4,6 +4,22 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## 0.19.8
+
+### New
+
+- Settings → System → over time has a **Network** chart: what the server
+  sends to players and receives, and, when the library is on NFS, what's
+  read from it. A stuttering stream can be traced to the storage, the server
+  or the player's link. Measured on Linux (Docker and Kubernetes included);
+  Windows shows 0.
+
+### Fixed
+
+- When a 4K film whose picture is being copied keeps buffering on Auto
+  quality, the web player now steps down to a 1080p conversion first
+  instead of going straight to 720p.
+
 ## 0.19.7
 
 ### Changed
