@@ -4,6 +4,14 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## 0.19.11
+
+### Changed
+
+- Playback-test results from the LG app's debug build are kept in
+  `playtest.jsonl` in the data folder as well as the log, so a run survives
+  the server restarting or upgrading.
+
 ## 0.19.10
 
 ### Fixed
