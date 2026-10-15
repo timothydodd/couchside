@@ -4,6 +4,21 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## Unreleased
+
+### Added
+
+- In the web player, the title in the top bar opens the title's details
+  over the picture: the poster and plot, a show's seasons and episodes
+  (the one playing marked, its season open) and a movie's extras. Pick an
+  episode to play it, or open the title's page from there.
+- On phones the player's play/pause and previous/next (or back and forward
+  ten seconds for a film) sit over the picture, and the bar below is the
+  seek bar, the time and the queue, settings and full-screen buttons. A
+  double tap on the left or right of the picture goes back or forward ten
+  seconds (each further tap adds ten more); a double tap in the middle
+  still toggles full screen.
+
 ## 0.19.12
 
 ### Changed

@@ -555,6 +555,7 @@ export default function PlayerPage({ fileId }: { fileId: number }) {
       preview={trick ? (t) => (info?.durationSec && t > info.durationSec ? null : previewFrame(fileId, trick, t)) : undefined}
       breakMode={breakMode}
       onBack={exit}
+      details={info ? { itemId: info.itemId, fileId, onPlay: (id) => go(`/play/${id}`, { replace: true }), onOpen: () => go(`/item/${info.itemId}`) } : undefined}
       queue={
         queue.length > 0 && !parts
           ? { entries: queue, current: fileId, onPlay: (id) => go(`/play/${id}`, { replace: true }), onRemove: (id) => useQueue.getState().remove(id) }

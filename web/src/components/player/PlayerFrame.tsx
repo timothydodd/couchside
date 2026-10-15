@@ -5,11 +5,13 @@ import {
 import SeekBar from "./SeekBar";
 import SettingsMenu, { type SettingSection } from "./SettingsMenu";
 import QueueMenu from "./QueueMenu";
+import DetailsMenu from "./DetailsMenu";
 import type { QueueEntry } from "../../stores/queue";
 import { useMediaState } from "./useMediaState";
 import { useBreakSkip } from "./useBreakSkip";
 import { useIntroSkip } from "./useIntroSkip";
 import { fmtClock, fmtTime } from "../../lib/format";
+import { usePhone } from "../../lib/media";
 import type { PreviewFrame } from "../../lib/trickplay";
 import type { BreakMode, MarkedSegment, Segment } from "../../lib/types";
 
@@ -71,6 +73,13 @@ export interface PlayerFrameProps {
     onPlay: (fileId: number) => void;
     onRemove: (fileId: number) => void;
   };
+  /** The title's details (vod): a click on the title opens them, with the show's seasons and episodes. Omitted, the title is plain text. */
+  details?: {
+    itemId: number;
+    fileId: number; // the file playing, marked in the list
+    onPlay: (fileId: number) => void;
+    onOpen: () => void; // leave for the title's page
+  };
   onKey?: (e: KeyboardEvent) => boolean; // return true when handled
   loading?: string | null;
   notice?: string | null;
@@ -82,6 +91,8 @@ export interface PlayerFrameProps {
 }
 
 const LIVE_SLACK = 12; // seconds behind the edge that still counts as "live"
+const DOUBLE_TAP_MS = 300; // two taps this close together are a double tap
+const TAP_SEEK = 10; // seconds a double tap on the left or right of the picture seeks
 
 /** The half-hour slot (9:00–9:30, 9:30–10:00) holding clock time t: a stand-in for a missing guide entry. */
 const halfHour = (t: number) => {
@@ -100,11 +111,19 @@ export default function PlayerFrame(p: PlayerFrameProps) {
   const [menu, setMenu] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const resumeAfterQueue = useRef(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const resumeAfterDetails = useRef(false);
   const [breakMenu, setBreakMenu] = useState<{ b: Segment; x: number } | null>(null);
   const [full, setFull] = useState(false);
   const [volOpen, setVolOpen] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const tap = useRef<{ touch: boolean; shown: boolean }>({ touch: false, shown: true });
+  // The last tap on the picture, to tell a double tap from two single ones.
+  const lastTap = useRef<{ at: number; side: "left" | "right" | "middle"; shown: boolean } | null>(null);
+  // "+10s" shown briefly on the side a double tap seeked from.
+  const [tapSeek, setTapSeek] = useState<{ side: "left" | "right"; n: number } | null>(null);
+  const tapSeekTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const phone = usePhone();
 
   const v = () => videoRef.current;
   const isLive = timeline.kind !== "vod";
@@ -257,6 +276,63 @@ export default function PlayerFrame(p: PlayerFrameProps) {
     setQueueOpen(false);
     if (resumeAfterQueue.current) void v()?.play().catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- v reads a ref
+  // --- details ------------------------------------------------------------------------
+  const openDetails = useCallback(() => {
+    const el = v();
+    resumeAfterDetails.current = !!el && !el.paused;
+    el?.pause();
+    setMenu(false);
+    setQueueOpen(false);
+    setDetailsOpen(true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- v reads a ref
+  const closeDetails = useCallback(() => {
+    setDetailsOpen(false);
+    if (resumeAfterDetails.current) void v()?.play().catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- v reads a ref
+  // Another file picked from the details: it starts on its own, so don't
+  // resume this one over it.
+  const pickFromDetails = useCallback(
+    (fileId: number) => {
+      resumeAfterDetails.current = false;
+      setDetailsOpen(false);
+      p.details?.onPlay(fileId);
+    },
+    [p.details],
+  );
+
+  // --- double tap on the picture: seek on the sides, full screen in the middle ----------
+  const tapped = useCallback(
+    (x: number, width: number) => {
+      const side = x < width / 3 ? "left" : x > (width * 2) / 3 ? "right" : "middle";
+      const now = performance.now();
+      const last = lastTap.current;
+      if (last && now - last.at < DOUBLE_TAP_MS && last.side === side) {
+        lastTap.current = null;
+        if (side === "middle") {
+          toggleFull();
+          return true;
+        }
+        skip(side === "left" ? -TAP_SEEK : TAP_SEEK);
+        // Each further tap adds another ten seconds to the badge.
+        setTapSeek((t) => ({ side, n: t?.side === side ? t.n + TAP_SEEK : TAP_SEEK }));
+        clearTimeout(tapSeekTimer.current);
+        tapSeekTimer.current = setTimeout(() => setTapSeek(null), 700);
+        // Keep tapping: a third tap within the window seeks again.
+        lastTap.current = { at: now, side, shown: last.shown };
+        // The first tap toggled the controls; put them back as they were.
+        if (last.shown) poke();
+        else {
+          clearTimeout(hideTimer.current);
+          setChrome(false);
+        }
+        return true;
+      }
+      lastTap.current = { at: now, side, shown: tap.current.shown };
+      return false;
+    },
+    [skip, toggleFull, poke],
+  );
+  useEffect(() => () => clearTimeout(tapSeekTimer.current), []);
 
   {
     keyHandler.current = (e: KeyboardEvent) => {
@@ -312,7 +388,9 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           else seg.intro?.skip();
           break;
         case "Escape":
+          // The queue and details close themselves (useDialog): don't also leave.
           if (menu) setMenu(false);
+          else if (queueOpen || detailsOpen) return;
           else if (!document.fullscreenElement) p.onBack();
           break;
       }
@@ -359,6 +437,8 @@ export default function PlayerFrame(p: PlayerFrameProps) {
 
   const VolIcon = st.muted || st.volume === 0 ? VolumeX : st.volume < 0.5 ? Volume1 : Volume2;
   const show = chrome || menu || !!p.error;
+  const overlayOpen = menu || queueOpen || detailsOpen;
+  const ready = !p.loading && !p.error && st.width > 0;
 
   return (
     <div
@@ -375,16 +455,18 @@ export default function PlayerFrame(p: PlayerFrameProps) {
         autoPlay
         playsInline
         onPointerDown={(e) => (tap.current = { touch: e.pointerType === "touch", shown: show })}
-        onClick={() => {
+        onClick={(e) => {
           if (menu) setMenu(false);
           else if (!tap.current.touch) toggle();
-          // On a touch screen a tap shows or hides the controls; it doesn't pause.
+          // On a touch screen a double tap seeks or goes full screen; a single
+          // tap shows or hides the controls and doesn't pause.
+          else if (tapped(e.clientX - e.currentTarget.getBoundingClientRect().left, e.currentTarget.clientWidth)) return;
           else if (tap.current.shown && !st.paused) {
             clearTimeout(hideTimer.current);
             setChrome(false);
           }
         }}
-        onDoubleClick={toggleFull}
+        onDoubleClick={() => !tap.current.touch && toggleFull()}
         {...p.videoProps}
       >
         {p.children}
@@ -397,7 +479,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           {p.loading && <div className="text-sm text-player-fg/80">{p.loading}</div>}
         </div>
       )}
-      {st.paused && !p.loading && !p.error && st.width > 0 && (
+      {!phone && st.paused && ready && (
         <button
           className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-player-bg/55 text-player-fg backdrop-blur transition-transform hover:scale-105"
           onClick={toggle}
@@ -405,6 +487,43 @@ export default function PlayerFrame(p: PlayerFrameProps) {
         >
           <Play size={28} className="translate-x-0.5 fill-current" />
         </button>
+      )}
+      {/* phones: previous, play/pause and next sit over the picture, not in the bar */}
+      {phone && ready && !overlayOpen && (
+        <div
+          className={`pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 items-center justify-center gap-10 transition-opacity duration-300 ${show ? "opacity-100" : "opacity-0 [&>*]:pointer-events-none"}`}
+        >
+          {q ? (
+            <BigButton label={!atStart ? "Start over" : "Previous"} onClick={previous} disabled={!canPrevious}>
+              <SkipBack size={22} className="fill-current" />
+            </BigButton>
+          ) : (
+            <BigButton label="Back 10 seconds" onClick={() => skip(-10)}>
+              <RotateCcw size={22} />
+            </BigButton>
+          )}
+          <BigButton label={st.paused ? "Play" : "Pause"} onClick={toggle} large>
+            {st.paused ? <Play size={30} className="translate-x-0.5 fill-current" /> : <Pause size={30} className="fill-current" />}
+          </BigButton>
+          {q ? (
+            <BigButton label="Next" onClick={next} disabled={qNext === null}>
+              <SkipForward size={22} className="fill-current" />
+            </BigButton>
+          ) : (
+            <BigButton label="Forward 10 seconds" onClick={() => skip(10)} disabled={atLive}>
+              <RotateCw size={22} />
+            </BigButton>
+          )}
+        </div>
+      )}
+      {tapSeek && (
+        <div className={`pointer-events-none absolute inset-y-0 flex w-1/3 items-center justify-center ${tapSeek.side === "left" ? "left-0" : "right-0"}`}>
+          <div key={tapSeek.n} className="anim-pop flex items-center gap-1 rounded-full bg-player-bg/55 px-4 py-2 text-sm font-semibold text-player-fg backdrop-blur">
+            {tapSeek.side === "left" ? <RotateCcw size={18} /> : <RotateCw size={18} />}
+            {tapSeek.side === "left" ? "−" : "+"}
+            {tapSeek.n}s
+          </div>
+        </div>
       )}
 
       {/* top bar */}
@@ -419,8 +538,23 @@ export default function PlayerFrame(p: PlayerFrameProps) {
         {p.logo && <img src={p.logo} alt="" className="channel-logo mt-0.5 max-h-9 max-w-16" />}
         <div className="min-w-0 flex-1">
           {p.badge && <div className="mb-0.5 flex items-center gap-2 text-xs text-player-fg/70">{p.badge}</div>}
-          <div className="truncate text-lg font-semibold leading-tight">{p.title}</div>
-          {p.subtitle && <div className="truncate text-xs text-player-fg/65">{p.subtitle}</div>}
+          {p.details ? (
+            <button
+              type="button"
+              className="-mx-1.5 -my-0.5 block max-w-full rounded-md px-1.5 py-0.5 text-left hover:bg-player-fg/10"
+              onClick={() => (detailsOpen ? closeDetails() : openDetails())}
+              title="Details, seasons and episodes"
+              aria-expanded={detailsOpen}
+            >
+              <span className="block truncate text-lg font-semibold leading-tight">{p.title}</span>
+              {p.subtitle && <span className="block truncate text-xs text-player-fg/65">{p.subtitle}</span>}
+            </button>
+          ) : (
+            <>
+              <div className="truncate text-lg font-semibold leading-tight">{p.title}</div>
+              {p.subtitle && <div className="truncate text-xs text-player-fg/65">{p.subtitle}</div>}
+            </>
+          )}
         </div>
         <div className="flex items-center gap-1">{p.topActions}</div>
       </div>
@@ -506,25 +640,30 @@ export default function PlayerFrame(p: PlayerFrameProps) {
           onBreakMenu={p.onNotCommercial ? (b, x) => setBreakMenu({ b, x }) : undefined}
         />
         </div>
+        {/* Phones: the transport is over the picture, so the bar is the time, the queue and settings. */}
         <div className="mt-1 flex items-center gap-1 pointer-coarse:mt-3">
-          <CtlButton label={st.paused ? "Play (Space)" : "Pause (Space)"} onClick={toggle}>
-            {st.paused ? <Play size={20} className="fill-current" /> : <Pause size={20} className="fill-current" />}
-          </CtlButton>
-          {q && (
-            <CtlButton label={!atStart ? "Start over (P)" : "Previous (P)"} onClick={previous} disabled={!canPrevious}>
-              <SkipBack size={18} />
-            </CtlButton>
-          )}
-          <CtlButton label="Back 10 seconds (←)" onClick={() => skip(-10)}>
-            <RotateCcw size={18} />
-          </CtlButton>
-          <CtlButton label="Forward 30 seconds (L)" onClick={() => skip(30)} disabled={atLive}>
-            <RotateCw size={18} />
-          </CtlButton>
-          {q && (
-            <CtlButton label="Next (N)" onClick={next} disabled={qNext === null}>
-              <SkipForward size={18} />
-            </CtlButton>
+          {!phone && (
+            <>
+              <CtlButton label={st.paused ? "Play (Space)" : "Pause (Space)"} onClick={toggle}>
+                {st.paused ? <Play size={20} className="fill-current" /> : <Pause size={20} className="fill-current" />}
+              </CtlButton>
+              {q && (
+                <CtlButton label={!atStart ? "Start over (P)" : "Previous (P)"} onClick={previous} disabled={!canPrevious}>
+                  <SkipBack size={18} />
+                </CtlButton>
+              )}
+              <CtlButton label="Back 10 seconds (←)" onClick={() => skip(-10)}>
+                <RotateCcw size={18} />
+              </CtlButton>
+              <CtlButton label="Forward 30 seconds (L)" onClick={() => skip(30)} disabled={atLive}>
+                <RotateCw size={18} />
+              </CtlButton>
+              {q && (
+                <CtlButton label="Next (N)" onClick={next} disabled={qNext === null}>
+                  <SkipForward size={18} />
+                </CtlButton>
+              )}
+            </>
           )}
           {/* phones have volume buttons, and iOS ignores the page's volume */}
           <div className="relative flex items-center max-md:hidden" onMouseEnter={() => setVolOpen(true)} onMouseLeave={() => setVolOpen(false)}>
@@ -542,7 +681,7 @@ export default function PlayerFrame(p: PlayerFrameProps) {
               aria-label="Volume"
             />
           </div>
-          <span className="ml-2 min-w-0 truncate text-xs tabular-nums text-player-fg/80">{timeText}</span>
+          <span className={`min-w-0 truncate text-xs tabular-nums text-player-fg/80 ${phone ? "" : "ml-2"}`}>{timeText}</span>
           <div className="flex-1" />
           {timeline.kind === "recording" && (
             <CtlButton label="Start over" onClick={() => seekTo(0)} wide>
@@ -576,6 +715,9 @@ export default function PlayerFrame(p: PlayerFrameProps) {
 
       {menu && <SettingsMenu sections={p.settings} onClose={() => setMenu(false)} />}
       {queueOpen && q && <QueueMenu entries={q.entries} current={q.current} onPlay={(id) => { setQueueOpen(false); q.onPlay(id); }} onRemove={q.onRemove} onClose={closeQueue} />}
+      {detailsOpen && p.details && (
+        <DetailsMenu itemId={p.details.itemId} current={p.details.fileId} onPlay={pickFromDetails} onOpen={p.details.onOpen} onClose={closeDetails} />
+      )}
 
       {p.error && (
         <div className="absolute inset-0 flex items-center justify-center p-6">
@@ -620,6 +762,20 @@ function CtlButton({
       className={`player-btn ${wide ? "px-2.5" : "px-2"} ${
         active ? "bg-player-fg/10 text-player-fg" : ""
       }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** A round button over the picture (phones): play/pause and its neighbours. */
+function BigButton({ label, onClick, children, disabled, large }: { label: string; onClick: () => void; children: ReactNode; disabled?: boolean; large?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className={`pointer-events-auto flex items-center justify-center rounded-full bg-player-bg/55 text-player-fg backdrop-blur transition-transform active:scale-95 disabled:opacity-30 ${large ? "h-[4.5rem] w-[4.5rem]" : "h-14 w-14"}`}
     >
       {children}
     </button>
