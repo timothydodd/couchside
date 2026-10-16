@@ -55,7 +55,7 @@ jobs:
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: web-dist
           path: server/internal/webui/dist
@@ -81,7 +81,7 @@ jobs:
         run: echo "::warning::Signing is off for this run, so couchside.exe and the installer are unsigned. That's fine for pre-* tags and manual runs only."
       - name: Azure login (code signing)
         if: env.SIGN == 'true'
-        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2.3.1
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -89,7 +89,7 @@ jobs:
       # Built into its own folder so only our exe is signed, not ffmpeg's.
       - name: sign couchside.exe
         if: env.SIGN == 'true'
-        uses: azure/trusted-signing-action@1d365fec12862c4aa68fcac418143d73f0cea293 # v0.5.11
+        uses: azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
         with:
           endpoint: ${{ vars.SIGNING_ENDPOINT }}
           trusted-signing-account-name: ${{ vars.SIGNING_ACCOUNT }}
@@ -107,7 +107,7 @@ jobs:
           if ($sig.Status -ne 'Valid') { throw "couchside.exe signature is $($sig.Status): $($sig.StatusMessage)" }
           if (-not $sig.TimeStamperCertificate) { throw "couchside.exe signature has no timestamp" }
           Write-Host "couchside.exe signed by $($sig.SignerCertificate.Subject), timestamped by $($sig.TimeStamperCertificate.Subject)"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: windows-exe
           path: sign/couchside.exe
@@ -157,7 +157,7 @@ jobs:
       # After the build, before upload: release.yml hashes what's uploaded.
       - name: sign the installer
         if: env.SIGN == 'true'
-        uses: azure/trusted-signing-action@1d365fec12862c4aa68fcac418143d73f0cea293 # v0.5.11
+        uses: azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
         with:
           endpoint: ${{ vars.SIGNING_ENDPOINT }}
           trusted-signing-account-name: ${{ vars.SIGNING_ACCOUNT }}
@@ -177,12 +177,12 @@ jobs:
           if ($sig.Status -ne 'Valid') { throw "$($exe[0].Name) signature is $($sig.Status): $($sig.StatusMessage)" }
           if (-not $sig.TimeStamperCertificate) { throw "$($exe[0].Name) signature has no timestamp" }
           Write-Host "$($exe[0].Name) signed by $($sig.SignerCertificate.Subject)"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ffmpeg-source
           path: ffmpeg-src/*.tar.gz
           retention-days: 14
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: windows-installer
           path: out/*.exe
