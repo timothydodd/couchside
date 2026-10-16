@@ -130,7 +130,10 @@ unpack "OpenCL-ICD-Loader-$OPENCL_VERSION.tar.gz" opencl-loader
 cmake_build opencl-loader -DOPENCL_ICD_LOADER_HEADERS_DIR="$prefix/include" \
   -DOPENCL_ICD_LOADER_BUILD_SHARED_LIBS=OFF -DOPENCL_ICD_LOADER_BUILD_TESTING=OFF -DBUILD_TESTING=OFF \
   -DENABLE_OPENCL_LAYERINFO=OFF
-# The loader finds vendor drivers through the registry: it needs these system libraries.
+# mingw names the static library OpenCL.a; -lOpenCL looks for libOpenCL.a.
+[ -f "$prefix/lib/libOpenCL.a" ] || mv "$prefix/lib/OpenCL.a" "$prefix/lib/libOpenCL.a"
+# The loader finds vendor drivers through the registry and the display
+# driver: it needs these system libraries.
 cat >"$prefix/lib/pkgconfig/OpenCL.pc" <<EOF
 prefix=$prefix
 libdir=\${prefix}/lib
@@ -139,7 +142,7 @@ Name: OpenCL
 Description: Khronos OpenCL ICD loader
 Version: $OPENCL_VERSION
 Libs: -L\${libdir} -lOpenCL
-Libs.private: -lcfgmgr32 -lruntimeobject -lole32
+Libs.private: -lcfgmgr32 -lruntimeobject -lole32 -lgdi32 -ladvapi32
 Cflags: -I\${includedir}
 EOF
 
