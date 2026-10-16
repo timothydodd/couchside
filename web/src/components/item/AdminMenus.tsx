@@ -1,5 +1,7 @@
-import { Copy, Cpu, Eye, EyeOff, FastForward, FolderOpen, MoreHorizontal, Pencil, RefreshCw, RotateCcw, Scissors, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Copy, Cpu, Eye, EyeOff, FastForward, FolderInput, FolderOpen, FolderOutput, MoreHorizontal, Pencil, RefreshCw, RotateCcw, Scissors, Trash2 } from "lucide-react";
 import { MenuButton, type MenuItem } from "../ui";
+import FileUnder from "./FileUnder";
 import { api } from "../../lib/api";
 import { attempt, notify } from "../../lib/notices";
 import type { DeleteResult, EpisodeRow, Item, MediaFile } from "../../lib/types";
@@ -169,6 +171,7 @@ export function TitleActions({ item, onChange }: { item: Item; onChange: () => v
   const series = item.kind === "series";
   const what = series ? "episode" : "file";
   const count = (n: number) => `${n} ${what}${n === 1 ? "" : "s"}`;
+  const [filing, setFiling] = useState(false);
 
   const items: MenuItem[] = [
     {
@@ -228,6 +231,25 @@ export function TitleActions({ item, onChange }: { item: Item; onChange: () => v
       },
     );
   }
+  if (!series && item.parentId)
+    items.push({
+      id: "unfile",
+      label: "Unfile",
+      detail: `Take it out of ${item.parentTitle}: back on the Movies page as a title of its own. Scans leave it there.`,
+      icon: <FolderOutput size={15} />,
+      onSelect: attempt("Couldn't unfile", async () => {
+        await api(`/api/items/${item.id}/parent`, { method: "PUT", json: { parentId: null } });
+        onChange();
+      }),
+    });
+  else if (!series && !item.childCount)
+    items.push({
+      id: "file",
+      label: "File under…",
+      detail: "List it on another movie's page (a box set, a collection) instead of the Movies page.",
+      icon: <FolderInput size={15} />,
+      onSelect: () => setFiling(true),
+    });
   items.push(
     {
       id: "library",
@@ -252,5 +274,19 @@ export function TitleActions({ item, onChange }: { item: Item; onChange: () => v
     },
   );
 
-  return <MenuButton label="More actions" icon={<MoreHorizontal size={16} />} items={items} align="end" className="btn-ghost !px-2.5 !py-2" />;
+  return (
+    <>
+      <MenuButton label="More actions" icon={<MoreHorizontal size={16} />} items={items} align="end" className="btn-ghost !px-2.5 !py-2" />
+      {filing && (
+        <FileUnder
+          item={item}
+          onClose={() => setFiling(false)}
+          onFiled={() => {
+            setFiling(false);
+            onChange();
+          }}
+        />
+      )}
+    </>
+  );
 }

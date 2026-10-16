@@ -155,7 +155,7 @@ func TestRuleLinksLibraryShowByEpisodeTitles(t *testing.T) {
 	oe, _ := d.EnsureEpisode(ctx, oldID, 1, 1, "Pilot", "")
 	_, _ = d.UpsertFile(ctx, db.File{LibraryID: lib, MediaItemID: oldID, EpisodeID: &oe, Path: "/x/old.mkv", Size: 1, Mtime: 1}, 1)
 	// ...and the real one, which has "Finale" (airing as S12E01).
-	items, _ := d.Items(ctx, "series")
+	items, _ := d.Items(ctx, "series", false)
 	var realID int64
 	for _, it := range items {
 		if it.Year != nil && *it.Year == 2003 {

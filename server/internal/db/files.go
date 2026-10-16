@@ -166,17 +166,28 @@ type FileStamp struct {
 	Edition     string
 	ItemPinned  bool // put under its title by hand (Merge): the scan leaves it there
 	MediaItemID int64
+	// The title's parent (a child title), as parsed, so the scan can tell
+	// whether the nesting rule still files it the same way.
+	ParentID          *int64
+	ParentPinned      bool // filed (or unfiled) by hand: the scan leaves it
+	ParentParsedTitle string
+	ParentParsedYear  int
+	GroupLabel        string
+	SortNo            int
 }
 
 const stampSelect = `SELECT f.path, f.id, f.size, f.mtime, m.parsed_title, m.parsed_year,
 	COALESCE(e.season, 0), COALESCE(e.episode, 0),
-	f.role, f.part_no, f.extra_title, f.role_pinned, f.problem, f.edition, f.item_pinned, f.media_item_id
-	FROM files f JOIN media_items m ON m.id = f.media_item_id LEFT JOIN episodes e ON e.id = f.episode_id `
+	f.role, f.part_no, f.extra_title, f.role_pinned, f.problem, f.edition, f.item_pinned, f.media_item_id,
+	m.parent_id, m.parent_pinned, COALESCE(p.parsed_title, ''), COALESCE(p.parsed_year, 0), m.group_label, m.sort_no
+	FROM files f JOIN media_items m ON m.id = f.media_item_id LEFT JOIN episodes e ON e.id = f.episode_id
+	LEFT JOIN media_items p ON p.id = m.parent_id `
 
 func scanStamp(r interface{ Scan(...any) error }, path *string) (*FileStamp, error) {
 	var s FileStamp
 	err := r.Scan(path, &s.ID, &s.Size, &s.Mtime, &s.ParsedTitle, &s.ParsedYear, &s.Season, &s.Episode,
-		&s.Role, &s.PartNo, &s.ExtraTitle, &s.RolePinned, &s.Problem, &s.Edition, &s.ItemPinned, &s.MediaItemID)
+		&s.Role, &s.PartNo, &s.ExtraTitle, &s.RolePinned, &s.Problem, &s.Edition, &s.ItemPinned, &s.MediaItemID,
+		&s.ParentID, &s.ParentPinned, &s.ParentParsedTitle, &s.ParentParsedYear, &s.GroupLabel, &s.SortNo)
 	return &s, err
 }
 
@@ -414,28 +425,43 @@ func carryRenamed(ctx context.Context, tx *sql.Tx, libraryID, scanStart int64) (
 }
 
 // tidyItems is the housekeeping after files go: items and episodes left
-// without files are deleted, and an item whose home library has no files
-// for it any more moves home to one that has. It returns the items deleted.
+// without files are deleted (a title with no file of its own stays while
+// titles are filed under it: a box set is its discs), and an item whose
+// home library has no files for it any more moves home to one that has.
+// It returns the items deleted.
 func tidyItems(ctx context.Context, tx *sql.Tx) ([]int64, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT id FROM media_items WHERE NOT EXISTS (SELECT 1 FROM files f WHERE f.media_item_id = media_items.id)`)
-	if err != nil {
-		return nil, err
-	}
+	const orphan = `NOT EXISTS (SELECT 1 FROM files f WHERE f.media_item_id = media_items.id)
+		AND NOT EXISTS (SELECT 1 FROM media_items c WHERE c.parent_id = media_items.id)`
 	gone := []int64{}
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			rows.Close()
+	// Twice: a box set whose last child went in the first pass is an orphan in the second.
+	for pass := 0; pass < 2; pass++ {
+		rows, err := tx.QueryContext(ctx, `SELECT id FROM media_items WHERE `+orphan)
+		if err != nil {
 			return nil, err
 		}
-		gone = append(gone, id)
+		n := 0
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			gone = append(gone, id)
+			n++
+		}
+		rows.Close()
+		if n == 0 {
+			break
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM media_items WHERE `+orphan); err != nil {
+			return nil, err
+		}
 	}
-	rows.Close()
 	for _, q := range []string{
-		`DELETE FROM media_items WHERE NOT EXISTS (SELECT 1 FROM files f WHERE f.media_item_id = media_items.id)`,
 		`DELETE FROM episodes WHERE NOT EXISTS (SELECT 1 FROM files f WHERE f.episode_id = episodes.id)`,
 		`UPDATE media_items SET library_id = (SELECT f.library_id FROM files f WHERE f.media_item_id = media_items.id ORDER BY f.id LIMIT 1)
-		   WHERE NOT EXISTS (SELECT 1 FROM files f WHERE f.media_item_id = media_items.id AND f.library_id = media_items.library_id)`,
+		   WHERE EXISTS (SELECT 1 FROM files f WHERE f.media_item_id = media_items.id)
+		     AND NOT EXISTS (SELECT 1 FROM files f WHERE f.media_item_id = media_items.id AND f.library_id = media_items.library_id)`,
 	} {
 		if _, err := tx.ExecContext(ctx, q); err != nil {
 			return nil, err

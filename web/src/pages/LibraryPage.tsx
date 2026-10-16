@@ -112,6 +112,8 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
         if (parts.length) entries.push(...parts.map((f) => ({ fileId: f.id, title: it.title, subtitle: `Part ${f.partNo}` })));
         else if (d.versionFileId) entries.push({ fileId: d.versionFileId, title: it.title, subtitle: year });
         else if (d.files.find((f) => f.role === "copy")) entries.push({ fileId: d.files.find((f) => f.role === "copy")!.id, title: it.title, subtitle: year });
+        // A box set: the titles filed under it, in its page's order.
+        for (const g of d.children ?? []) for (const k of g.items) if (k.fileId && !k.problem) entries.push({ fileId: k.fileId, title: k.title, subtitle: k.year ? String(k.year) : g.label || undefined });
       }
     }
     if (!entries.length) throw new Error("nothing to play in the selection");
@@ -224,7 +226,7 @@ export default function LibraryPage({ kind }: { kind: ItemKind }) {
                 { id: "refresh", label: "Refresh metadata", detail: "Fetches details and artwork again; a fixed match stays", icon: <RefreshCw size={14} />, onSelect: () => void refreshMeta() },
                 ...(comskip ? [{ id: "commercials", label: "Find commercials", detail: "In recordings not yet checked", icon: <Scissors size={14} />, onSelect: () => void findCommercials() }] : []),
                 ...(chosen.length > 1
-                  ? [{ id: "merge", label: "Merge…", detail: kind === "movie" ? "Into one film: duplicates or bonus material" : "Into one show", icon: <Combine size={14} />, onSelect: () => setMerging(true) }]
+                  ? [{ id: "merge", label: "Merge…", detail: kind === "movie" ? "Into one film: duplicates, bonus material or titles filed under it" : "Into one show", icon: <Combine size={14} />, onSelect: () => setMerging(true) }]
                   : []),
                 ...(chosen.length === 1
                   ? [

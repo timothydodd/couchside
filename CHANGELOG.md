@@ -4,6 +4,28 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## 0.20.0
+
+### Added
+
+- **Box sets and bonus discs.** A video anywhere below a subfolder of a
+  movie's folder (`Looney Tunes Platinum Collection (2011)/Disc 3 - Bonus
+  Materials/Bonus Cartoons/05 - The Door (1968).mp4`) is now filed under
+  that movie instead of appearing on the Movies page: a title of its own,
+  matched on its own name (a leading track number is dropped), with its own
+  poster, details and watched state, listed on the movie's page under a
+  heading named after the subfolder. The movie folder becomes a title even
+  with no video of its own; Play on it plays what's filed under it in order,
+  and Mark watched covers them all. Disc folders (`Disc 1/`) and Plex extras
+  folders (`Featurettes/`) are read as before. Settings → Server → **File
+  nested folders under their movie** turns the rule off.
+- Admins can file any movie under another from its page (**⋯ → File
+  under…**, and **Unfile**), or by selecting titles on the Movies page and
+  choosing **Merge → Titles of their own, filed under it**. Choices made by
+  hand stick through rescans.
+- `GET /api/server` lists the feature `childTitles`; `GET /api/items` leaves
+  filed titles out unless `includeChildren=1` ([api-compat.md](docs/api-compat.md)).
+
 ## 0.19.14
 
 ### Fixed

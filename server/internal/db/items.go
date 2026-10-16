@@ -30,6 +30,13 @@ type ItemSummary struct {
 	// DynamicRange is the best among the title's files (extras aside): dv,
 	// hdr10, hlg or "" (SDR or not known), for a badge.
 	DynamicRange string `json:"dynamicRange"`
+	// A child title (a film on a box set's bonus disc) is filed under its
+	// parent: kept off the Movies grid and listed on the parent's page.
+	ParentID    *int64 `json:"parentId"`
+	ParentTitle string `json:"parentTitle"`
+	GroupLabel  string `json:"groupLabel"` // the subfolder it came from ("Bonus Materials"), for a heading
+	SortNo      int    `json:"sortNo"`     // its track number on the disc; 0 when none
+	ChildCount  int    `json:"childCount"` // titles filed under this one
 }
 
 // Item is the full detail record.
@@ -59,8 +66,12 @@ func summaryCols(ctx context.Context) string {
 	EXISTS (SELECT 1 FROM profile_items pi WHERE pi.item_id = m.id AND pi.profile_id = ` + strconv.FormatInt(ProfileID(ctx), 10) + `),
 	COALESCE((SELECT MAX(f.added_at) FROM files f WHERE f.media_item_id = m.id), m.added_at) AS last_added,
 	COALESCE((SELECT MAX(CASE f.dynamic_range WHEN 'dv' THEN 3 WHEN 'hdr10' THEN 2 WHEN 'hlg' THEN 1 ELSE 0 END)
-		FROM files f WHERE f.media_item_id = m.id AND f.role <> 'extra'), 0)`
+		FROM files f WHERE f.media_item_id = m.id AND f.role <> 'extra'), 0)` + childCols
 }
+
+// childCols are the parent and child facts of summaryCols and summaryListCols.
+const childCols = `, m.parent_id, COALESCE((SELECT p.title FROM media_items p WHERE p.id = m.parent_id), ''), m.group_label, m.sort_no,
+	(SELECT COUNT(*) FROM media_items c WHERE c.parent_id = m.id)`
 
 // summaryListCols and summaryListFrom are summaryCols for whole-kind lists:
 // the per-title subqueries (five index probes per title) become one pass
@@ -74,7 +85,7 @@ func summaryListCols() string {
 	COALESCE(fs.file_count, 0), COALESCE(fs.watched_count, 0),
 	pi.item_id IS NOT NULL,
 	COALESCE(fs.last_added, m.added_at) AS last_added,
-	COALESCE(fs.range_rank, 0)`
+	COALESCE(fs.range_rank, 0)` + childCols
 }
 
 func summaryListFrom(ctx context.Context) string {
@@ -92,7 +103,8 @@ func summaryListFrom(ctx context.Context) string {
 func scanSummary(dest *ItemSummary, extra ...any) []any {
 	return append([]any{&dest.ID, &dest.Kind, &dest.Title, &dest.SortTitle, &dest.Year, &genreScanner{&dest.Genres}, &dest.Rating,
 		&dest.RuntimeMin, &dest.HasPoster, &dest.HasBackdrop, &dest.MatchStatus, &dest.AddedAt, &dest.UpdatedAt,
-		&dest.FileCount, &dest.WatchedCount, &dest.InWatchlist, &dest.LastAddedAt, rangeScanner{&dest.DynamicRange}}, extra...)
+		&dest.FileCount, &dest.WatchedCount, &dest.InWatchlist, &dest.LastAddedAt, rangeScanner{&dest.DynamicRange},
+		&dest.ParentID, &dest.ParentTitle, &dest.GroupLabel, &dest.SortNo, &dest.ChildCount}, extra...)
 }
 
 // rangeScanner reads summaryCols' range rank (3 dv, 2 hdr10, 1 hlg, 0 SDR) as its name.
@@ -149,14 +161,24 @@ func SplitGenres(s string) []string {
 
 // Items lists every item of a kind. The client filters and sorts: a home
 // library is a few thousand rows, and doing it client-side keeps the grid instant.
-func (d *DB) Items(ctx context.Context, kind string) ([]ItemSummary, error) {
-	return d.querySummaries(ctx, `SELECT `+summaryListCols()+summaryListFrom(ctx)+` WHERE m.kind = ?`+visible(ctx, "m")+` ORDER BY m.sort_title`, kind)
+// Child titles are left out unless asked for: they're on their parent's page.
+func (d *DB) Items(ctx context.Context, kind string, children bool) ([]ItemSummary, error) {
+	return d.querySummaries(ctx, `SELECT `+summaryListCols()+summaryListFrom(ctx)+` WHERE m.kind = ?`+topLevel(children)+visible(ctx, "m")+` ORDER BY m.sort_title`, kind)
 }
 
-// RecentItems returns items of a kind ordered by newest file.
+// topLevel is the condition that leaves child titles out of a list.
+func topLevel(children bool) string {
+	if children {
+		return ""
+	}
+	return ` AND m.parent_id IS NULL`
+}
+
+// RecentItems returns items of a kind ordered by newest file. A child title
+// counts as its parent's news: the parent is listed, by its newest child.
 func (d *DB) RecentItems(ctx context.Context, kind string, limit int) ([]ItemSummary, error) {
-	return d.querySummaries(ctx, `SELECT `+summaryListCols()+summaryListFrom(ctx)+` WHERE m.kind = ?`+visible(ctx, "m")+`
-		ORDER BY last_added DESC, m.id DESC LIMIT ?`, kind, limit)
+	return d.querySummaries(ctx, `SELECT `+summaryListCols()+summaryListFrom(ctx)+` WHERE m.kind = ? AND m.parent_id IS NULL`+visible(ctx, "m")+`
+		ORDER BY MAX(last_added, COALESCE((SELECT MAX(f.added_at) FROM files f JOIN media_items c ON c.id = f.media_item_id WHERE c.parent_id = m.id), 0)) DESC, m.id DESC LIMIT ?`, kind, limit)
 }
 
 func (d *DB) querySummaries(ctx context.Context, q string, args ...any) ([]ItemSummary, error) {

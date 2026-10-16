@@ -40,6 +40,8 @@ var Editable = func() []Setting {
 			Help: "How often every library is checked for new and removed files. 0 turns it off; you can still scan by hand.", Default: "6h", Placeholder: "6h"},
 		{Key: "COUCHSIDE_WORKERS", Group: "Libraries", Label: "Background jobs at once", Kind: "int",
 			Help: "Scans, matching, artwork and thumbnails running side by side.", Default: "2"},
+		{Key: "COUCHSIDE_NESTED_CHILDREN", Group: "Libraries", Label: "File nested folders under their movie", Kind: "bool",
+			Help: "A video in a subfolder of a movie's folder (bonus discs, shorts, featurettes) is listed on that movie's page instead of on the Movies page. Turn off to index every file as its own title. Takes effect on the next scan.", Default: "true"},
 
 		{Key: "COUCHSIDE_HWACCEL", Group: "Encoding", Label: "Hardware encoder", Kind: "choice",
 			Options: []string{"auto", "none", "nvenc", "qsv", "vaapi"},

@@ -56,8 +56,11 @@ func visible(ctx context.Context, m string) string {
 		for i, id := range a.Libraries {
 			ids[i] = strconv.FormatInt(id, 10)
 		}
-		// A title can have files in several libraries: it's visible when any of them is.
-		cond += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM files fl WHERE fl.media_item_id = %s.id AND fl.library_id IN (%s))", m, strings.Join(ids, ","))
+		// A title can have files in several libraries: it's visible when any of
+		// them is. A box set with no file of its own is visible through its children.
+		in := strings.Join(ids, ",")
+		cond += fmt.Sprintf(" AND (EXISTS (SELECT 1 FROM files fl WHERE fl.media_item_id = %s.id AND fl.library_id IN (%s))"+
+			" OR EXISTS (SELECT 1 FROM media_items ch JOIN files fl ON fl.media_item_id = ch.id WHERE ch.parent_id = %s.id AND fl.library_id IN (%s)))", m, in, m, in)
 	}
 	if lvl := ratingLevel(a.MaxRating); lvl > 0 {
 		cond += fmt.Sprintf(" AND (%s) <= %d", ratingLevelSQL(m+".rated"), lvl)

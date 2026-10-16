@@ -57,10 +57,10 @@ func TestProfilesSeparateWatchStateAndFavourites(t *testing.T) {
 	if err := d.SetWatched(them, []int64{fid}, true); err != nil {
 		t.Fatal(err)
 	}
-	if items, _ := d.Items(them, "movie"); len(items) != 1 || items[0].WatchedCount != 1 {
+	if items, _ := d.Items(them, "movie", false); len(items) != 1 || items[0].WatchedCount != 1 {
 		t.Fatalf("their watched count = %+v", items)
 	}
-	if items, _ := d.Items(me, "movie"); items[0].WatchedCount != 0 {
+	if items, _ := d.Items(me, "movie", false); items[0].WatchedCount != 0 {
 		t.Fatalf("my watched count = %d, want 0", items[0].WatchedCount)
 	}
 

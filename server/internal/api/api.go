@@ -379,6 +379,7 @@ func (s *Server) adminRoutes(r chi.Router) {
 
 	r.Post("/items/{id}/match", s.rematch)
 	r.Post("/items/merge", s.mergeItems)
+	r.Put("/items/{id}/parent", s.setParent)
 	r.Put("/items/{id}/details", s.setItemDetails)
 	r.Post("/items/{id}/optimize", s.optimizeItem)
 	r.Post("/items/{id}/commercials", s.findItemCommercials)

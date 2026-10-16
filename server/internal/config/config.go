@@ -53,6 +53,7 @@ type Config struct {
 	TrustedProxies []string
 
 	// LAN discovery (SSDP), so TV apps find the server without typing its address.
+	NestedChildren     bool   // COUCHSIDE_NESTED_CHILDREN: file videos nested below a movie's folder under that movie (default on; "false" turns it off)
 	Discovery          bool   // COUCHSIDE_DISCOVERY: answer SSDP searches (default on; "false" turns it off)
 	DiscoveryURL       string // COUCHSIDE_DISCOVERY_URL: base URL to advertise, when the port others reach differs (Docker -p 8095:8080)
 	DiscoveryInterface string // COUCHSIDE_DISCOVERY_INTERFACE: network interface to listen on; empty = the default one
@@ -118,6 +119,7 @@ func LoadWith(o map[string]string) Config {
 		Auth:           envBool("COUCHSIDE_AUTH"),
 		TrustedProxies: strings.FieldsFunc(getenv("COUCHSIDE_TRUSTED_PROXIES"), func(r rune) bool { return r == ',' || r == ' ' }),
 
+		NestedChildren:     !envFalse("COUCHSIDE_NESTED_CHILDREN"),
 		Discovery:          !envFalse("COUCHSIDE_DISCOVERY"),
 		DiscoveryURL:       getenv("COUCHSIDE_DISCOVERY_URL"),
 		DiscoveryInterface: getenv("COUCHSIDE_DISCOVERY_INTERFACE"),

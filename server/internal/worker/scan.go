@@ -372,7 +372,7 @@ func (w *Worker) parseChanged(lib db.Library, path string, st *db.FileStamp) boo
 		r, ok := parse.Episode(rel)
 		return ok && (r.Title != st.ParsedTitle || r.Year != st.ParsedYear || r.Season != st.Season || r.Episode != st.Episode)
 	}
-	r := parse.MovieIn(relPath(lib, path), videosIn(lib))
+	r := parse.MovieWith(relPath(lib, path), videosIn(lib), w.cfg.NestedChildren)
 	return r.Title != st.ParsedTitle || r.Year != st.ParsedYear
 }
 
@@ -395,10 +395,16 @@ func (w *Worker) refreshRole(ctx context.Context, lib db.Library, path string, s
 			return err
 		}
 	}
-	if st.RolePinned || st.ItemPinned {
+	if st.ItemPinned {
 		return nil
 	}
-	r := parse.MovieRoleIn(relPath(lib, path), st.ParsedTitle, videosIn(lib))
+	if err := w.refreshParent(ctx, lib, path, st); err != nil {
+		return err
+	}
+	if st.RolePinned {
+		return nil
+	}
+	r := parse.MovieRoleWith(relPath(lib, path), st.ParsedTitle, videosIn(lib), w.cfg.NestedChildren)
 	if r.Kind == st.Role && r.Part == st.PartNo && r.Extra == st.ExtraTitle {
 		return nil
 	}
@@ -409,6 +415,54 @@ func (w *Worker) refreshRole(ctx context.Context, lib db.Library, path string, s
 		return w.Enqueue(ctx, KindStill, st.ID, "Still "+filepath.Base(path))
 	}
 	return nil
+}
+
+// refreshParent brings an unchanged movie file's title in line with the
+// nesting rule (see parse.MovieWith): filed under the movie whose folder it
+// is nested in, or not, as the rule and the setting now say. A parent
+// chosen by hand stays. A file whose parse changed is re-indexed instead.
+func (w *Worker) refreshParent(ctx context.Context, lib db.Library, path string, st *db.FileStamp) error {
+	if st.ParentPinned {
+		return nil
+	}
+	r := parse.MovieWith(relPath(lib, path), videosIn(lib), w.cfg.NestedChildren)
+	if r.Child == nil {
+		if st.ParentID == nil {
+			return nil
+		}
+		return w.db.SetDetectedParent(ctx, st.MediaItemID, nil, "", 0, "")
+	}
+	c := r.Child
+	if st.ParentID != nil && st.ParentParsedTitle == c.ParentTitle && st.ParentParsedYear == c.ParentYear && st.GroupLabel == c.Group && st.SortNo == c.SortNo {
+		return nil
+	}
+	parentID, created, err := w.fileUnder(ctx, lib, st.MediaItemID, c)
+	if err != nil {
+		return err
+	}
+	if created {
+		return w.Enqueue(ctx, KindMatch, parentID, "Match "+c.ParentTitle)
+	}
+	return nil
+}
+
+// fileUnder makes (or finds) the parent movie a nested file's title belongs
+// under and files the title there, reporting whether the parent is new (and
+// so needs a match). Call it with HoldItems held, or from within the scan's
+// per-file work: the parent has no file of its own and would otherwise be
+// tidied away before the child points at it.
+func (w *Worker) fileUnder(ctx context.Context, lib db.Library, itemID int64, c *parse.Child) (int64, bool, error) {
+	release := w.db.HoldItems()
+	defer release()
+	parentID, created, err := w.db.EnsureItem(ctx, lib.ID, "movie", c.ParentTitle, c.ParentYear)
+	if err != nil {
+		return 0, false, err
+	}
+	if parentID == itemID {
+		return parentID, created, nil // the file is named like its folder: not a child
+	}
+	under := filepath.Join(lib.Path, filepath.FromSlash(c.ParentDir)) + string(filepath.Separator)
+	return parentID, created, w.db.SetDetectedParent(ctx, itemID, &parentID, c.Group, c.SortNo, under)
 }
 
 // indexFile parses, probes and records one file. It returns false for files
@@ -433,8 +487,8 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 		}
 	} else {
 		rel := relPath(lib, path)
-		r = parse.MovieIn(rel, videosIn(lib))
-		role = parse.MovieRoleIn(rel, r.Title, videosIn(lib))
+		r = parse.MovieWith(rel, videosIn(lib), w.cfg.NestedChildren)
+		role = parse.MovieRoleWith(rel, r.Title, videosIn(lib), w.cfg.NestedChildren)
 	}
 	label := r.Title
 
@@ -462,11 +516,16 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 		}
 	}
 
-	fileID, created, err := w.writeFile(ctx, lib, &f, prev, r, seen)
+	fileID, created, parentCreated, err := w.writeFile(ctx, lib, &f, prev, r, seen)
 	if err != nil {
 		return false, err
 	}
 	itemID := f.MediaItemID
+	if parentCreated != 0 {
+		if err := w.Enqueue(ctx, KindMatch, parentCreated, "Match "+r.Child.ParentTitle); err != nil {
+			return false, err
+		}
+	}
 	if lib.Kind != "tv" {
 		if err := w.db.SetDetectedRole(ctx, fileID, role.Kind, role.Part, role.Extra); err != nil {
 			return false, err
@@ -509,7 +568,12 @@ func (w *Worker) indexFile(ctx context.Context, lib db.Library, path string, inf
 
 // writeFile makes (or finds) the file's title and episode and writes its row,
 // holding off the tidy-up in between so they can't be deleted first.
-func (w *Worker) writeFile(ctx context.Context, lib db.Library, f *db.File, prev *db.FileStamp, r parse.Result, seen int64) (fileID int64, created bool, err error) {
+//
+// A movie nested below another movie's folder (r.Child) is filed under that
+// movie, which is made too when it's new: parentCreated is then its id, for
+// a match. A movie that isn't nested is taken out from under a parent the
+// scan had put it under.
+func (w *Worker) writeFile(ctx context.Context, lib db.Library, f *db.File, prev *db.FileStamp, r parse.Result, seen int64) (fileID int64, created bool, parentCreated int64, err error) {
 	release := w.db.HoldItems()
 	defer release()
 	pinned := prev != nil && prev.ItemPinned
@@ -519,20 +583,31 @@ func (w *Worker) writeFile(ctx context.Context, lib db.Library, f *db.File, prev
 		f.MediaItemID = prev.MediaItemID
 	case lib.Kind == "tv":
 		if f.MediaItemID, created, err = w.db.EnsureItem(ctx, lib.ID, "series", r.Title, r.Year); err != nil {
-			return 0, false, err
+			return 0, false, 0, err
 		}
 		epID, err := w.db.EnsureEpisode(ctx, f.MediaItemID, r.Season, r.Episode, r.EpisodeTitle, r.AirDate)
 		if err != nil {
-			return 0, false, err
+			return 0, false, 0, err
 		}
 		f.EpisodeID = &epID
 	default:
 		if f.MediaItemID, created, err = w.db.EnsureItem(ctx, lib.ID, "movie", r.Title, r.Year); err != nil {
-			return 0, false, err
+			return 0, false, 0, err
+		}
+		if r.Child != nil {
+			parentID, pc, err := w.fileUnder(ctx, lib, f.MediaItemID, r.Child)
+			if err != nil {
+				return 0, false, 0, err
+			}
+			if pc {
+				parentCreated = parentID
+			}
+		} else if err := w.db.SetDetectedParent(ctx, f.MediaItemID, nil, "", 0, ""); err != nil {
+			return 0, false, 0, err
 		}
 	}
 	fileID, err = w.db.UpsertFile(ctx, *f, seen)
-	return fileID, created, err
+	return fileID, created, parentCreated, err
 }
 
 // RescanFile reads one file again the way a scan reads a new one (probe,

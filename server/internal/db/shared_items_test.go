@@ -52,7 +52,7 @@ func TestItemsAreSharedAcrossLibraries(t *testing.T) {
 
 	// Only the TV library is limited: the title is visible through its DVR file too.
 	limited := WithAccess(ctx, Access{Libraries: []int64{dvr}})
-	if items, _ := d.Items(limited, "series"); len(items) != 1 {
+	if items, _ := d.Items(limited, "series", false); len(items) != 1 {
 		t.Fatalf("a profile limited to DVR sees %d series, want 1", len(items))
 	}
 	if files, _ := d.ItemFiles(limited, a); len(files) != 1 || files[0].ID != f2 {

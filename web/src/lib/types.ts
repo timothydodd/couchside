@@ -25,6 +25,31 @@ export interface ItemSummary {
   lastAddedAt: number;
   /** The best among the title's copies and episodes (extras aside). */
   dynamicRange: DynamicRange;
+  /** A child title (a film on a box set's bonus disc) is filed under its parent, off the Movies grid. */
+  parentId: number | null;
+  parentTitle: string;
+  /** The subfolder a scanned child came from ("Bonus Materials"), a heading on the parent's page. */
+  groupLabel: string;
+  /** Its track number on the disc; 0 when none. */
+  sortNo: number;
+  /** Titles filed under this one. A box set can have these and no file of its own. */
+  childCount: number;
+}
+
+/** A title filed under another, with the file its tile plays. */
+export interface ChildItem extends ItemSummary {
+  /** Its best copy; 0 when it has none. */
+  fileId: number;
+  problem: FileProblem;
+  durationSec: number;
+  positionSec: number;
+  watched: boolean;
+}
+
+/** The titles filed under a movie, one group per subfolder they came from (label "" when filed by hand). */
+export interface ChildGroup {
+  label: string;
+  items: ChildItem[];
 }
 
 export interface Item extends ItemSummary {
@@ -96,6 +121,8 @@ export interface ItemDetail {
   crew: CreditRow[];
   /** The copy of a movie this profile chose to watch; 0 = none chosen. */
   versionFileId: number;
+  /** Movies: the titles filed under this one (a box set's discs), grouped. */
+  children?: ChildGroup[];
 }
 
 /** One person in a title's credits. role is the character, or the job(s) for crew. */

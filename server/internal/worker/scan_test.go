@@ -352,7 +352,7 @@ func TestScanKeepsMergedFilesWhereTheyWerePut(t *testing.T) {
 	if err := w.scan(ctx, lib); err != nil {
 		t.Fatal(err)
 	}
-	items, _ := d.Items(ctx, "movie")
+	items, _ := d.Items(ctx, "movie", false)
 	if len(items) != 2 {
 		t.Fatalf("items after the first scan = %d, want 2", len(items))
 	}
@@ -371,7 +371,7 @@ func TestScanKeepsMergedFilesWhereTheyWerePut(t *testing.T) {
 	if err := w.scan(ctx, lib); err != nil {
 		t.Fatal(err)
 	}
-	items, _ = d.Items(ctx, "movie")
+	items, _ = d.Items(ctx, "movie", false)
 	if len(items) != 1 || items[0].ID != keep {
 		t.Fatalf("items after the merge and a rescan = %+v, want only %d", items, keep)
 	}

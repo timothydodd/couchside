@@ -186,6 +186,17 @@ func (s *Server) deleteItem(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	if len(files) == 0 {
+		// A box set with no file of its own: the title goes, the titles filed
+		// under it (and their files) stay, as movies in their own right.
+		if err := s.db.DeleteEmptyItem(r.Context(), id); err != nil {
+			writeErr(w, err)
+			return
+		}
+		_ = os.RemoveAll(worker.ItemArtDir(s.cfg.CacheDir, id))
+		writeJSON(w, http.StatusOK, deleteResult{ItemsRemoved: []int64{id}, KeptFolders: []string{}})
+		return
+	}
 	res, err := s.deleteFiles(r.Context(), lib, files)
 	if err != nil {
 		writeErr(w, err)

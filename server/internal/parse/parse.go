@@ -16,6 +16,21 @@ type Result struct {
 	Episode      int    // episodes only
 	EpisodeTitle string // episodes only, from "Show - S01E02 - Title" style names
 	AirDate      string // date-named recordings: "2006-01-02 15:04" (time optional)
+	// Child is set for a movie file nested below another movie's folder
+	// ("Looney Tunes Platinum Collection (2011)/Disc 3 - Bonus Materials/Bonus
+	// Cartoons/02 - The Door (1968).mp4"): a title of its own, filed under
+	// that movie. Nil for a movie in its own right.
+	Child *Child
+}
+
+// Child says which movie a nested file belongs under, and where in it.
+type Child struct {
+	ParentTitle string // the movie folder's title and year
+	ParentYear  int
+	ParentDir   string // the movie folder, relative to the library root, with forward slashes
+	Group       string // the folders between, cleaned: "Bonus Materials · Bonus Cartoons"
+	SortNo      int    // a leading track number in the file name ("01 - ..."), 0 when none
+	extra       string // set when the file's own folder is a Plex extras folder: an extra of the parent, not a child
 }
 
 var (
@@ -42,10 +57,27 @@ func Movie(path string) Result { return MovieIn(path, nil) }
 
 // MovieIn is Movie with a look at the folders around the file (list may be
 // nil), so it agrees with MovieRoleIn about what's an extras folder.
-func MovieIn(path string, list Lister) Result {
+func MovieIn(path string, list Lister) Result { return MovieWith(path, list, true) }
+
+// MovieWith is MovieIn with the nesting rule on or off: with nested, a file
+// below a subfolder of a movie's folder is a child title (Result.Child) of
+// that movie, named after the file with its track number dropped; without
+// it, such a file is a movie like any other.
+func MovieWith(path string, list Lister, nested bool) Result {
 	if _, ok := inExtrasDir(path, list); ok {
 		if d := Name(filepath.Base(filepath.Dir(filepath.Dir(path)))); d.Title != "" {
 			return d
+		}
+	}
+	if nested {
+		if c, name := childOf(path); c != nil {
+			if c.extra != "" {
+				// A Plex extras folder on a bonus disc: an extra of the set itself.
+				return Result{Title: c.ParentTitle, Year: c.ParentYear}
+			}
+			r := Name(name)
+			r.Child = c
+			return r
 		}
 	}
 	r := Name(stem(path))
@@ -176,6 +208,60 @@ func Name(name string) Result {
 		r.Title = cleanTitle(s)
 	}
 	return r
+}
+
+var (
+	// A folder that is only a disc or part marker ("Disc 1", "CD2"): a split
+	// movie's folder, not a group of bonus material.
+	rePartDir = regexp.MustCompile(`(?i)^(?:part|pt|cd|disc|disk)[ ._-]*(?:\d{1,2}|one|two|three|four)(?:$|[ ._-]+)`)
+	// A track number at the start of a disc rip's file name: "01 - Title", "02.Title".
+	reTrackNo = regexp.MustCompile(`^(\d{1,3})\s*[-.]\s*`)
+)
+
+// childOf reports whether a movie file is nested below a subfolder of a
+// movie's folder (one named with a year), at any depth, and if so under
+// which movie and what to parse its own name from. A file whose own folder
+// is named with a year is a movie in its own right, and one whose folder is
+// only a disc marker ("Disc 1") is a split movie, as before.
+func childOf(path string) (*Child, string) {
+	segs := strings.Split(filepath.ToSlash(filepath.Clean(path)), "/")
+	if len(segs) < 3 {
+		return nil, ""
+	}
+	dirs := segs[:len(segs)-1]
+	own := dirs[len(dirs)-1]
+	if Name(own).Year > 0 || isPartDir(own) {
+		return nil, ""
+	}
+	for i := len(dirs) - 2; i >= 0; i-- {
+		p := Name(dirs[i])
+		if p.Year == 0 || p.Title == "" {
+			continue
+		}
+		var group []string
+		for _, d := range dirs[i+1:] {
+			if g := cleanTitle(rePartDir.ReplaceAllString(d, "")); g != "" {
+				group = append(group, g)
+			}
+		}
+		c := &Child{ParentTitle: p.Title, ParentYear: p.Year, ParentDir: strings.Join(dirs[:i+1], "/"), Group: strings.Join(group, " · ")}
+		if label, ok := ExtrasDir(own); ok {
+			c.extra = label
+			return c, ""
+		}
+		name := stem(path)
+		if m := reTrackNo.FindStringSubmatch(name); m != nil && len(name) > len(m[0]) && (name[len(m[0])] < '0' || name[len(m[0])] > '9') {
+			c.SortNo, _ = strconv.Atoi(m[1])
+			name = name[len(m[0]):]
+		}
+		return c, name
+	}
+	return nil, ""
+}
+
+// isPartDir reports whether a folder name is only a disc or part marker.
+func isPartDir(name string) bool {
+	return rePartDir.MatchString(name) && cleanTitle(rePartDir.ReplaceAllString(name, "")) == ""
 }
 
 func isSep(c byte) bool { return strings.IndexByte(" ._-()[]", c) >= 0 }

@@ -8,6 +8,9 @@ import Link from "../components/Link";
 import FadeImg from "../components/FadeImg";
 import { PosterArt } from "../components/PosterCard";
 import { BackButton, EmptyState, ErrorNote, Loading } from "../components/ui";
+import { PosterRow } from "../components/Rows";
+import { useQueue } from "../stores/queue";
+import { useRouter } from "../stores/router";
 import { api, backdropUrl, posterUrl, useApi } from "../lib/api";
 import { usePhone } from "../lib/media";
 import { useScrollEdges } from "../lib/scroll";
@@ -26,6 +29,7 @@ export default function ItemPage({ id, season, edit }: { id: number; season?: nu
   const { data, error, loading, reload } = useApi<ItemDetail>(`/api/items/${id}`);
   useTitle(data && (season !== undefined && data.item.kind === "series" ? `${data.item.title} · Season ${season}` : data.item.title));
   const admin = useIsAdmin();
+  const go = useRouter((s) => s.go);
   // The Edit panel: open from the button, from "Fix match", or by ?edit=1 (the library table links here).
   const [editing, setEditing] = useState<PanelSection | null>(edit ? "details" : null);
 
@@ -69,7 +73,16 @@ export default function ItemPage({ id, season, edit }: { id: number; season?: nu
   const partOffset = feature.slice(0, Math.max(0, movieAt)).reduce((t, f) => t + (f.durationSec ?? 0), 0);
   const playFile = isSeries ? next?.fileId : movieFile?.id;
   const resumeAt = isSeries ? next?.positionSec : movieAt >= 0 ? partOffset + movieFile.positionSec : 0;
-  const allWatched = item.fileCount > 0 && item.watchedCount >= item.fileCount;
+  // Titles filed under this one (a box set's discs). With no file of its own, Play runs through them.
+  const groups = data.children ?? [];
+  const kids = groups.flatMap((g) => g.items);
+  const playableKids = kids.filter((k) => k.fileId && !k.problem);
+  const kidAt = playableKids.find((k) => !k.watched) ?? playableKids[0];
+  const playKids = () => {
+    useQueue.getState().start(playableKids.map((k) => ({ fileId: k.fileId, title: k.title, subtitle: k.year ? String(k.year) : k.groupLabel || undefined })));
+    go(`/play/${kidAt.fileId}`);
+  };
+  const allWatched = (item.fileCount > 0 ? item.watchedCount >= item.fileCount : kids.length > 0) && kids.every((k) => k.watched);
 
   const setListed = attempt("Couldn't change your list", async (on: boolean) => {
     await api(`/api/items/${id}/watchlist`, { method: on ? "PUT" : "DELETE" });
@@ -94,7 +107,7 @@ export default function ItemPage({ id, season, edit }: { id: number; season?: nu
           <div className="poster-placeholder absolute inset-0" />
         )}
         <div className="hero-fade absolute inset-0" />
-        <BackButton fallback={isSeries ? "/tv" : "/movies"} overlay />
+        <BackButton fallback={item.parentId ? `/item/${item.parentId}` : isSeries ? "/tv" : "/movies"} overlay />
       </section>
 
       <div className="relative -mt-24 flex flex-col gap-6 gutter sm:-mt-40 md:flex-row">
@@ -103,6 +116,11 @@ export default function ItemPage({ id, season, edit }: { id: number; season?: nu
           <PosterArt item={item} size="full" />
         </div>
         <div className="min-w-0 flex-1 md:pt-16">
+          {item.parentId && (
+            <Link to={`/item/${item.parentId}`} className="text-xs font-semibold uppercase tracking-widest text-content-muted hover:text-accent">
+              Part of {item.parentTitle}
+            </Link>
+          )}
           <h1 className="text-2xl font-bold leading-tight text-content sm:text-3xl md:text-4xl">{item.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-content-secondary">
             {item.year && <span>{item.year}</span>}
@@ -110,6 +128,7 @@ export default function ItemPage({ id, season, edit }: { id: number; season?: nu
             <RangeChip range={item.dynamicRange} />
             {!isSeries && runtime && <span>{runtime}</span>}
             {feature.length > 1 && <span>{feature.length} parts</span>}
+            {kids.length > 0 && <span>{kids.length} title{kids.length === 1 ? "" : "s"}</span>}
             {isSeries && seasons && (
               <span>
                 {seasons.length} season{seasons.length === 1 ? "" : "s"} · {item.fileCount} episode{item.fileCount === 1 ? "" : "s"}
@@ -134,6 +153,12 @@ export default function ItemPage({ id, season, edit }: { id: number; season?: nu
           )}
 
           <div className="mt-5 flex flex-wrap items-center gap-2">
+            {!playFile && kidAt && (
+              <button type="button" className="btn-primary !px-5 !py-2" onClick={playKids}>
+                <Play size={16} className="fill-current" />
+                {kidAt.positionSec > 30 && !kidAt.watched ? `Resume ${kidAt.title}` : kids.every((k) => !k.watched) ? "Play all" : `Play ${kidAt.title}`}
+              </button>
+            )}
             {playFile && (
               <Link to={`/play/${playFile}`} className="btn-primary !px-5 !py-2">
                 <Play size={16} className="fill-current" />
@@ -197,6 +222,13 @@ export default function ItemPage({ id, season, edit }: { id: number; season?: nu
         <CastRow cast={data.cast ?? []} />
       </div>
       {isSeries && seasons && <Seasons item={item} seasons={seasons} open={season} admin={admin} onChange={reload} />}
+      {groups.length > 0 && (
+        <div className="mt-6">
+          {groups.map((g) => (
+            <PosterRow key={g.label} title={g.label || (groups.length === 1 ? "In this set" : "Also in this set")} items={g.items} />
+          ))}
+        </div>
+      )}
       {extras.length > 0 && <Extras item={item} files={extras} admin={admin} onChange={reload} />}
       {!isSeries && files.length > extras.length && <FilesCard files={files.filter((f) => f.role !== "extra")} onChange={reload} />}
       {error && (

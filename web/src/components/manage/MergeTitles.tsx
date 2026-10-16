@@ -16,7 +16,7 @@ export default function MergeTitles({ items, onClose, onMerged }: { items: ItemS
   // Default to the one with metadata and the most files: the best-known copy of the title.
   const best = [...items].sort((a, b) => Number(b.matchStatus === "matched") - Number(a.matchStatus === "matched") || b.fileCount - a.fileCount)[0];
   const [into, setInto] = useState(best?.id ?? 0);
-  const [as, setAs] = useState<"copy" | "extra">("copy");
+  const [as, setAs] = useState<"copy" | "extra" | "child">("copy");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -55,7 +55,7 @@ export default function MergeTitles({ items, onClose, onMerged }: { items: ItemS
         </div>
         {movies ? (
           <>
-            <div className="mt-3 field-label">The other films' files are</div>
+            <div className="mt-3 field-label">The other films are</div>
             <div className="mt-1 flex flex-col gap-1" role="radiogroup" aria-label="What the other files become">
               <label className="flex items-start gap-2 text-sm text-content">
                 <input type="radio" name="as" className="mt-1 accent-brand" checked={as === "copy"} onChange={() => setAs("copy")} />
@@ -71,12 +71,21 @@ export default function MergeTitles({ items, onClose, onMerged }: { items: ItemS
                   <span className="block text-xs text-content-muted">Featurettes, deleted scenes: listed under the film, named after the title they were.</span>
                 </span>
               </label>
+              <label className="flex items-start gap-2 text-sm text-content">
+                <input type="radio" name="as" className="mt-1 accent-brand" checked={as === "child"} onChange={() => setAs("child")} />
+                <span>
+                  Titles of their own, filed under it
+                  <span className="block text-xs text-content-muted">A box set's discs, shorts on a collection: each keeps its details and watched state, listed on the kept title's page instead of the Movies page.</span>
+                </span>
+              </label>
             </div>
           </>
         ) : (
           <p className="mt-3 text-xs text-content-muted">The other shows' episodes join this one by season and number. Watch history comes along.</p>
         )}
-        <p className="mt-3 text-xs text-content-muted">Nothing on disk moves. Scans leave merged files where you put them; the other titles disappear from the library.</p>
+        <p className="mt-3 text-xs text-content-muted">
+          Nothing on disk moves. {as === "child" ? "Scans leave your choice alone; the other titles stay, on the kept title's page." : "Scans leave merged files where you put them; the other titles disappear from the library."}
+        </p>
         {err && (
           <div className="mt-3">
             <ErrorNote>{err}</ErrorNote>
@@ -87,7 +96,7 @@ export default function MergeTitles({ items, onClose, onMerged }: { items: ItemS
             Cancel
           </button>
           <button className="btn-primary" disabled={busy || !into} onClick={() => void run()}>
-            <Combine size={14} /> {busy ? "Merging…" : "Merge"}
+            <Combine size={14} /> {busy ? (as === "child" ? "Filing…" : "Merging…") : as === "child" ? "File under" : "Merge"}
           </button>
         </div>
       </>

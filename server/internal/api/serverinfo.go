@@ -66,6 +66,10 @@ func (s *Server) features(ctx context.Context) []string {
 	if s.cfg.Discovery {
 		f = append(f, "discovery")
 	}
+	// Movies can be filed under another (a box set's discs): GET /api/items
+	// leaves them out unless includeChildren=1, and a title can have no file
+	// of its own while titles are filed under it.
+	f = append(f, "childTitles")
 	sort.Strings(f)
 	return f
 }

@@ -21,7 +21,8 @@ func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, badRequest("kind must be movie or series"))
 		return
 	}
-	items, err := s.db.Items(r.Context(), kind)
+	// Child titles (a box set's discs) are on their parent's page, not in the grid, unless asked for.
+	items, err := s.db.Items(r.Context(), kind, r.URL.Query().Get("includeChildren") == "1")
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -67,6 +68,14 @@ func (s *Server) getItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := map[string]any{"item": item, "files": files, "cast": cast, "crew": crew, "versionFileId": version}
+	if item.Kind == "movie" {
+		children, err := s.db.ChildItems(ctx, id)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		out["children"] = groupChildren(children)
+	}
 	if item.Kind == "series" {
 		eps, err := s.db.SeriesEpisodes(ctx, id)
 		if err != nil {
@@ -215,9 +224,25 @@ func (s *Server) itemWatched(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	ids := make([]int64, len(files))
-	for i, f := range files {
-		ids[i] = f.ID
+	ids := make([]int64, 0, len(files))
+	for _, f := range files {
+		ids = append(ids, f.ID)
+	}
+	// Watching a box set is watching everything filed under it.
+	children, err := s.db.ChildItems(r.Context(), id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	for _, c := range children {
+		cf, err := s.db.FeatureFiles(r.Context(), c.ID)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		for _, f := range cf {
+			ids = append(ids, f.ID)
+		}
 	}
 	if err := s.db.SetWatched(r.Context(), ids, in.Watched); err != nil {
 		writeErr(w, err)
@@ -243,6 +268,17 @@ func (s *Server) mergeItems(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(in.From) == 0 || len(in.From) > 100 {
 		writeErr(w, badRequest("pick 1 to 100 titles to merge"))
+		return
+	}
+	if in.As == "child" {
+		// Not merged: each stays a title of its own, filed under the one kept.
+		for _, id := range in.From {
+			if err := s.db.SetParent(r.Context(), id, &in.Into); err != nil {
+				writeErr(w, userFaultOr400(err))
+				return
+			}
+		}
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	if err := s.db.MergeItems(r.Context(), in.Into, in.From, in.As); err != nil {
@@ -329,4 +365,53 @@ func (s *Server) setItemDetails(w http.ResponseWriter, r *http.Request) {
 		_ = s.worker.Enqueue(ctx, worker.KindMatch, id, "Match "+item.ParsedTitle)
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// childGroup is one heading on a title's page: the titles filed under it
+// from one subfolder ("Bonus Materials"), or all of them when none came from a folder.
+type childGroup struct {
+	Label string         `json:"label"`
+	Items []db.ChildItem `json:"items"`
+}
+
+func groupChildren(children []db.ChildItem) []childGroup {
+	groups := []childGroup{}
+	for _, c := range children {
+		if len(groups) == 0 || groups[len(groups)-1].Label != c.GroupLabel {
+			groups = append(groups, childGroup{Label: c.GroupLabel, Items: []db.ChildItem{}})
+		}
+		groups[len(groups)-1].Items = append(groups[len(groups)-1].Items, c)
+	}
+	return groups
+}
+
+// setParent files a movie under another title (File under), or takes it out
+// (parentId null: Unfile). Either choice sticks through scans.
+func (s *Server) setParent(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	var in struct {
+		ParentID *int64 `json:"parentId"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := s.db.SetParent(r.Context(), id, in.ParentID); err != nil {
+		writeErr(w, userFaultOr400(err))
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// userFaultOr400 answers a db rule ("a title can't be filed under itself")
+// as a 400 and not-found as a 404; anything else stays an internal error.
+func userFaultOr400(err error) error {
+	if errors.Is(err, db.ErrNotFound) {
+		return err
+	}
+	return badRequest(err.Error())
 }

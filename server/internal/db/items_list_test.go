@@ -78,7 +78,7 @@ func TestItemsJoinMatchesSubqueries(t *testing.T) {
 	}
 	seedLibrary(t, d, me.ID, 60)
 	for _, c := range []context.Context{WithProfile(ctx, me.ID), WithProfile(ctx, other.ID), ctx} {
-		got, err := d.Items(c, "movie")
+		got, err := d.Items(c, "movie", false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -108,7 +108,7 @@ func BenchmarkItems5k(b *testing.B) {
 	ctx := WithProfile(context.Background(), me.ID)
 	b.Run("join", func(b *testing.B) {
 		for range b.N {
-			if _, err := d.Items(ctx, "movie"); err != nil {
+			if _, err := d.Items(ctx, "movie", false); err != nil {
 				b.Fatal(err)
 			}
 		}

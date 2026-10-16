@@ -73,16 +73,31 @@ func MovieRole(path, title string) Role { return MovieRoleIn(path, title, nil) }
 // MovieRoleIn is MovieRole with a look at the folders around the file (list
 // may be nil): an extras folder needs a movie around it, and a part marker
 // counts only when another file in the folder has one too.
-func MovieRoleIn(path, title string, list Lister) Role {
+func MovieRoleIn(path, title string, list Lister) Role { return MovieRoleWith(path, title, list, true) }
+
+// MovieRoleWith is MovieRoleIn with the nesting rule on or off (see
+// MovieWith). A child title's file is that title's own copy, whatever its
+// name says ("Making of Chuck Amuck" is a film on a bonus disc, not an
+// extra of itself); it can still be one part of a split child.
+func MovieRoleWith(path, title string, list Lister, nested bool) Role {
 	name := stem(path)
 	if label, ok := inExtrasDir(path, list); ok {
 		return Role{Kind: "extra", Extra: extraName(name, title, label)}
 	}
-	if m := reExtraSuffix.FindStringSubmatchIndex(name); m != nil && !reExtraSuffix.MatchString(title) {
+	child := false
+	if nested {
+		if c, _ := childOf(path); c != nil {
+			if c.extra != "" {
+				return Role{Kind: "extra", Extra: extraName(name, title, c.extra)}
+			}
+			child = true
+		}
+	}
+	if m := reExtraSuffix.FindStringSubmatchIndex(name); m != nil && !child && !reExtraSuffix.MatchString(title) {
 		label := suffixLabels[strings.ToLower(name[m[2]:m[3]])]
 		return Role{Kind: "extra", Extra: extraName(name[:m[0]], title, label)}
 	}
-	if m := reExtraWord.FindStringSubmatch(name); m != nil && !reExtraWord.MatchString(title) {
+	if m := reExtraWord.FindStringSubmatch(name); m != nil && !child && !reExtraWord.MatchString(title) {
 		return Role{Kind: "extra", Extra: extraName(name, title, cleanTitle(m[1]))}
 	}
 	if m := rePart.FindStringSubmatch(name); m != nil && !rePart.MatchString(title) {

@@ -76,6 +76,41 @@ in the Manage view and pick *Copy*, *Part N* or *Extra* for the file. Choices
 made by hand stick through rescans; marking a file as Part 2 makes the movie's
 single other copy Part 1.
 
+## Box sets and bonus discs
+
+A movie folder can hold other movies: a box set's bonus discs, the shorts on
+a collection, a making-of that is a film in its own right.
+
+```
+Looney Tunes Platinum Collection - Volume 1 (2011)/
+  Disc 1 - Behind the Tunes/01 - A Greeting from Chuck Jones.mp4
+  Disc 3 - Bonus Materials/Bonus Cartoons/05 - The Door (1968).mp4
+```
+
+A video anywhere below a subfolder of a movie's folder (one named with a
+year) is **filed under** that movie: a title of its own, with its own
+details, poster, watched state and search result, but listed on the
+movie's page instead of on the Movies page, under a heading named after the
+subfolder ("Bonus Materials · Bonus Cartoons"). A leading track number
+("01 - ") is dropped from the name and keeps the disc's order. The movie
+folder becomes a title even when it holds no video itself (the set above
+is matched as "Looney Tunes Platinum Collection - Volume 1"); Play on it
+plays what's filed under it in order, and Mark watched covers them all.
+
+Two kinds of subfolder are read as before: one that is only a disc marker
+(`Disc 1/`, `CD2/`) is a split movie, and a Plex extras folder
+(`Featurettes/`, `Trailers/`…) makes extras of the movie, on a bonus disc
+too.
+
+To turn the rule off, so that every file is its own title, clear **Settings
+→ Server → File nested folders under their movie** (`COUCHSIDE_NESTED_CHILDREN=false`);
+it takes effect on the next scan. Either way, admins can file any movie
+under another from its page (**⋯ → File under…**, and **Unfile** to take it
+out), or from the Movies page by selecting titles and choosing **Merge →
+Titles of their own, filed under it**; choices made by hand stick through
+rescans. Deleting a set that has no file of its own only removes the title:
+what was filed under it goes back to the Movies page.
+
 ## One title across libraries
 
 A movie or show is one entry however many libraries hold files for it. A

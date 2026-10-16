@@ -48,6 +48,7 @@ doesn't know means nothing to it.
 | `passwordless` | Picking a profile signs in. |
 | `oidc` | Single sign-on is configured. |
 | `discovery` | The server answers SSDP searches on the LAN. |
+| `childTitles` | Movies can be filed under another (a box set's discs). `GET /api/items` leaves them out unless `includeChildren=1`; a summary carries `parentId`, `parentTitle`, `groupLabel`, `sortNo` and `childCount`; `GET /api/items/{id}` adds `children` (groups of `{label, items}`) to a movie; and a title can have `fileCount` 0 while `childCount` is above 0, so Play on it should play its children. |
 
 ## Rules for the server
 
