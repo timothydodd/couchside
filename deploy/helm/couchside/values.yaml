@@ -163,6 +163,13 @@ service:
   # With type NodePort: a fixed port (30000-32767), so TV apps keep the same
   # address; "" lets Kubernetes pick.
   nodePort: ""
+  # With type NodePort or LoadBalancer: Local hands connections to the pod
+  # with the visitor's own address, so the sessions list, the log and the
+  # sign-in throttle see it. Cluster (Kubernetes's default) rewrites every
+  # connection's source to the node (10.42.0.1 on k3s), so everyone looks the
+  # same. Local only answers on the node running the pod, which is every
+  # node of a one-node cluster.
+  externalTrafficPolicy: Local
 
 ingress:
   enabled: false

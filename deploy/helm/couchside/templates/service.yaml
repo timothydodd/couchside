@@ -5,6 +5,9 @@ metadata:
   labels: {{- include "couchside.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.service.type }}
+  {{- if and (ne .Values.service.type "ClusterIP") .Values.service.externalTrafficPolicy }}
+  externalTrafficPolicy: {{ .Values.service.externalTrafficPolicy }}
+  {{- end }}
   selector: {{- include "couchside.selector" . | nindent 4 }}
   ports:
     - name: http

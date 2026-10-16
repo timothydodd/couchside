@@ -4,6 +4,18 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## Unreleased
+
+### Fixed
+
+- **Helm: every sign-in showed the node's address** (`10.42.0.1` on k3s)
+  in Settings → Accounts → sessions and the log when the chart's Service
+  was a NodePort or LoadBalancer. The chart now sets
+  `externalTrafficPolicy: Local` on those (`service.externalTrafficPolicy`),
+  which keeps the visitor's address. Existing installs pick it up on the
+  next `helm upgrade`; a cluster with several nodes that wants every node
+  to answer can set it back to `Cluster`.
+
 ## 0.20.1
 
 ### Changed

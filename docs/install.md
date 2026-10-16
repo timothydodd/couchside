@@ -185,6 +185,12 @@ name and a password.
   the pod: a recording in progress is cut and resumed by the new one.
 - Liveness uses `/livez` (the process answers) and readiness `/healthz` (the
   database answers), so a long scan or backup doesn't get the pod restarted.
+- A NodePort or LoadBalancer Service gets `externalTrafficPolicy: Local`, so
+  Couchside sees visitors' own addresses (sessions list, log, sign-in
+  throttle) rather than the node's (`10.42.0.1` on k3s). On a cluster with
+  several nodes, only the node running the pod answers on that port; set
+  `service.externalTrafficPolicy=Cluster` to answer on every node and lose
+  the addresses.
 - LAN discovery needs `discovery.hostNetwork=true` (multicast doesn't reach
   the pod network); the pod then serves on the node's port 8080.
 - Optional keys come from Secrets: `tmdb.existingSecret` for your own TMDB key
