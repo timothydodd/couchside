@@ -38,8 +38,8 @@ var Editable = func() []Setting {
 	s := []Setting{
 		{Key: "COUCHSIDE_SCAN_INTERVAL", Group: "Libraries", Label: "Rescan libraries every", Kind: "duration",
 			Help: "How often every library is checked for new and removed files. 0 turns it off; you can still scan by hand.", Default: "6h", Placeholder: "6h"},
-		{Key: "COUCHSIDE_WORKERS", Group: "Libraries", Label: "Background jobs at once", Kind: "int",
-			Help: "Scans, matching, artwork and thumbnails running side by side.", Default: "2"},
+		{Key: "COUCHSIDE_WORKERS", Group: "Libraries", Label: "Library jobs at once", Kind: "int",
+			Help: "Scans, matching, artwork and episode stills running side by side. Encoding jobs (preview thumbnails, optimized copies, commercial and intro detection) have their own setting under Encoding.", Default: "2"},
 		{Key: "COUCHSIDE_NESTED_CHILDREN", Group: "Libraries", Label: "File nested folders under their movie", Kind: "bool",
 			Help: "A video in a subfolder of a movie's folder (bonus discs, shorts, featurettes) is listed on that movie's page instead of on the Movies page. Turn off to index every file as its own title. Takes effect on the next scan.", Default: "true"},
 
@@ -49,8 +49,8 @@ var Editable = func() []Setting {
 			Default: "auto"},
 		{Key: "COUCHSIDE_MAX_TRANSCODES", Group: "Encoding", Label: "Streams converted at once", Kind: "int",
 			Help: "Playback and live TV sessions that need converting. Direct play and remuxes don't count. More than your CPU or GPU can keep up with makes every stream stutter.", Default: "2"},
-		{Key: "COUCHSIDE_ENCODE_WORKERS", Group: "Encoding", Label: "Optimized copies at once", Kind: "int",
-			Help: "Background \"optimize\" and commercial-detection jobs.", Default: "1"},
+		{Key: "COUCHSIDE_ENCODE_WORKERS", Group: "Encoding", Label: "Encoding jobs at once", Kind: "int",
+			Help: "Background ffmpeg jobs running side by side: optimized copies, commercial detection, intro detection and preview (seek-bar) thumbnails. Each uses a couple of CPU threads; a change applies after a restart.", Default: "1"},
 		{Key: "COUCHSIDE_OPTIMIZE_HEIGHT", Group: "Encoding", Label: "Optimized copy size", Kind: "choice",
 			Options: []string{"480", "720", "1080"}, Help: "The tallest picture an optimized copy keeps.", Default: "1080"},
 		{Key: "COUCHSIDE_FFMPEG_THREADS", Advanced: true, Group: "Encoding", Label: "Threads per ffmpeg", Kind: "int",
