@@ -120,6 +120,13 @@ func TestNVENCFullPipeline(t *testing.T) {
 	if chain != "scale_cuda=w=-2:h=720:format=p010,hwdownload,format=p010le,hwupload,tonemap_opencl=format=nv12:tonemap=hable:desat=0:p=bt709:t=bt709:m=bt709,hwdownload,format=nv12" {
 		t.Errorf("tonemap_opencl chain = %q", chain)
 	}
+	// A machine with more than one OpenCL device needs the selector detection chose.
+	e.OpenCLDevice = ",device_vendor=NVIDIA,device_type=gpu"
+	in, _, _ = e.VideoParts(o)
+	if got := strings.Join(in, " "); !strings.Contains(got, "-init_hw_device opencl=ocl:,device_vendor=NVIDIA,device_type=gpu -filter_hw_device ocl") {
+		t.Errorf("opencl device selector args = %q", got)
+	}
+	e.OpenCLDevice = ""
 
 	// SDR live TV: deinterlace and scale on the GPU, OpenCL not involved.
 	in, chain, _ = e.VideoParts(VideoOpts{MaxHeight: 720, BitrateK: 4000, Deinterlace: true, Live: true, HWDecode: true})

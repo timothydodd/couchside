@@ -18,6 +18,14 @@ its own notes list every merged change.
   `deploy/ffmpeg/`; the source tarball on each release is now
   `couchside-ffmpeg-<version>-src.tar.gz`.
 
+### Fixed
+
+- **HDR tone mapping on NVIDIA with more than one OpenCL device.** On a
+  machine with an Intel iGPU or a CPU OpenCL runtime beside the NVIDIA
+  card, ffmpeg refused to pick an OpenCL device ("More than one matching
+  device found") and HDR fell back to the CPU. The server now asks for the
+  NVIDIA GPU by vendor and only then for whatever single device there is.
+
 ## 0.20.0
 
 ### Added

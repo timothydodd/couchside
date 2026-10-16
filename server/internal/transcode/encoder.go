@@ -31,6 +31,11 @@ type Encoder struct {
 	HWDecode      bool
 	HWTonemap     bool
 	TonemapFilter string // tonemap_vaapi, tonemap_cuda or tonemap_opencl when HWTonemap
+	// OpenCLDevice picks the OpenCL device for tonemap_opencl (ffmpeg's
+	// -init_hw_device opencl selector after "ocl:"): a machine with an iGPU or
+	// a CPU runtime beside the NVIDIA card has more than one, and ffmpeg
+	// refuses to guess.
+	OpenCLDevice string
 	// Note says why no GPU is used, when one was asked for (or "auto" tried
 	// some): each encoder tried and ffmpeg's reason it failed.
 	Note string
@@ -113,16 +118,33 @@ func Detect(ctx context.Context, ffmpeg, want, vaapiDevice string) Encoder {
 			// tonemap_cuda is jellyfin-ffmpeg's; tonemap_opencl is in stock
 			// ffmpeg and runs on NVIDIA's OpenCL, with a round trip through
 			// memory because OpenCL can't map CUDA frames.
+		tonemap:
 			for _, f := range []string{"tonemap_cuda", "tonemap_opencl"} {
-				if strings.Contains(string(filters), " "+f+" ") && testCUDATonemap(ctx, e, f) {
-					e.HWTonemap, e.TonemapFilter = true, f
-					break
+				if !strings.Contains(string(filters), " "+f+" ") {
+					continue
+				}
+				for _, dev := range openCLDevices(f) {
+					e.OpenCLDevice = dev
+					if testCUDATonemap(ctx, e, f) {
+						e.HWTonemap, e.TonemapFilter = true, f
+						break tonemap
+					}
 				}
 			}
 		}
 		slog.Info("nvenc pipeline", "gpuDecode", e.HWDecode, "gpuTonemap", e.TonemapFilter)
 	}
 	return e
+}
+
+// openCLDevices are the OpenCL device selectors to try for a tone mapper,
+// most specific first: the NVIDIA GPU by name, then whatever single device
+// ffmpeg finds. tonemap_cuda needs no OpenCL device.
+func openCLDevices(filter string) []string {
+	if filter != "tonemap_opencl" {
+		return []string{""}
+	}
+	return []string{",device_vendor=NVIDIA,device_type=gpu", ""}
 }
 
 // testCUDATonemap runs a synthetic 10-bit PQ clip through the CUDA pipeline
@@ -138,7 +160,7 @@ func testCUDATonemap(ctx context.Context, e Encoder, filter string) bool {
 	args = append(args, codec...)
 	args = append(args, "-f", "null", "-")
 	if msg, err := exec.CommandContext(ctx, e.FFmpeg, args...).CombinedOutput(); err != nil {
-		slog.Warn("nvenc tone map test failed", "filter", filter, "err", err, "ffmpeg", Tail(string(msg), 300))
+		slog.Warn("nvenc tone map test failed", "filter", filter, "opencl", e.OpenCLDevice, "err", err, "ffmpeg", Tail(string(msg), 300))
 		return false
 	}
 	return true
@@ -445,7 +467,11 @@ func (e Encoder) nvencFull(o VideoOpts) (in []string, chain string, codec []stri
 // device (for hwupload) when tonemap_opencl does the tone mapping.
 func (e Encoder) cudaDevices(o VideoOpts) []string {
 	if o.HDR && e.HWTonemap && e.TonemapFilter == "tonemap_opencl" {
-		return []string{"-init_hw_device", "cuda=cu", "-init_hw_device", "opencl=ocl", "-filter_hw_device", "ocl"}
+		ocl := "opencl=ocl"
+		if e.OpenCLDevice != "" {
+			ocl += ":" + e.OpenCLDevice
+		}
+		return []string{"-init_hw_device", "cuda=cu", "-init_hw_device", ocl, "-filter_hw_device", "ocl"}
 	}
 	return []string{"-init_hw_device", "cuda=cu", "-filter_hw_device", "cu"}
 }
