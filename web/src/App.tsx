@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useLayoutEffect, useRef } from "react";
 import { MobileTabBar, MobileTopBar } from "./components/MobileNav";
 import Sidebar from "./components/Sidebar";
+import ServerWarnings from "./components/ServerWarnings";
 import StatusBar from "./components/StatusBar";
 import { EmptyState, Loading } from "./components/ui";
 import { lazyPage } from "./lib/lazyPage";
@@ -124,12 +125,14 @@ function Signed() {
       <MobileTopBar />
       <div className="flex min-h-0 flex-1">
         <Sidebar />
+        <div className="flex min-w-0 flex-1 flex-col">
+        <ServerWarnings />
         {/* Grid pages manage their own scroll (virtualised); the rest scroll here. */}
         <main
           ref={main}
           onScroll={(e) => scrollMemory.set(path, e.currentTarget.scrollTop)}
           key={route.name === "livetv" || route.name === "search" ? route.name : path}
-          className={`${viewTransitions ? "page-view" : "anim-page"} min-w-0 flex-1 ${route.name === "movies" || route.name === "tv" || route.name === "livetv" ? "overflow-hidden" : "overflow-auto"}`}
+          className={`${viewTransitions ? "page-view" : "anim-page"} min-h-0 min-w-0 flex-1 ${route.name === "movies" || route.name === "tv" || route.name === "livetv" ? "overflow-hidden" : "overflow-auto"}`}
         >
           <Suspense
             fallback={
@@ -153,6 +156,7 @@ function Signed() {
           {route.name === "notfound" && <EmptyState title="Nothing here">That page doesn't exist.</EmptyState>}
           </Suspense>
         </main>
+        </div>
       </div>
       <StatusBar />
       <MobileTabBar />

@@ -55,8 +55,10 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		tv = s.tv.Summary()
 	}
 	mediaRoots := []string{} // server paths: admins only, as tvStatus does with folders
+	shareErrors := []shareError{}
 	if currentUser(r.Context()).Admin {
 		mediaRoots = s.mediaRoots(r.Context())
+		shareErrors = s.shareErrors()
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"livetv":     tv,
@@ -64,12 +66,15 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		"providers":  s.providers.Names(),
 		"tmdbKey":    s.cfg.TMDBKeySource(),
 		"mediaRoots": mediaRoots,
-		"counts":     counts,
-		"jobs":       jobs,
-		"scanEvery":  s.cfg.ScanInterval.String(),
-		"workers":    s.cfg.Workers,
-		"comskip":    s.worker.CommercialsAvailable(),
-		"apiVersion": APIVersion,
+		// Network shares the server couldn't sign in to (admins only): the
+		// files are indexed but nothing can open them until it's fixed.
+		"shareErrors": shareErrors,
+		"counts":      counts,
+		"jobs":        jobs,
+		"scanEvery":   s.cfg.ScanInterval.String(),
+		"workers":     s.cfg.Workers,
+		"comskip":     s.worker.CommercialsAvailable(),
+		"apiVersion":  APIVersion,
 		// Why metadata lookups fail right now (TMDB refusing the key); empty when fine.
 		"metadataDegraded": s.providers.Degraded(),
 		"features":         s.features(r.Context()),

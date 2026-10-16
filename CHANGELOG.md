@@ -18,6 +18,13 @@ its own notes list every merged change.
   `deploy/ffmpeg/`; the source tarball on each release is now
   `couchside-ffmpeg-<version>-src.tar.gz`.
 
+### Added
+
+- **A warning when a network share can't be signed in to.** Admins see a
+  banner on every page naming the share and the reason, with a link to
+  Settings → Server → Media locations, instead of finding out from failed
+  jobs; `GET /api/status` carries it as `shareErrors` (admins only).
+
 ### Fixed
 
 - **HDR tone mapping on NVIDIA with more than one OpenCL device.** On a

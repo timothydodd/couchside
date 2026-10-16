@@ -433,6 +433,8 @@ export interface Status {
   /** Where the TMDB key comes from: this build's own, TMDB_API_KEY, or none. */
   tmdbKey: "builtin" | "custom" | "";
   mediaRoots: string[]; // media locations: admins only (empty for everyone else)
+  /** Network shares the server couldn't sign in to (admins only; absent on servers before 0.20.1). */
+  shareErrors?: { path: string; error: string }[];
   counts: { movies: number; series: number; episodes: number; unmatched: number; libraries: number };
   jobs: JobCounts;
   scanEvery: string;

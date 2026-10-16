@@ -76,6 +76,27 @@ func PrepareLocations(ctx context.Context, d *db.DB, cfg config.Config) map[stri
 	return status
 }
 
+// shareError is a network share whose sign-in failed, for /api/status.
+type shareError struct {
+	Path  string `json:"path"`
+	Error string `json:"error"`
+}
+
+// shareErrors lists the shares that couldn't be signed in to, so the UI can
+// point admins at Media locations instead of leaving it to the log.
+func (s *Server) shareErrors() []shareError {
+	s.sharesMu.Lock()
+	defer s.sharesMu.Unlock()
+	out := []shareError{}
+	for p, e := range s.shareStatus {
+		if e != "" {
+			out = append(out, shareError{Path: p, Error: e})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	return out
+}
+
 // shares are the saved locations with a sign-in.
 func shares(locs []db.MediaLocation) []netshare.Share {
 	var out []netshare.Share
