@@ -38,8 +38,8 @@ env:
   # GPL: FFMPEG.txt in the install folder says where the source is, and the
   # source tarball is attached to every Couchside release.
   FFMPEG_VERSION: 8.1.3-1
-  FFMPEG_SHA256: ""
-  FFMPEG_SRC_SHA256: ""
+  FFMPEG_SHA256: f5b38852128fd180665cc65aae462711d2c4479c2d813c8b46d715d181763b4b
+  FFMPEG_SRC_SHA256: 46e036fcfe466080d455bd6083e68c358b721db26149e78dfeba055d1af90413
   INNO_VERSION: 6.7.3
   INNO_SHA256: 9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732
 
