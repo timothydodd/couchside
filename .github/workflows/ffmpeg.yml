@@ -46,7 +46,7 @@ jobs:
           x86_64-w64-mingw32-gcc --version | head -1
           clang --version | head -1
       - name: build
-        run: deploy/ffmpeg/build.sh "$RUNNER_TEMP/ffmpeg"
+        run: bash deploy/ffmpeg/build.sh "$RUNNER_TEMP/ffmpeg"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ffmpeg-win64
