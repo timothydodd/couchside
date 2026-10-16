@@ -19,6 +19,11 @@ const KINDS: Record<string, { label: string; Icon: LucideIcon }> = {
   intros: { label: "Intros", Icon: Search },
 };
 
+/** The job's target without the verb its label starts with ("Preview thumbnails Film.mkv" → "Film.mkv"); the Task column names the kind. */
+function jobTarget(label: string): string {
+  return label.replace(/^(Preview thumbnails|Find (commercials|intros)|Read HDR info|\S+)\s+/, "");
+}
+
 const STATUS: Record<Job["status"], { label: string; tone: Tone }> = {
   running: { label: "Running", tone: "info" },
   queued: { label: "Queued", tone: "muted" },
@@ -105,7 +110,7 @@ export default function ActivityPage() {
                         </span>
                       </td>
                       <td className="max-w-md">
-                        <div className="truncate">{j.label.replace(/^\S+\s/, "")}</div>
+                        <div className="truncate">{jobTarget(j.label)}</div>
                         {j.error && (
                           <div className="truncate text-xs text-critical" title={j.error}>
                             {j.error}

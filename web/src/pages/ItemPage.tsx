@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bookmark, BookmarkCheck, Eye, EyeOff, Pencil, Play, Star, Wand2 } from "lucide-react";
+import { Bookmark, BookmarkCheck, ChevronLeft, ChevronRight, Eye, EyeOff, Pencil, Play, Star, Wand2 } from "lucide-react";
 import EpisodeCard from "../components/EpisodeCard";
 import FilesCard from "../components/item/FilesCard";
 import ItemPanel, { type PanelSection } from "../components/manage/ItemPanel";
@@ -264,7 +264,7 @@ function Seasons({
   const [season, setSeason] = useState(open ?? firstUnwatched);
   const current = seasons.find((s) => s.season === season) ?? seasons[0];
   const tabs = useRef<HTMLDivElement>(null);
-  useScrollEdges(tabs);
+  const { left, right, page } = useScrollEdges(tabs);
   // A show opened on a later season: bring its tab into view.
   useEffect(() => {
     tabs.current?.querySelector<HTMLElement>(".navtab-active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -272,12 +272,25 @@ function Seasons({
   if (!current) return null;
   return (
     <section className="mt-10 gutter">
-      <div ref={tabs} className="row-scroll flex gap-1 overflow-x-auto border-b border-border-light">
-        {seasons.map((s) => (
-          <button key={s.season} type="button" onClick={() => setSeason(s.season)} className={`navtab shrink-0 !text-sm ${s.season === current.season ? "navtab-active" : ""}`}>
-            {s.season === 0 ? "Specials" : `Season ${s.season}`}
-          </button>
-        ))}
+      {/* Many seasons overflow the tabs; with a mouse the arrows page them, like a card row (`.row-nav` hides them on touch). */}
+      <div className="flex items-end gap-2 border-b border-border-light">
+        <div ref={tabs} className="row-scroll flex min-w-0 flex-1 gap-1 overflow-x-auto">
+          {seasons.map((s) => (
+            <button key={s.season} type="button" onClick={() => setSeason(s.season)} className={`navtab shrink-0 !text-sm ${s.season === current.season ? "navtab-active" : ""}`}>
+              {s.season === 0 ? "Specials" : `Season ${s.season}`}
+            </button>
+          ))}
+        </div>
+        {(left || right) && (
+          <div className="row-nav mb-1 flex shrink-0 gap-0.5">
+            <button type="button" className="btn-quiet !p-1" aria-label="Scroll seasons left" disabled={!left} onClick={() => page(-1)}>
+              <ChevronLeft size={16} />
+            </button>
+            <button type="button" className="btn-quiet !p-1" aria-label="Scroll seasons right" disabled={!right} onClick={() => page(1)}>
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
       </div>
       <TileList>
         {current.episodes.map((e) => (

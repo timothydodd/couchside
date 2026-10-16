@@ -4,6 +4,17 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## 0.19.14
+
+### Fixed
+
+- On a show with more seasons than fit across the page, the season tabs
+  can now be paged with arrows beside them (with a mouse; fingers swipe),
+  like a row of cards.
+- Activity's Target column showed the job's verb for preview thumbnails,
+  intro detection, commercial detection and HDR reads ("thumbnails
+  Film.mkv"); it now names the file or title alone.
+
 ## 0.19.13
 
 ### Added
