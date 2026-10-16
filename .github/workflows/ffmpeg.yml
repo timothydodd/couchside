@@ -1,0 +1,131 @@
+name: ffmpeg
+
+# Builds the ffmpeg.exe and ffprobe.exe the Windows installer ships
+# (deploy/ffmpeg/build.sh: upstream FFmpeg, static, cross-compiled on Linux),
+# checks them on a Windows runner, and on an ffmpeg-<version>-<build> tag
+# publishes them as a GitHub release of that name with the complete source.
+# windows-installer.yml then downloads that release by its pinned hashes.
+#
+# To ship a new build: edit deploy/ffmpeg/versions.env, push, then
+#   git tag ffmpeg-<FFMPEG_VERSION>-<BUILD> && git push origin ffmpeg-...
+# and put the new hashes from the release's SHA256SUMS.txt into
+# windows-installer.yml. A manual run only keeps the artifacts.
+on:
+  push:
+    tags: ['ffmpeg-*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.pins.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: the tag must match versions.env
+        id: pins
+        run: |
+          . deploy/ffmpeg/versions.env
+          tag="ffmpeg-$FFMPEG_VERSION-$BUILD"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.ref_type }}" = tag ] && [ "${{ github.ref_name }}" != "$tag" ]; then
+            echo "::error::tag ${{ github.ref_name }} doesn't match deploy/ffmpeg/versions.env ($tag)"
+            exit 1
+          fi
+      - name: toolchain
+        run: |
+          sudo apt-get update -q
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+            mingw-w64 clang llvm nasm cmake ninja-build pkg-config autoconf automake libtool make zip curl xz-utils
+          # The Windows-threads variant has no std::thread; libvpl needs posix.
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+          x86_64-w64-mingw32-gcc --version | head -1
+          clang --version | head -1
+      - name: build
+        run: deploy/ffmpeg/build.sh "$RUNNER_TEMP/ffmpeg"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ffmpeg-win64
+          path: |
+            ${{ runner.temp }}/ffmpeg/out/*.zip
+            ${{ runner.temp }}/ffmpeg/out/*.tar.gz
+            ${{ runner.temp }}/ffmpeg/out/SHA256SUMS.txt
+          retention-days: 14
+          if-no-files-found: error
+
+  # The exe only runs on Windows: check it has what Couchside asks for. The
+  # runner has no GPU, so NVENC, Quick Sync and OpenCL are checked as present,
+  # not run; a test encode covers the CPU paths.
+  verify:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ffmpeg-win64
+      - name: check features
+        shell: pwsh
+        run: |
+          Expand-Archive (Get-Item *-win64.zip).FullName -DestinationPath ffmpeg
+          Get-Content ffmpeg/FFMPEG.txt
+          ./ffmpeg/ffmpeg.exe -hide_banner -version
+          $enc = ./ffmpeg/ffmpeg.exe -hide_banner -encoders | Out-String
+          $dec = ./ffmpeg/ffmpeg.exe -hide_banner -decoders | Out-String
+          $flt = ./ffmpeg/ffmpeg.exe -hide_banner -filters | Out-String
+          $hw  = ./ffmpeg/ffmpeg.exe -hide_banner -hwaccels | Out-String
+          $fmt = ./ffmpeg/ffmpeg.exe -hide_banner -formats | Out-String
+          $pro = ./ffmpeg/ffmpeg.exe -hide_banner -protocols | Out-String
+          foreach ($n in 'h264_nvenc', 'h264_qsv', 'libx264', 'aac', 'ac3', 'eac3', 'libwebp', 'mjpeg', 'webvtt') { if ($enc -notmatch " $n ") { throw "no $n encoder" } }
+          foreach ($n in 'h264_cuvid', 'hevc_cuvid', 'h264_qsv', 'hevc_qsv', 'hevc', 'mpeg2video', 'pgssub', 'dvdsub', 'png') { if ($dec -notmatch " $n ") { throw "no $n decoder" } }
+          foreach ($n in 'zscale', 'tonemap', 'tonemap_opencl', 'scale_cuda', 'yadif_cuda', 'yadif', 'scale2ref', 'overlay', 'hwupload', 'hwdownload', 'trim', 'atrim', 'testsrc2', 'anullsrc') { if ($flt -notmatch " $n ") { throw "no $n filter" } }
+          foreach ($n in 'cuda', 'qsv', 'd3d11va', 'dxva2', 'opencl') { if ($hw -notmatch "(?m)^$n\s*$") { throw "no $n hwaccel" } }
+          foreach ($n in 'hls', 'mpegts', 'matroska', 'mov', 'webvtt', 'lavfi', 'null', 's16le') { if ($fmt -notmatch " $n ") { throw "no $n format" } }
+          foreach ($n in 'https', 'tls', 'concat', 'pipe') { if ($pro -notmatch "(?m)^\s*$n\s*$") { throw "no $n protocol" } }
+      - name: test encodes
+        shell: pwsh
+        run: |
+          # A transcode to HLS the way a playback session does it.
+          ./ffmpeg/ffmpeg.exe -hide_banner -loglevel error -f lavfi -i testsrc2=size=1280x720:rate=30 -f lavfi -i "sine=frequency=440" -t 3 `
+            -c:v libx264 -preset veryfast -c:a aac -f hls -hls_time 1 -hls_playlist_type vod hls/index.m3u8
+          if ($LASTEXITCODE) { throw "HLS encode failed" }
+          # HDR tone mapping on the CPU (a 10-bit clip through zscale, as a session does).
+          ./ffmpeg/ffmpeg.exe -hide_banner -loglevel error -f lavfi -i testsrc2=size=640x360:rate=30 -t 1 `
+            -vf "format=yuv420p10le,zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=hable,zscale=t=bt709:m=bt709:r=tv,format=yuv420p" -c:v libx264 -f null -
+          if ($LASTEXITCODE) { throw "tone-map encode failed" }
+          # A poster the way the artwork job makes one.
+          ./ffmpeg/ffmpeg.exe -hide_banner -loglevel error -f lavfi -i testsrc2=size=400x600 -frames:v 1 -c:v libwebp -quality 82 poster.webp
+          if ($LASTEXITCODE -or -not (Test-Path poster.webp)) { throw "webp encode failed" }
+          # ffprobe's JSON, which the scanner reads.
+          $p = ./ffmpeg/ffprobe.exe -hide_banner -v error -print_format json -show_streams hls/index.m3u8 | ConvertFrom-Json
+          if ($p.streams.Count -lt 2) { throw "ffprobe found $($p.streams.Count) streams" }
+          "ok: $($p.streams.codec_name -join ', ')"
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: [build, verify]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ffmpeg-win64
+      - run: cat SHA256SUMS.txt
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          name: ${{ needs.build.outputs.tag }}
+          files: |
+            *.zip
+            *.tar.gz
+            SHA256SUMS.txt
+          make_latest: false
+          body: |
+            The `ffmpeg.exe` and `ffprobe.exe` bundled by Couchside's Windows installer: upstream FFmpeg, static, with only what Couchside uses (NVENC/NVDEC with the CUDA filters, Intel Quick Sync, OpenCL tone mapping, libx264, zimg, libwebp). Built by `deploy/ffmpeg/build.sh` from the pins in `deploy/ffmpeg/versions.env` at this tag.
+
+            - `couchside-ffmpeg-*-win64.zip`: the two exes and `FFMPEG.txt` (configure line, licences).
+            - `couchside-ffmpeg-*-src.tar.gz`: the complete source (GPL v3), every archive as fetched plus the build script.
+            - `SHA256SUMS.txt`: the hashes `windows-installer.yml` pins.

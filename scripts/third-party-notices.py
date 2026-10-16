@@ -133,15 +133,17 @@ def npm_packages():
 WINDOWS = """Windows installer (couchside-<version>-windows-amd64-setup.exe)
 -----------------------------------------------------------------
 
-- jellyfin-ffmpeg (ffmpeg.exe and ffprobe.exe, the portable win64 "gpl"
-  build; https://github.com/jellyfin/jellyfin-ffmpeg): transcoding, probing
-  and recording. GNU General Public License v3. Couchside runs it as a
-  separate process. FFMPEG.txt beside the exe names the version. Its complete
-  source (the FFmpeg tree with Jellyfin's patches and the scripts that build
-  the portable package) is attached to the matching Couchside release as
-  jellyfin-ffmpeg-<version>-src.tar.gz
-  (https://github.com/timothydodd/couchside/releases), and is also at
-  https://github.com/jellyfin/jellyfin-ffmpeg/releases. The GPL v3 text is
+- FFmpeg (ffmpeg.exe and ffprobe.exe; https://ffmpeg.org): transcoding,
+  probing and recording. Built by Couchside from unmodified upstream sources
+  (deploy/ffmpeg/build.sh), static, with x264 (GPL v2+), zimg (WTFPL),
+  libwebp (BSD-3-Clause), libvpl (MIT), nv-codec-headers (MIT), the Khronos
+  OpenCL headers and ICD loader (Apache-2.0) and zlib (zlib licence). The
+  whole is under the GNU General Public License v3. Couchside runs it as a
+  separate process. FFMPEG.txt beside the exe names the version and the
+  configure line. Its complete source (every library as fetched, with the
+  build script) is attached to the matching Couchside release as
+  couchside-ffmpeg-<version>-src.tar.gz and to the ffmpeg-<version> release
+  (https://github.com/timothydodd/couchside/releases). The GPL v3 text is
   GPL-3.0.txt beside the exe.
 """
 

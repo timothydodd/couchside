@@ -39,8 +39,9 @@ on the Libraries page. Settings are covered in [configuration.md](configuration.
 
 Run `couchside-<version>-windows-amd64-setup.exe`. It asks for a port, then:
 
-- installs Couchside with ffmpeg beside it (jellyfin-ffmpeg, whose NVENC runs on
-  older NVIDIA drivers than upstream builds), so there's nothing else to install;
+- installs Couchside with ffmpeg beside it (Couchside's own build of FFmpeg:
+  NVIDIA NVENC on driver 531.61 or newer, Intel Quick Sync, and nothing it
+  doesn't use), so there's nothing else to install;
 - runs it as the **Couchside** Windows service, which starts with Windows and
   restarts if it stops unexpectedly. The service runs as its own account,
   `NT SERVICE\Couchside`, not as an administrator: it can change only its own

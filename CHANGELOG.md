@@ -4,6 +4,20 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## Unreleased
+
+### Changed
+
+- **The Windows installer ships Couchside's own FFmpeg** instead of
+  jellyfin-ffmpeg: upstream FFmpeg 8.1.3, built static from unmodified
+  sources with only what Couchside uses (NVENC/NVDEC and the CUDA filters,
+  Intel Quick Sync, OpenCL tone mapping, libx264, zimg, libwebp). NVENC
+  still works on NVIDIA driver 531.61 or newer. HDR on NVIDIA is tone
+  mapped by OpenCL (`tonemap_opencl`), which the server already preferred
+  when `tonemap_cuda` wasn't there. The build script and pins are in
+  `deploy/ffmpeg/`; the source tarball on each release is now
+  `couchside-ffmpeg-<version>-src.tar.gz`.
+
 ## 0.20.0
 
 ### Added
