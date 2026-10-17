@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http/httptest"
 	"path/filepath"
 	"strconv"
@@ -297,4 +298,44 @@ func TestCreateLockedAccount(t *testing.T) {
 	if code := admin.do("POST", "/api/accounts", map[string]any{"name": "Boss", "role": "admin", "password": "boss password", "passwordLocked": true}, &a); code != 201 || a.PasswordLocked || !a.MustChangePassword {
 		t.Fatalf("admin account: %d %+v", code, a)
 	}
+}
+
+// A shared profile with hideDevices set isn't shown its own signed-in
+// devices and can't sign them out; an admin still can, from Accounts.
+func TestHiddenDevices(t *testing.T) {
+	s, ts, admin := passwordlessServer(t)
+	var p db.Profile
+	if code := admin.do("POST", "/api/accounts", map[string]any{"name": "Demo", "hideDevices": true}, &p); code != 201 || !p.HideDevices {
+		t.Fatalf("create = %d %+v", code, p)
+	}
+	demo := newClient(t, ts.URL)
+	if code := demo.do("POST", "/api/auth/pick", map[string]any{"profileId": p.ID}, nil); code != 200 {
+		t.Fatalf("pick = %d", code)
+	}
+	if code := demo.do("GET", "/api/auth/sessions", nil, nil); code != 403 {
+		t.Fatalf("hidden profile's sessions = %d, want 403", code)
+	}
+	if code := demo.do("POST", "/api/auth/sessions/others/end", nil, nil); code != 403 {
+		t.Fatalf("hidden profile's sign-out-others = %d, want 403", code)
+	}
+	var mine []sessionView
+	if code := admin.do("GET", fmt.Sprintf("/api/accounts/%d/sessions", p.ID), nil, &mine); code != 200 || len(mine) != 1 {
+		t.Fatalf("admin's view of its sessions = %d %v", code, mine)
+	}
+	if code := demo.do("DELETE", "/api/auth/sessions/"+mine[0].ID, nil, nil); code != 403 {
+		t.Fatalf("hidden profile ending a session = %d, want 403", code)
+	}
+	// Turning it off shows them again.
+	if code := admin.do("PUT", fmt.Sprintf("/api/accounts/%d", p.ID), map[string]any{"name": "Demo", "hideDevices": false}, &p); code != 200 || p.HideDevices {
+		t.Fatalf("update = %d %+v", code, p)
+	}
+	if code := demo.do("GET", "/api/auth/sessions", nil, nil); code != 200 {
+		t.Fatalf("sessions after showing = %d", code)
+	}
+	// An admin can't be hidden from.
+	var a db.Profile
+	if code := admin.do("POST", "/api/accounts", map[string]any{"name": "Boss2", "role": "admin", "password": "boss password", "hideDevices": true}, &a); code != 201 || a.HideDevices {
+		t.Fatalf("admin account: %d %+v", code, a)
+	}
+	_ = s
 }

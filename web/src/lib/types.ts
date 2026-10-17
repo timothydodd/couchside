@@ -262,6 +262,8 @@ export interface Profile {
   hasPassword: boolean;
   /** Only an admin can set or change this account's password (a shared profile). */
   passwordLocked: boolean;
+  /** A shared profile that isn't shown its own signed-in devices; admins see them in Accounts. */
+  hideDevices: boolean;
 }
 
 /** Set by the scanner for files that can't be played at all. */

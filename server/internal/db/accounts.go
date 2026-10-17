@@ -40,6 +40,12 @@ func (d *DB) SetPasswordLocked(ctx context.Context, id int64, locked bool) error
 	return affected(res, err)
 }
 
+// SetHideDevices sets whether a profile is shown its own signed-in devices.
+func (d *DB) SetHideDevices(ctx context.Context, id int64, hide bool) error {
+	res, err := d.sql.ExecContext(ctx, `UPDATE profiles SET hide_devices = ? WHERE id = ?`, hide, id)
+	return affected(res, err)
+}
+
 // SetAccess changes what a profile may do. The last enabled admin can't be
 // demoted or disabled.
 func (d *DB) SetAccess(ctx context.Context, id int64, role string, canRecord, disabled bool) (Profile, error) {

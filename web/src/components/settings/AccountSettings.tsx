@@ -13,8 +13,10 @@ import { attempt } from "../../lib/notices";
 export default function AccountSettings() {
   const { user, changePassword, logout } = useAuth();
   const hasPassword = !!user?.hasPassword;
-  // A shared profile: only an admin manages its password.
+  // A shared profile: only an admin manages its password, and its devices
+  // (other people's) stay out of sight.
   const locked = !!user?.passwordLocked && user.role !== "admin";
+  const devicesHidden = !!user?.hideDevices && user.role !== "admin";
   const [current, setCurrent] = useState("");
   const [password, setPassword] = useState<string | null>(null);
   const [formKey, setFormKey] = useState(0);
@@ -100,13 +102,17 @@ export default function AccountSettings() {
 
       {!locked && <TwoStep hasPassword={hasPassword} />}
 
-      <div className="mb-2 mt-6 flex items-center justify-between">
-        <div className="field-label !mb-0">Signed-in devices</div>
-        <button className="btn-quiet !text-xs" onClick={() => void signOutOthers()}>
-          Sign out everywhere else
-        </button>
-      </div>
-      <SessionList key={devicesKey} url="/api/auth/sessions" />
+      {!devicesHidden && (
+        <>
+          <div className="mb-2 mt-6 flex items-center justify-between">
+            <div className="field-label !mb-0">Signed-in devices</div>
+            <button className="btn-quiet !text-xs" onClick={() => void signOutOthers()}>
+              Sign out everywhere else
+            </button>
+          </div>
+          <SessionList key={devicesKey} url="/api/auth/sessions" />
+        </>
+      )}
     </section>
   );
 }

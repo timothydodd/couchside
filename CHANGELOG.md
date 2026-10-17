@@ -6,6 +6,15 @@ its own notes list every merged change.
 
 ## Unreleased
 
+### Added
+
+- **Hide a shared profile's devices.** Accounts → an account → "Can see and
+  sign out their own devices", off for a profile several people share (a
+  demo server's guest, a household's "Everyone"): that profile's Settings
+  no longer lists its signed-in devices and addresses, and it can't sign
+  the others out (`hideDevices` on the account; the sessions routes answer
+  403). Admins still see and end them in Accounts.
+
 ### Fixed
 
 - **Helm: every sign-in showed the node's address** (`10.42.0.1` on k3s)

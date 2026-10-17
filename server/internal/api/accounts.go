@@ -55,6 +55,9 @@ type accountInput struct {
 	// PasswordLocked stops the account setting or changing its own password
 	// (a shared profile). Admins can always change theirs.
 	PasswordLocked bool `json:"passwordLocked"`
+	// HideDevices keeps the account's signed-in devices (other people's, on a
+	// shared profile) out of its own Settings. Admins always see theirs.
+	HideDevices bool `json:"hideDevices"`
 	// Libraries limits the account to these libraries (empty = all), and
 	// MaxRating to titles rated no higher ("" = any). Neither applies to admins.
 	Libraries []int64 `json:"libraries"`
@@ -72,7 +75,7 @@ func (in *accountInput) validate() error {
 		return badRequest("role must be admin or user")
 	}
 	if in.Role == "admin" {
-		in.PasswordLocked = false
+		in.PasswordLocked, in.HideDevices = false, false
 		in.Libraries, in.MaxRating = nil, ""
 	}
 	if in.MaxRating != "" && !slices.Contains(db.RatingLimits, in.MaxRating) {
@@ -128,6 +131,13 @@ func (s *Server) createAccount(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, accountErr(err))
 		return
 	}
+	if in.HideDevices {
+		if err := s.db.SetHideDevices(r.Context(), p.ID, true); err != nil {
+			writeErr(w, accountErr(err))
+			return
+		}
+		p.HideDevices = true
+	}
 	slog.Info("account created", "profile", p.Name, "role", p.Role, "by", currentUser(r.Context()).ID)
 	writeJSON(w, http.StatusCreated, s.account(r.Context(), p))
 }
@@ -165,6 +175,10 @@ func (s *Server) updateAccount(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := s.db.SetPasswordLocked(ctx, id, in.PasswordLocked); err != nil {
+		writeErr(w, accountErr(err))
+		return
+	}
+	if err := s.db.SetHideDevices(ctx, id, in.HideDevices); err != nil {
 		writeErr(w, accountErr(err))
 		return
 	}

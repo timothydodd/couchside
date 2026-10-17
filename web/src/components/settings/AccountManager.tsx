@@ -154,6 +154,7 @@ function AccountForm({ account, onDone, onChanged }: { account?: Profile; onDone
   const [canRecord, setCanRecord] = useState(account?.canRecord ?? false);
   const [disabled, setDisabled] = useState(account?.disabled ?? false);
   const [passwordLocked, setPasswordLocked] = useState(account?.passwordLocked ?? false);
+  const [hideDevices, setHideDevices] = useState(account?.hideDevices ?? false);
   const { data: allLibraries } = useApi<Library[]>("/api/libraries");
   const [libraries, setLibraries] = useState<number[]>(account?.libraries ?? []);
   const [maxRating, setMaxRating] = useState(account?.maxRating ?? "");
@@ -182,8 +183,8 @@ function AccountForm({ account, onDone, onChanged }: { account?: Profile; onDone
   const save = () =>
     run(() =>
       account
-        ? api(`/api/accounts/${account.id}`, { method: "PUT", json: { name, color, role, canRecord, disabled, passwordLocked, libraries, maxRating } })
-        : api("/api/accounts", { method: "POST", json: { name, color, role, canRecord, password, passwordLocked, libraries, maxRating } }),
+        ? api(`/api/accounts/${account.id}`, { method: "PUT", json: { name, color, role, canRecord, disabled, passwordLocked, hideDevices, libraries, maxRating } })
+        : api("/api/accounts", { method: "POST", json: { name, color, role, canRecord, password, passwordLocked, hideDevices, libraries, maxRating } }),
     );
 
   return (
@@ -241,6 +242,11 @@ function AccountForm({ account, onDone, onChanged }: { account?: Profile; onDone
             <label className="flex items-center gap-2 text-content-secondary">
               <input type="checkbox" className="accent-brand" checked={!passwordLocked} onChange={(e) => setPasswordLocked(!e.target.checked)} />
               Can set and change their own password (turn off for a shared profile, like a guest)
+            </label>
+            <span className="text-content-muted">Devices</span>
+            <label className="flex items-center gap-2 text-content-secondary">
+              <input type="checkbox" className="accent-brand" checked={!hideDevices} onChange={(e) => setHideDevices(!e.target.checked)} />
+              Can see and sign out their own devices (turn off for a shared profile, so people using it don't see each other's)
             </label>
             <span className="text-content-muted">Libraries</span>
             <div>

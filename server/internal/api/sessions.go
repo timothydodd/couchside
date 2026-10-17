@@ -18,7 +18,29 @@ type sessionView struct {
 
 // mySessions lists the user's signed-in devices.
 func (s *Server) mySessions(w http.ResponseWriter, r *http.Request) {
+	if err := s.devicesShown(r.Context()); err != nil {
+		writeErr(w, err)
+		return
+	}
 	s.listSessions(w, r, currentUser(r.Context()).ID)
+}
+
+// devicesShown refuses a shared profile (hideDevices) its own device list
+// and "sign out everywhere else": the people using it shouldn't see or end
+// each other's sessions. Admins are never hidden from.
+func (s *Server) devicesShown(ctx context.Context) error {
+	u := currentUser(ctx)
+	if u.Admin {
+		return nil
+	}
+	p, err := s.db.Profile(ctx, u.ID)
+	if err != nil {
+		return err
+	}
+	if p.HideDevices {
+		return forbidden("this profile's devices are managed by an admin")
+	}
+	return nil
 }
 
 func (s *Server) listSessions(w http.ResponseWriter, r *http.Request, profileID int64) {
@@ -48,6 +70,10 @@ func (s *Server) endSession(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, db.ErrNotFound)
 		return
 	}
+	if err := s.devicesShown(ctx); err != nil {
+		writeErr(w, err)
+		return
+	}
 	if err := s.db.DeleteSession(ctx, sess.ID); err != nil {
 		writeErr(w, err)
 		return
@@ -59,6 +85,10 @@ func (s *Server) endSession(w http.ResponseWriter, r *http.Request) {
 // endOtherSessions signs the user out everywhere but here.
 func (s *Server) endOtherSessions(w http.ResponseWriter, r *http.Request) {
 	u := currentUser(r.Context())
+	if err := s.devicesShown(r.Context()); err != nil {
+		writeErr(w, err)
+		return
+	}
 	if err := s.db.DeleteSessions(r.Context(), u.ID, u.Session); err != nil {
 		writeErr(w, err)
 		return
