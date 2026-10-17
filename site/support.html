@@ -58,8 +58,8 @@
   <a class="home" href="/"><img src="/icons/logo-256.png" alt=""><span class="brand">Couchside</span></a>
   <h1>Support</h1>
 
-  <p>Couchside is a media server you run yourself, and the Roku app plays
-  what's on it. There's no Couchside account or subscription: you need a
+  <p>Couchside is a media server you run yourself, and the Roku channel and
+  the LG TV app play what's on it. There's no Couchside account or subscription: you need a
   Couchside server on your own computer or network first. The
   <a href="https://github.com/timothydodd/couchside/blob/main/docs/install.md">install guide</a>
   shows how to set one up.</p>
@@ -70,8 +70,8 @@
     <a href="mailto:support@couchside.app">support@couchside.app</a>.</li>
     <li><strong>Problems and questions:</strong>
     <a href="https://github.com/timothydodd/couchside/issues">GitHub issues</a>.
-    Say which app (Roku or web), its version (on the Roku, it is shown in Settings),
-    and what you did when it went wrong.</li>
+    Say which app (Roku, LG TV or web), its version (on the TV it is shown
+    in Settings), and what you did when it went wrong.</li>
     <li><strong>Security problems:</strong>
     <a href="https://github.com/timothydodd/couchside/security/advisories/new">report them privately</a>,
     not in a public issue.</li>
@@ -91,14 +91,32 @@
   <p>The Roku remembers the server and the profile. If the server moves to a
   new address on your network, the Roku finds it again when it starts.</p>
 
+  <h2>Connecting your LG TV</h2>
+  <ol>
+    <li>Install Couchside from the LG Content Store and open it. It runs on
+    webOS 5.0 (2020 TVs) and later.</li>
+    <li>Type your server's address on the first screen, for example
+    <code>192.168.1.20:8080</code> (no <code>http://</code> needed), and press
+    OK. On your home network the app also looks for servers on its own and
+    lists any it finds.</li>
+    <li>Pick your profile. A profile with a password asks for it.</li>
+  </ol>
+  <p>The TV remembers the server and the profile. Settings &rarr; Change
+  server points it at a different one. Both the Magic Remote and the
+  standard remote work; Back goes up a level and Home asks before leaving
+  the app.</p>
+
   <h2>Common problems</h2>
 
   <h3>My server isn't listed</h3>
   <ul>
-    <li>The Roku and the server must be on the same network.</li>
-    <li>In Docker, discovery needs <code>--network host</code>; on Kubernetes,
-    <code>discovery.hostNetwork=true</code>. Without it, type the address
-    instead.</li>
+    <li>The TV and the server must be on the same network.</li>
+    <li>On the Roku, in Docker discovery needs <code>--network host</code>; on
+    Kubernetes, <code>discovery.hostNetwork=true</code>. Without it, type the
+    address instead.</li>
+    <li>The LG app asks each address on the TV's network on port 8080, so
+    it finds a server in a container too, but only on the server's default
+    port and only on the TV's own network. Otherwise type the address.</li>
     <li>Check the address works in a browser on another device first.</li>
   </ul>
 
@@ -113,19 +131,22 @@
 
   <h3>A video won't play, or keeps stopping</h3>
   <ul>
-    <li>Files the Roku can't play directly are converted by your server, which
+    <li>Files the TV can't play directly are converted by your server, which
     takes more of its power. A slow server or network can stall them.</li>
+    <li>On an LG TV, a file that shows a black screen for a while is being
+    converted instead after about 15 seconds; the TV accepted it but could
+    not play it.</li>
     <li>Make sure the server is running and can reach its media files.</li>
     <li>Subtitles from a large file can take a while the first time: the
     server prepares the whole track.</li>
   </ul>
 
   <h3>I was signed out</h3>
-  <p>Someone may have signed this Roku out from the server's Settings page,
+  <p>Someone may have signed this TV out from the server's Settings page,
   or changed the profile's password. Pick the profile and sign in again.</p>
 
   <h2>Privacy</h2>
-  <p>The Roku app talks only to your own server. See the
+  <p>The TV apps talk only to your own server. See the
   <a href="/privacy.html">privacy policy</a>.</p>
 </main>
 
@@ -133,7 +154,7 @@
   <div class="wrap">
     <span class="credits">Free and open source (<a href="https://github.com/timothydodd/couchside/blob/main/LICENSE">MIT</a>).</span>
     <span><a href="/">Home</a> · <a href="/privacy.html">Privacy</a> · <a href="https://github.com/timothydodd/couchside">GitHub</a></span>
-    <p class="legal">Couchside doesn't provide or find any content: use it only with media you have the right to play. It comes with no warranty (see the license). Roku, HDHomeRun, Plex and other product names here are trademarks of their owners; Couchside isn't affiliated with or endorsed by any of them.</p>
+    <p class="legal">Couchside doesn't provide or find any content: use it only with media you have the right to play. It comes with no warranty (see the license). Roku, LG, webOS, HDHomeRun, Plex and other product names here are trademarks of their owners; Couchside isn't affiliated with or endorsed by any of them.</p>
   </div>
 </footer>
 </body>
