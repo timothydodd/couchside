@@ -33,14 +33,16 @@ export default function SearchPage({ q }: { q: string }) {
     </div>
   );
 
+  // Both branches share the same wrapper: a different parent element would remount
+  // the phone search box on the first keystroke and drop its focus.
   if (!term)
     return (
-      <>
+      <div className="pb-8">
         {phoneBox}
         <EmptyState icon={<Search size={36} strokeWidth={1.5} />} title="Search Couchside">
           Find movies, shows and episodes by title, and with live TV, channels and what's on the guide.
         </EmptyState>
-      </>
+      </div>
     );
 
   const groups = res ? [res.movies, res.series, res.episodes, res.people ?? [], res.channels, res.programs] : [];
