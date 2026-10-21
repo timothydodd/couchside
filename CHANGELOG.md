@@ -4,6 +4,15 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## 0.20.5
+
+### Fixed
+
+- **The phone's search icon now opens the keyboard.** Tapping the magnifier
+  in the top bar took you to the Search page but left its box unfocused, so
+  you had to tap it again. The page change was animated, and phones only
+  raise the keyboard for a focus made during the tap itself.
+
 ## 0.20.4
 
 ### Fixed
