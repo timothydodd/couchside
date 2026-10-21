@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { LogOut, Menu, Search, Users, X, type LucideIcon } from "lucide-react";
 import Link from "./Link";
 import ProfileAvatar from "./ProfileAvatar";
 import { NAV_LIVE, NAV_MAIN, NAV_MANAGE, sectionOf } from "./nav";
+import { PHONE_SEARCH_ID } from "./Sidebar";
 import { JobsBadge, RecBadge, useJobsSummary } from "./StatusBits";
 import { useAuth, useIsAdmin } from "../stores/auth";
 import { useProfile } from "../stores/profile";
@@ -20,6 +21,18 @@ import { fmtVersion } from "../lib/format";
 
 export function MobileTopBar() {
   const profile = useProfile((s) => s.current);
+  const go = useRouter((s) => s.go);
+  // Open the search page and put the keyboard in its box, all inside the tap.
+  const openSearch = (e: MouseEvent<HTMLAnchorElement>) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    go("/search", { instant: true });
+    const box = document.getElementById(PHONE_SEARCH_ID);
+    if (box instanceof HTMLInputElement) {
+      box.focus();
+      box.select();
+    }
+  };
   return (
     <header className="mobile-bar flex shrink-0 items-center gap-2 border-b border-border-light bg-surface md:hidden">
       <Link to="/" className="flex items-center gap-2" aria-label="Couchside home">
@@ -28,7 +41,7 @@ export function MobileTopBar() {
       </Link>
       <RecBadge to="/livetv/recordings" className="ml-1" />
       <div className="flex-1" />
-      <Link to="/search" className="touch-target text-content-secondary hover:text-content" aria-label="Search">
+      <Link to="/search" onClick={openSearch} className="touch-target text-content-secondary hover:text-content" aria-label="Search">
         <Search size={20} />
       </Link>
       {profile && (

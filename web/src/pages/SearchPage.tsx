@@ -6,7 +6,7 @@ import ProgramDialog from "../components/livetv/ProgramDialog";
 import { RecDot } from "../components/livetv/ChannelBits";
 import { PersonPhoto } from "../components/Credits";
 import { EmptyState, ErrorNote, Loading, PageHeader, Section, Spinner } from "../components/ui";
-import { SearchBox } from "../components/Sidebar";
+import { PHONE_SEARCH_ID, SearchBox } from "../components/Sidebar";
 import { useApi } from "../lib/api";
 import { fmtSlot } from "../lib/format";
 import type { Program, SearchResult, TvChannel } from "../lib/types";
@@ -29,7 +29,7 @@ export default function SearchPage({ q }: { q: string }) {
   // Phones have no sidebar, so the box lives on the page there.
   const phoneBox = (
     <div className="gutter pt-3 md:hidden">
-      <SearchBox hotkey={false} autoFocus={!term} className="" />
+      <SearchBox id={PHONE_SEARCH_ID} hotkey={false} autoFocus={!term} className="" />
     </div>
   );
 

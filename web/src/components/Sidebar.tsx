@@ -103,7 +103,20 @@ export default function Sidebar() {
  * With hotkey, "/" focuses it from anywhere (the sidebar's; phones use the
  * Search page's own box).
  */
-export function SearchBox({ hotkey = true, autoFocus = false, className = "mb-4" }: { hotkey?: boolean; autoFocus?: boolean; className?: string }) {
+/** The id of the phone search box, so the top bar's search icon can focus it. */
+export const PHONE_SEARCH_ID = "phone-search";
+
+export function SearchBox({
+  hotkey = true,
+  autoFocus = false,
+  className = "mb-4",
+  id,
+}: {
+  hotkey?: boolean;
+  autoFocus?: boolean;
+  className?: string;
+  id?: string;
+}) {
   const route = useRouter((s) => s.route);
   const go = useRouter((s) => s.go);
   const routeQ = route.name === "search" ? route.q : "";
@@ -144,6 +157,7 @@ export function SearchBox({ hotkey = true, autoFocus = false, className = "mb-4"
   return (
     <SearchInput
       ref={ref}
+      id={id}
       type="search"
       value={q}
       onChange={setQ}

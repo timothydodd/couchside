@@ -1,3 +1,4 @@
+import { flushSync } from "react-dom";
 import { create } from "zustand";
 import { transition, type NavKind } from "../lib/transition";
 
@@ -73,7 +74,13 @@ interface RouterState {
   route: Route;
   /** The last change came from the browser's Back or Forward, not a link: a page may put its scroll position back. */
   pop: boolean;
-  go: (path: string, opts?: { replace?: boolean }) => void;
+  /**
+   * `instant` skips the view transition and commits the new page before
+   * returning, so a tap handler can still focus something on it: a view
+   * transition updates the page in a later task, outside the tap, and phones
+   * ignore focus (and show no keyboard) outside a user gesture.
+   */
+  go: (path: string, opts?: { replace?: boolean; instant?: boolean }) => void;
   back: (fallback: string) => void;
 }
 
@@ -89,6 +96,10 @@ export const useRouter = create<RouterState>((set, get) => ({
     if (opts?.replace) history.replaceState({ couchside: true }, "", path);
     else history.pushState({ couchside: true }, "", path);
     const route = parseRoute(path);
+    if (opts?.instant) {
+      flushSync(() => set({ path, route, pop: false }));
+      return;
+    }
     transition(() => set({ path, route, pop: false }), navKind(get().route, route, false));
   },
   back: (fallback) => {
