@@ -14,6 +14,8 @@ its own notes list every merged change.
 
 ### Changed
 
+- Built with Go 1.27.3 (GO-2026-6809, crypto/x509; the 0.20.3 release
+  failed its vulnerability check on 1.27.2 and was never published).
 - Dependency updates: Go `chi` 5.5.0 and `x/crypto` 0.58.0; web React
   19.3.1, Vite 8.3.4 (fixes the launch-editor and source-map-js
   advisories) and lucide-react 1.59.0. Third-party notices updated.

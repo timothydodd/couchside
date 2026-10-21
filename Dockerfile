@@ -11,7 +11,7 @@ COPY web/ ./
 RUN npm run build
 
 # --- server: static Go binary with the UI embedded -----------------------------
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:738d1cf061836894ff6bb8c33881080ac66de8cf0586615012a0c8f592649cfa AS server
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd AS server
 ARG TARGETOS TARGETARCH VERSION=dev
 WORKDIR /src
 COPY server/go.mod server/go.sum ./
