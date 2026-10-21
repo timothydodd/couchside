@@ -4,6 +4,20 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## 0.20.4
+
+### Fixed
+
+- **A pasted link was read as a TMDB reference when its address only
+  contained themoviedb.org** (`notthemoviedb.org/movie/603`). Fix match
+  now reads TMDB ids only from themoviedb.org addresses.
+
+### Changed
+
+- Dependency updates: Go `chi` 5.5.0 and `x/crypto` 0.58.0; web React
+  19.3.1, Vite 8.3.4 (fixes the launch-editor and source-map-js
+  advisories) and lucide-react 1.59.0. Third-party notices updated.
+
 ## 0.20.3
 
 ### Fixed
