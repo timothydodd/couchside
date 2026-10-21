@@ -4,6 +4,15 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## 0.20.3
+
+### Fixed
+
+- **Phone search box lost focus on the first keystroke.** On a phone the
+  search box sits on the Search page, and the page swapped the box's
+  wrapper when results arrived, which recreated the input and dropped the
+  keyboard. The box now stays put while you type.
+
 ## 0.20.2
 
 ### Added
