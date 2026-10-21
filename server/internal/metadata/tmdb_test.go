@@ -166,6 +166,8 @@ func TestTMDBID(t *testing.T) {
 		"tmdb:movie:603": "tmdb:movie:603",
 		"https://www.themoviedb.org/tv/1399-game-of-thrones": "tmdb:tv:1399",
 		"tt0133093": "",
+		"https://notthemoviedb.org/movie/603": "",
+		"themoviedb.org/movie/603": "tmdb:movie:603",
 	} {
 		if got := TMDBID(in); got != want {
 			t.Errorf("TMDBID(%q) = %q, want %q", in, got, want)

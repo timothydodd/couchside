@@ -104,7 +104,7 @@ const (
 )
 
 var reTMDBID = regexp.MustCompile(`tmdb:(movie|tv):(\d+)`)
-var reTMDBURL = regexp.MustCompile(`themoviedb\.org/(movie|tv)/(\d+)`)
+var reTMDBURL = regexp.MustCompile(`(?:^|[/.])themoviedb\.org/(movie|tv)/(\d+)`)
 
 // TMDBID finds a TMDB reference in s: "tmdb:movie:603", or a themoviedb.org
 // URL. It returns the normalized form, or "".
