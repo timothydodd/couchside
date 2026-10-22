@@ -12,10 +12,12 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://couchside.app/">
-<meta name="twitter:card" content="summary">
+<meta name="twitter:card" content="summary_large_image">
 <meta property="og:title" content="Couchside">
 <meta property="og:description" content="Fast, light and local: your movies, shows and live TV with a proper DVR, served from your own server.">
-<meta property="og:image" content="https://couchside.app/icons/logo-512.png">
+<meta property="og:image" content="https://couchside.app/screenshots/social.jpg">
+<meta property="og:image:width" content="1920">
+<meta property="og:image:height" content="1080">
 <style>
   /* Tokens from docs/style.md: one dark theme, seafoam on neutral grey. */
   :root {
@@ -51,6 +53,21 @@
   /* The four goals: two across, so none is left alone on a row. */
   .features.goals { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); padding-bottom: 0; }
   .also { margin: 16px 0 48px; color: var(--text-secondary); text-align: center; font-size: 0.95rem; }
+  .hero { margin: 0 auto 56px; max-width: 1100px; padding: 0 16px; }
+  .shot { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--border-light); box-shadow: 0 30px 80px rgba(0, 0, 0, .55); }
+  .showcase { padding-bottom: 24px; }
+  .feature { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: center; padding: 28px 0; }
+  .feature:nth-child(even) .feature-text { order: -1; }
+  .feature h3 { margin: 0 0 8px; font-size: 1.35rem; letter-spacing: -0.01em; }
+  .feature p { margin: 0; color: var(--text-secondary); }
+  .feature figure { margin: 0; }
+  .feature .phones { display: flex; gap: 16px; justify-content: center; }
+  .feature .phones .shot { width: calc(50% - 8px); border-radius: 24px; }
+  @media (max-width: 720px) {
+    .feature { grid-template-columns: 1fr; gap: 16px; }
+    .feature:nth-child(even) .feature-text { order: 0; }
+    .hero { margin-bottom: 40px; }
+  }
   .card { background: var(--bg-surface); border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; }
   .card h2 { margin: 0 0 6px; font-size: 1rem; }
   .card p { margin: 0; color: var(--text-secondary); font-size: 0.95rem; }
@@ -80,6 +97,10 @@
   </div>
 </header>
 
+<figure class="hero">
+  <img class="shot" src="/screenshots/home.webp" width="1600" height="1000" alt="Couchside's home page: the newest title, library counts and Continue Watching">
+</figure>
+
 <main class="wrap">
   <section class="features goals" aria-label="What it's for">
     <div class="card"><h2>Fast and light</h2><p>One small binary with its database built in. Runs on a NAS, a Pi or k3s.</p></div>
@@ -88,6 +109,37 @@
     <div class="card"><h2>Phones, browsers and TVs</h2><p>A web app that works on phones, a full-screen player with quality presets, and a Roku app.</p></div>
   </section>
   <p class="also">Also: TMDB matching with cast and artwork, GPU transcoding (VAAPI in the container, NVENC and Quick Sync on Windows), HDR tone mapping, and profiles for the whole household.</p>
+
+  <section class="showcase" aria-label="A look around">
+    <h2 class="section">A look around</h2>
+    <div class="feature">
+      <figure><img class="shot" src="/screenshots/movies.webp" width="1600" height="1000" loading="lazy" alt="The Movies library as a grid of posters"></figure>
+      <div class="feature-text"><h3>Your library, with its artwork</h3><p>Point it at a folder and it finds every film and show, matches them on TMDB and fetches posters, backdrops, cast and plots. Browse by genre, year, rating or what's unwatched.</p></div>
+    </div>
+    <div class="feature">
+      <figure><img class="shot" src="/screenshots/movie.webp" width="1600" height="1000" loading="lazy" alt="A film's page: poster, details, the file and where you left off"></figure>
+      <div class="feature-text"><h3>Everything about a title, at a glance</h3><p>Details, versions and extras, seasons and episodes, and where you left off. Fix a wrong match or edit the details yourself.</p></div>
+    </div>
+    <div class="feature">
+      <figure><img class="shot" src="/screenshots/player.webp" width="1600" height="1000" loading="lazy" alt="The full-screen player, paused partway through a film"></figure>
+      <div class="feature-text"><h3>Plays what you have</h3><p>Direct when the browser can, converted when it must, with GPU transcoding and HDR tone mapping. Subtitles, audio tracks and quality presets, in a player that gets out of the way.</p></div>
+    </div>
+    <div class="feature">
+      <figure><img class="shot" src="/screenshots/live-guide.webp" width="1600" height="1000" loading="lazy" alt="The live TV guide, with channels made from the library"></figure>
+      <div class="feature-text"><h3>Live TV, and channels of your own</h3><p>An HDHomeRun guide with series recordings and commercial skipping. Or make channels from your own library: a movie night, a show on repeat, a kids' channel.</p></div>
+    </div>
+    <div class="feature">
+      <figure class="phones">
+        <img class="shot" src="/screenshots/phone-home.webp" width="780" height="1688" loading="lazy" alt="Home on a phone">
+        <img class="shot" src="/screenshots/phone-movie.webp" width="780" height="1688" loading="lazy" alt="A film's page on a phone">
+      </figure>
+      <div class="feature-text"><h3>From the couch, or the phone in your hand</h3><p>The same library on every screen in the house: a web app that fits a phone, and a Roku app for the TV.</p></div>
+    </div>
+    <div class="feature">
+      <figure><img class="shot" src="/screenshots/profiles.webp" width="1200" height="750" loading="lazy" alt="Choosing who's watching from the household's profiles"></figure>
+      <div class="feature-text"><h3>One server, the whole household</h3><p>Profiles with their own progress, lists and rating limits, so the kids see what's theirs and nobody loses their place.</p></div>
+    </div>
+  </section>
 
   <section class="install">
     <h2 class="section">Run it</h2>
