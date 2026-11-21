@@ -4,6 +4,28 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## 0.20.6
+
+### Added
+
+- **Acknowledge failed jobs.** A failed job stays in Activity for two weeks
+  (so the next scan doesn't queue the same work again), and until now the
+  status bar and sidebar kept saying "failed" the whole time. Each failed
+  job now has **Acknowledge**, and the page has **Acknowledge failed** for
+  all of them: the job stays in the list, greyed, and stops counting as a
+  failure. Retrying it and failing again counts anew.
+
+### Fixed
+
+- Activity's **Clear finished** could be clicked when only failed jobs were
+  left, and did nothing; it never removed those.
+
+### Changed
+
+- Dependency updates: Go `x/crypto` 0.59.0 and `modernc.org/sqlite` 1.62.0
+  (SQLite 3.54.1); web hls.js 1.7.4, zustand 5.1.0, lucide-react 1.70.0,
+  Vite 8.3.6 and Tailwind 4.3.5. Third-party notices updated.
+
 ## 0.20.5
 
 ### Fixed
