@@ -1,4 +1,4 @@
-import { Cpu, Image, MonitorPlay, Pause, RotateCcw, ScanSearch, Scissors, Search, Square, Trash2, Wand2, X, type LucideIcon } from "lucide-react";
+import { Check, CheckCheck, Cpu, Image, MonitorPlay, Pause, RotateCcw, ScanSearch, Scissors, Search, Square, Trash2, Wand2, X, type LucideIcon } from "lucide-react";
 import Link from "../components/Link";
 import { EmptyState, ErrorNote, Meter, PageHeader, StatTile, StatusPill, type Tone, Loading } from "../components/ui";
 import { api, useApi } from "../lib/api";
@@ -31,6 +31,9 @@ const STATUS: Record<Job["status"], { label: string; tone: Tone }> = {
   failed: { label: "Failed", tone: "critical" },
 };
 
+/** A failure someone has acknowledged: still said, no longer shouting. */
+const ACKNOWLEDGED: { label: string; tone: Tone } = { label: "Failed, acknowledged", tone: "muted" };
+
 /** Background work (scans, metadata, thumbnails, encodes) and live streams. */
 export default function ActivityPage() {
   const { data, error, reload } = useApi<{ jobs: Job[]; counts: JobCounts }>("/api/jobs", { pollMs: 2500 });
@@ -44,6 +47,14 @@ export default function ActivityPage() {
 
   const retry = attempt("Couldn't retry the job", async (id: number) => {
     await api(`/api/jobs/${id}/retry`, { method: "POST" });
+    await reload();
+  });
+  const acknowledge = attempt("Couldn't acknowledge the job", async (id: number) => {
+    await api(`/api/jobs/${id}/acknowledge`, { method: "POST" });
+    await reload();
+  });
+  const acknowledgeAll = attempt("Couldn't acknowledge the failed jobs", async () => {
+    await api("/api/jobs/acknowledge", { method: "POST" });
     await reload();
   });
   const clear = attempt("Couldn't clear finished jobs", async () => {
@@ -62,7 +73,12 @@ export default function ActivityPage() {
         <button className="btn-ghost" onClick={() => void scanAll()}>
           <ScanSearch size={15} /> Scan all libraries
         </button>
-        <button className="btn-ghost" onClick={() => void clear()} disabled={!data?.jobs.some((j) => j.status === "done" || j.status === "failed")}>
+        {!!c?.failed && (
+          <button className="btn-ghost" onClick={() => void acknowledgeAll()} title="Keep them in the list, but stop counting them as failed">
+            <CheckCheck size={15} /> Acknowledge failed
+          </button>
+        )}
+        <button className="btn-ghost" onClick={() => void clear()} disabled={!data?.jobs.some((j) => j.status === "done")}>
           <Trash2 size={15} /> Clear finished
         </button>
       </PageHeader>
@@ -100,7 +116,7 @@ export default function ActivityPage() {
               <tbody>
                 {data?.jobs.map((j) => {
                   const k = KINDS[j.kind] ?? { label: j.kind, Icon: Wand2 };
-                  const s = STATUS[j.status];
+                  const s = j.acknowledged ? ACKNOWLEDGED : STATUS[j.status];
                   return (
                     <tr key={j.id}>
                       <td>
@@ -112,7 +128,7 @@ export default function ActivityPage() {
                       <td className="max-w-md">
                         <div className="truncate">{jobTarget(j.label)}</div>
                         {j.error && (
-                          <div className="truncate text-xs text-critical" title={j.error}>
+                          <div className={`truncate text-xs ${j.acknowledged ? "text-content-muted" : "text-critical"}`} title={j.error}>
                             {j.error}
                           </div>
                         )}
@@ -135,9 +151,16 @@ export default function ActivityPage() {
                       <td className="text-xs text-content-muted">{fmtAgo(j.finishedAt ?? j.startedAt ?? j.createdAt)}</td>
                       <td className="text-right">
                         {j.status === "failed" && (
-                          <button className="btn-chip" onClick={() => void retry(j.id)}>
-                            <RotateCcw size={12} /> Retry
-                          </button>
+                          <span className="inline-flex gap-1.5">
+                            {!j.acknowledged && (
+                              <button className="btn-chip" onClick={() => void acknowledge(j.id)} title="Keep it in the list, but stop counting it as failed">
+                                <Check size={12} /> Acknowledge
+                              </button>
+                            )}
+                            <button className="btn-chip" onClick={() => void retry(j.id)}>
+                              <RotateCcw size={12} /> Retry
+                            </button>
+                          </span>
                         )}
                         {(j.status === "queued" || (j.status === "running" && j.kind === "optimize")) && (
                           <button className="btn-chip hover:!border-critical hover:!text-critical" onClick={() => void cancel(j.id)}>

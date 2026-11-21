@@ -424,6 +424,7 @@ export interface Library {
 export interface JobCounts {
   queued: number;
   running: number;
+  /** Failures nobody has acknowledged. */
   failed: number;
   current: string;
 }
@@ -477,6 +478,8 @@ export interface Job {
   progress: number | null;
   /** What a finished job did: a scan's counts, and the files it skipped and why. */
   result: string;
+  /** A failed job an admin has set aside: still listed, not counted as failed. */
+  acknowledged: boolean;
 }
 
 // Settings → Server (GET /api/settings/server): environment variables admins can set here instead.

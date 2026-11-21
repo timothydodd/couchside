@@ -407,6 +407,8 @@ func (s *Server) adminRoutes(r chi.Router) {
 	r.Post("/jobs/{id}/retry", s.retryJob)
 	r.Post("/jobs/{id}/cancel", s.cancelJob)
 	r.Post("/jobs/clear", s.clearJobs)
+	r.Post("/jobs/{id}/acknowledge", s.acknowledgeJob)
+	r.Post("/jobs/acknowledge", s.acknowledgeJobs)
 }
 
 // live says the process is up and serving HTTP: the liveness probe. It

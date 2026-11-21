@@ -20,13 +20,16 @@ type Job struct {
 	FinishedAt *int64   `json:"finishedAt"`
 	Progress   *float64 `json:"progress"`
 	Result     string   `json:"result"` // what a finished job did (scans: counts and skipped files)
+	// Acknowledged is a failed job an admin has set aside: still listed, not
+	// counted as failed.
+	Acknowledged bool `json:"acknowledged"`
 }
 
-const jobCols = `id, kind, ref_id, label, status, attempts, error, created_at, started_at, finished_at, progress, result`
+const jobCols = `id, kind, ref_id, label, status, attempts, error, created_at, started_at, finished_at, progress, result, acknowledged`
 
 func scanJob(r interface{ Scan(...any) error }) (Job, error) {
 	var j Job
-	err := r.Scan(&j.ID, &j.Kind, &j.RefID, &j.Label, &j.Status, &j.Attempts, &j.Error, &j.CreatedAt, &j.StartedAt, &j.FinishedAt, &j.Progress, &j.Result)
+	err := r.Scan(&j.ID, &j.Kind, &j.RefID, &j.Label, &j.Status, &j.Attempts, &j.Error, &j.CreatedAt, &j.StartedAt, &j.FinishedAt, &j.Progress, &j.Result, &j.Acknowledged)
 	return j, err
 }
 
@@ -65,7 +68,7 @@ func (d *DB) ClaimJob(ctx context.Context, encode bool) (*Job, error) {
 
 func (d *DB) claim(ctx context.Context, where string, args ...any) (*Job, error) {
 	j, err := scanJob(d.sql.QueryRowContext(ctx, `UPDATE jobs SET status = 'running', attempts = attempts + 1,
-		started_at = unixepoch(), error = '', progress = NULL, result = ''
+		started_at = unixepoch(), error = '', progress = NULL, result = '', acknowledged = 0
 		WHERE id = (SELECT id FROM jobs WHERE status = 'queued' AND (not_before IS NULL OR not_before <= unixepoch()) AND `+where+`
 		  ORDER BY id LIMIT 1)
 		RETURNING `+jobCols, args...))
@@ -184,6 +187,23 @@ func (d *DB) FailedJobRefs(ctx context.Context, kind string) (map[int64]bool, er
 	return out, rows.Err()
 }
 
+// AcknowledgeJob sets a failed job aside: it stays in Activity, out of the
+// failed count. It reports whether the job was a failure not yet acknowledged.
+func (d *DB) AcknowledgeJob(ctx context.Context, id int64) (bool, error) {
+	res, err := d.sql.ExecContext(ctx, `UPDATE jobs SET acknowledged = 1 WHERE id = ? AND status = 'failed' AND acknowledged = 0`, id)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// AcknowledgeFailedJobs sets every failed job aside.
+func (d *DB) AcknowledgeFailedJobs(ctx context.Context) error {
+	_, err := d.sql.ExecContext(ctx, `UPDATE jobs SET acknowledged = 1 WHERE status = 'failed' AND acknowledged = 0`)
+	return err
+}
+
 func (d *DB) RetryJob(ctx context.Context, id int64) error {
 	_, err := d.sql.ExecContext(ctx, `UPDATE jobs SET status = 'queued', error = '', finished_at = NULL
 		WHERE id = ? AND status = 'failed'
@@ -205,10 +225,11 @@ func (d *DB) ClearFinishedJobs(ctx context.Context) error {
 	return err
 }
 
-// Recent jobs for the Activity page: active and failed first, then history.
+// Recent jobs for the Activity page: active and failed first, then history
+// (acknowledged failures among it).
 func (d *DB) RecentJobs(ctx context.Context, limit int) ([]Job, error) {
 	rows, err := d.sql.QueryContext(ctx, `SELECT `+jobCols+` FROM jobs
-		ORDER BY CASE status WHEN 'running' THEN 0 WHEN 'failed' THEN 1 WHEN 'queued' THEN 2 ELSE 3 END,
+		ORDER BY CASE WHEN status = 'running' THEN 0 WHEN status = 'failed' AND acknowledged = 0 THEN 1 WHEN status = 'queued' THEN 2 ELSE 3 END,
 		  CASE WHEN status = 'queued' THEN id ELSE -id END LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
@@ -228,7 +249,7 @@ func (d *DB) RecentJobs(ctx context.Context, limit int) ([]Job, error) {
 type JobCounts struct {
 	Queued  int    `json:"queued"`
 	Running int    `json:"running"`
-	Failed  int    `json:"failed"`
+	Failed  int    `json:"failed"` // failures nobody has acknowledged
 	Current string `json:"current"` // label of the oldest running job
 }
 
@@ -237,7 +258,7 @@ func (d *DB) JobCounts(ctx context.Context) (JobCounts, error) {
 	err := d.sql.QueryRowContext(ctx, `SELECT
 		(SELECT COUNT(*) FROM jobs WHERE status = 'queued'),
 		(SELECT COUNT(*) FROM jobs WHERE status = 'running'),
-		(SELECT COUNT(*) FROM jobs WHERE status = 'failed'),
+		(SELECT COUNT(*) FROM jobs WHERE status = 'failed' AND acknowledged = 0),
 		COALESCE((SELECT label FROM jobs WHERE status = 'running' ORDER BY CASE kind WHEN 'scan' THEN 0 ELSE 1 END, id LIMIT 1), '')`).
 		Scan(&c.Queued, &c.Running, &c.Failed, &c.Current)
 	return c, err

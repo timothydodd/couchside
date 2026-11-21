@@ -39,6 +39,36 @@ func (s *Server) retryJob(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
+// acknowledgeJob sets one failed job aside: it stays listed but leaves the
+// failed count.
+func (s *Server) acknowledgeJob(w http.ResponseWriter, r *http.Request) {
+	id, err := idParam(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if _, err := s.db.Job(r.Context(), id); err != nil {
+		writeErr(w, err)
+		return
+	}
+	// A job that isn't failed any more (retried meanwhile) has nothing to
+	// acknowledge; that's not an error.
+	if _, err := s.db.AcknowledgeJob(r.Context(), id); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// acknowledgeJobs sets every failed job aside.
+func (s *Server) acknowledgeJobs(w http.ResponseWriter, r *http.Request) {
+	if err := s.db.AcknowledgeFailedJobs(r.Context()); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) clearJobs(w http.ResponseWriter, r *http.Request) {
 	if err := s.db.ClearFinishedJobs(r.Context()); err != nil {
 		writeErr(w, err)

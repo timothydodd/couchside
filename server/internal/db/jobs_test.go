@@ -67,3 +67,65 @@ func TestPendingMatches(t *testing.T) {
 		t.Fatalf("PendingMatches = %+v, %v; want only Heat", got, err)
 	}
 }
+
+func TestAcknowledgedFailuresLeaveTheCount(t *testing.T) {
+	d, err := Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ctx := context.Background()
+	fail := func(ref int64) int64 {
+		t.Helper()
+		if err := d.Enqueue(ctx, "trickplay", ref, "Preview thumbnails"); err != nil {
+			t.Fatal(err)
+		}
+		j, err := d.ClaimJob(ctx, true)
+		if err != nil || j == nil {
+			t.Fatal(j, err)
+		}
+		if err := d.FinishJob(ctx, j.ID, context.DeadlineExceeded); err != nil {
+			t.Fatal(err)
+		}
+		return j.ID
+	}
+	first, second := fail(1), fail(2)
+
+	if ok, err := d.AcknowledgeJob(ctx, first); err != nil || !ok {
+		t.Fatalf("AcknowledgeJob = %v, %v", ok, err)
+	}
+	if c, _ := d.JobCounts(ctx); c.Failed != 1 {
+		t.Fatalf("failed count after acknowledging one of two = %d, want 1", c.Failed)
+	}
+	// Still a failure in Activity, so catch-up doesn't queue the work again.
+	if refs, _ := d.FailedJobRefs(ctx, "trickplay"); !refs[1] || !refs[2] {
+		t.Fatalf("FailedJobRefs = %v, want both refs", refs)
+	}
+	// The one that still needs someone is listed first.
+	jobs, err := d.RecentJobs(ctx, 10)
+	if err != nil || len(jobs) != 2 || jobs[0].ID != second || !jobs[1].Acknowledged {
+		t.Fatalf("RecentJobs = %+v, %v", jobs, err)
+	}
+
+	if err := d.AcknowledgeFailedJobs(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := d.JobCounts(ctx); c.Failed != 0 {
+		t.Fatalf("failed count after acknowledging all = %d, want 0", c.Failed)
+	}
+
+	// A retry that fails again is a new failure.
+	if err := d.RetryJob(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	j, err := d.ClaimJob(ctx, true)
+	if err != nil || j == nil || j.ID != first {
+		t.Fatal(j, err)
+	}
+	if err := d.FinishJob(ctx, first, context.DeadlineExceeded); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := d.JobCounts(ctx); c.Failed != 1 {
+		t.Fatalf("failed count after a retry failed again = %d, want 1", c.Failed)
+	}
+}
