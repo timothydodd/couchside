@@ -4,6 +4,14 @@ Each release lists **Breaking changes and upgrade notes** first (when there
 are any), then what's new and what's fixed. The GitHub release links here;
 its own notes list every merged change.
 
+## 0.20.7
+
+### Changed
+
+- Built with Go 1.27.4 (GO-2026-6859, an HTTP/1 server crash in net/http;
+  the 0.20.6 release failed its vulnerability check on 1.27.3 and was never
+  published, so what's listed under 0.20.6 arrives with this release).
+
 ## 0.20.6
 
 ### Added
